@@ -29,9 +29,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         u.PasswordHash, 
                         r.RoleName 
                     FROM 
-                        Users u
+                        dbo.Users u
                     INNER JOIN 
-                        Roles r ON u.RoleID = r.RoleID
+                        dbo.Roles r ON u.RoleID = r.RoleID
                     WHERE 
                         u.Email = @Email;
                 `);
