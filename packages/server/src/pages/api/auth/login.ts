@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db'; // ✅ use query instead of pool
-import bcrypt from 'bcrypt';
+//import bcrypt from 'bcrypt';
 import corsHandler from '@/lib/cors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -18,8 +18,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // ✅ use query() instead of pool.query()
-      const result = await query(
-        `
+       // ✅ Query matches updated column names
+      const sql = `
         SELECT 
           u."userId",
           u."employeeId",
@@ -34,18 +34,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           "Roles" r ON u."roleId" = r."roleId"
         WHERE 
           LOWER(u."email") = LOWER($1);
-        `,
-        [email]
-      );
+      `;
+
+      const result = await query(sql, [email]);
 
       if (result.rows.length === 0) {
         return res.status(401).json({ message: 'Invalid credentials.' });
       }
 
       const user = result.rows[0];
-      const isMatch = await bcrypt.compare(password, user.passwordHash);
-
-      if (!isMatch) {
+       if (password !== user.passwordHash) {
         return res.status(401).json({ message: 'Invalid credentials.' });
       }
 

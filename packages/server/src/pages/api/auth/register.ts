@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import bcrypt from 'bcrypt';
-import query from '@/lib/db'; // ← your db.ts that uses pg Pool
+import query from '@/lib/db';
 import corsHandler from '@/lib/cors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -10,33 +9,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const { employeeId, fullName, email, password, roleId } = req.body;
+
     if (!employeeId || !fullName || !email || !password || !roleId) {
       return res.status(400).json({ message: 'All required fields must be provided.' });
     }
 
     try {
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-      // Check if user already exists
+      // ✅ Check if user already exists
       const checkUser = await query(
-        'SELECT * FROM "Users" WHERE "Email" = $1 OR "EmployeeID" = $2',
-        [email.toLowerCase(), employeeId]
+        'SELECT * FROM "Users" WHERE LOWER("email") = LOWER($1) OR "employeeId" = $2',
+        [email, employeeId]
       );
 
       if (checkUser.rows.length > 0) {
         return res.status(409).json({ message: 'A user with this email or employee ID already exists.' });
       }
 
-      // Insert user
+      // ✅ Insert user with plain password
       await query(
-        `INSERT INTO "Users" ("EmployeeID", "FullName", "Email", "PasswordHash", "RoleID")
+        `INSERT INTO "Users" ("employeeId", "fullName", "email", "passwordHash", "roleId")
          VALUES ($1, $2, $3, $4, $5)`,
-        [employeeId, fullName, email.toLowerCase(), hashedPassword, roleId]
+        [employeeId, fullName, email.toLowerCase(), password, roleId]
       );
 
-      return res.status(201).json({ message: 'User created successfully.' });
-    } catch (error: any) {
+      return res.status(201).json({ message: 'User created successfully (plain password).' });
+    } catch (error) {
       console.error('Registration API Error:', error);
       return res.status(500).json({ message: 'An internal server error occurred.' });
     }
