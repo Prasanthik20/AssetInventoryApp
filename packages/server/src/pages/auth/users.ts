@@ -13,20 +13,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // ✅ Query all users along with their role names
       const sqlQuery = `
         SELECT 
-          u."userId",
-          u."employeeId",
-          u."fullName",
-          u."email",
-          u."phoneNumber",
-          u."address",
-          u."photoURL",
-          r."roleName"
+          *
         FROM 
-          "Users" u
-        LEFT JOIN 
-          "Roles" r ON u."roleId" = r."roleId"
-        ORDER BY 
-          u."fullName" ASC;
+          Users
+        
       `;
 
       // ✅ Execute query

@@ -48,13 +48,13 @@ export default function CompanyLoginScreen() {
         try {
             // Call your Next.js API endpoint
             // For mobile development, you must use your computer's IP address, not 'localhost'
-            const response = await axios.post('http://127.0.0.1:3000/api/auth/login', {
+            const response : any= await axios.post('http://127.0.0.1:3000/api/auth/login', {
                 email: email,
                 password: password,
             });
 
             // The request was successful (status 200)
-            const { role } = response.data;
+            const  role  = response.data.user.roleName;
             Alert.alert("Login Successful", `Welcome, ${role}!`);
 
             // Navigate based on the role received from the backend

@@ -1,87 +1,69 @@
-import React,{ useState } from 'react';
-import { View, Text, StyleSheet, Alert,  SafeAreaView, ImageBackground, FlatList, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Alert, SafeAreaView, ImageBackground, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
+import axios from 'axios';
 
-// Define the navigation stack param list, including the new screen
+
+// Define the structure of an Asset from the API
+interface Asset {
+    id: string;
+    serialNumber: string;
+    barcode: string;
+    assetName: string;
+    status: {
+        type: string;
+        assignedTo: string | null;
+        location: string;
+    };
+}
+interface Status {
+    id: number;
+    status: string;
+}
+// Define the navigation stack param list
 export type RootStackParamList = {
-    AssetsDetails: undefined;
-    AssetFullDetails: { assetId: string }; // We will pass the asset ID to the details screen
+    TotalAssetsDetails: undefined;
+    AssetFullDetails: { assetId: string };
 };
 
-type AssetsDetailsNavigationProp = StackNavigationProp<RootStackParamList, 'AssetsDetails'>;
+type AssetsDetailsNavigationProp = StackNavigationProp<RootStackParamList, 'TotalAssetsDetails'>;
 
-// --- NEW MOCK DATA FOR A CIVIL CONSTRUCTION COMPANY ---
-const civilAssetsData = [
-    {
-        id: '1',
-        serialNumber: 'EXC-001-2023',
-        barcode: 'BAR456',
-        assetName: 'Excavator',
-        status: {
-            type: 'Assigned',
-            assignedTo: 'Jane Doe',
-            location: 'Downtown Site, Block A',
-        },
-        assignedBy: 'John Smith (Supervisor)',
-        purchaseDate: '2023-01-15',
-        value: '$150,000',
-    },
-    {
-        id: '2',
-        serialNumber: 'CMX-007-2022',
-        barcode: 'BAR789',
-        assetName: 'Concrete Mixer',
-        status: {
-            type: 'Unassigned',
-            location: 'Main Yard',
-        },
-        assignedBy: 'N/A',
-        purchaseDate: '2022-05-20',
-        value: '$15,000',
-    },
-    {
-        id: '3',
-        serialNumber: 'JHM-003-2023',
-        barcode: 'BAR901',
-        assetName: 'Jackhammer',
-        status: {
-            type: 'Overdue',
-            assignedTo: 'Mike R.',
-            location: 'Highway 4 Project',
-        },
-        assignedBy: 'John Smith (Supervisor)',
-        purchaseDate: '2023-02-10',
-        value: '$2,500',
-    },
-    {
-        id: '4',
-        serialNumber: 'SRV-002-2021',
-        barcode: 'PROJ123',
-        assetName: 'Surveying Theodolite',
-        status: {
-            type: 'Returned',
-            location: 'In Company Warehouse',
-        },
-        assignedBy: 'N/A',
-        purchaseDate: '2021-11-01',
-        value: '$7,000',
-    },
-];
-
-// Reusable component for displaying colored status badges
-const StatusBadge = ({ status }: { status: typeof civilAssetsData[0]['status'] }) => {
+const StatusBadge = ({ status, allStatuses = [] }: { status: Asset['status'], allStatuses?: Status[] }) => {
+    
+    // This is now a more flexible, data-driven approach
     const getStatusStyle = () => {
-        switch (status.type) {
-            case 'Assigned': return { backgroundColor: '#E6F3FF', borderColor: '#007BFF', textColor: '#0056b3' };
-            case 'Overdue': return { backgroundColor: '#FDEDED', borderColor: '#DC3545', textColor: '#a71d2a' };
-            case 'Returned': return { backgroundColor: '#E9F7EF', borderColor: '#28A745', textColor: '#1c7430' };
-            case 'Unassigned': return { backgroundColor: '#F8F9FA', borderColor: '#6C757D', textColor: '#495057' };
-            default: return {};
+        // Find the full status object from the list
+        const statusInfo = allStatuses.find(s => s.status.toLowerCase() === status.type.toLowerCase());
+
+        // Default styles if no match is found
+        let backgroundColor = '#F8F9FA';
+        let borderColor = '#6C757D';
+        let textColor = '#495057';
+
+        if (statusInfo) {
+            // Assign colors based on the status name from the database
+            switch (statusInfo.status.toLowerCase()) {
+                case 'assigned':
+                    backgroundColor = '#E6F3FF'; borderColor = '#007BFF'; textColor = '#0056b3';
+                    break;
+                case 'overdue':
+                    backgroundColor = '#FDEDED'; borderColor = '#DC3545'; textColor = '#a71d2a';
+                    break;
+                case 'returned':
+                    backgroundColor = '#E9F7EF'; borderColor = '#28A745'; textColor = '#1c7430';
+                    break;
+                case 'unassigned':
+                    backgroundColor = '#F8F9FA'; borderColor = '#6C757D'; textColor = '#495057';
+                    break;
+                // You can add more cases here for new statuses like "Under Maintenance"
+            }
         }
+        return { backgroundColor, borderColor, textColor };
     };
+
     const { backgroundColor, borderColor, textColor } = getStatusStyle();
 
     return (
@@ -94,12 +76,31 @@ const StatusBadge = ({ status }: { status: typeof civilAssetsData[0]['status'] }
     );
 };
 
-
 const TotalAssetsDetails: React.FC = () => {
     const navigation = useNavigation<AssetsDetailsNavigationProp>();
 
-     const [isModalVisible, setModalVisible] = useState(false);
+    const [assets, setAssets] = useState<Asset[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isModalVisible, setModalVisible] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<{ id: string, name: string } | null>(null);
+
+    useEffect(() => {
+        const fetchAssets = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                const response = await axios.get(`http://localhost:3000/api/assets`);
+                setAssets(response.data.assets);
+            } catch (err) {
+                setError('Failed to fetch assets. Please check the server connection.');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchAssets();
+    }, []);
 
     const handleOpenModal = (asset: { id: string, name: string }) => {
         setSelectedAsset(asset);
@@ -121,9 +122,9 @@ const TotalAssetsDetails: React.FC = () => {
         );
     };
 
-    const renderAsset = ({ item, index }: { item: typeof civilAssetsData[0], index: number }) => {
+    // --- RENDER FUNCTION IS NOW SEPARATE AND CLEAN ---
+    const renderAsset = ({ item, index }: { item: Asset, index: number }) => { 
         const isOverdue = item.status.type === 'Overdue';
-
         return (
             <View style={styles.assetRow}>
                 <Text style={styles.cellSNo}>{index + 1}</Text>
@@ -135,12 +136,8 @@ const TotalAssetsDetails: React.FC = () => {
                 <View style={styles.cellStatus}>
                     <StatusBadge status={item.status} />
                 </View>
-                
-                {/* --- MODIFICATION START --- */}
-                {/* This container now holds and aligns both buttons */}
                 <View style={styles.cellAction}>
                     <View style={styles.actionButtonsContainer}>
-                        {/* Conditionally render the "Notify" button ONLY if overdue */}
                         {isOverdue && (
                             <TouchableOpacity
                                 style={[styles.actionButton, styles.notifyButton]}
@@ -150,8 +147,6 @@ const TotalAssetsDetails: React.FC = () => {
                                 <Text style={styles.actionButtonText}>Notify</Text>
                             </TouchableOpacity>
                         )}
-
-                        {/* Always render the "Know More" button */}
                         <TouchableOpacity
                             style={[styles.actionButton, styles.knowMoreButton]}
                             onPress={() => navigation.navigate('AssetFullDetails', { assetId: item.id })}
@@ -161,12 +156,29 @@ const TotalAssetsDetails: React.FC = () => {
                         </TouchableOpacity>
                     </View>
                 </View>
-                {/* --- MODIFICATION END --- */}
-
             </View>
         );
     };
 
+    // --- LOADING AND ERROR CHECKS MOVED HERE (THE CORRECT LOCATION) ---
+    if (loading) {
+        return (
+            <View style={styles.centeredView}>
+                <ActivityIndicator size="large" color="#FFFFFF" />
+                <Text style={styles.loadingText}>Loading Assets...</Text>
+            </View>
+        );
+    }
+
+    if (error) {
+        return (
+            <View style={styles.centeredView}>
+                <Text style={styles.errorText}>{error}</Text>
+            </View>
+        );
+    }
+
+    // --- MAIN RETURN STATEMENT FOR THE COMPONENT ---
     return (
         <ImageBackground source={require("../../assets/Company-bg.webp")} style={styles.backgroundImage} resizeMode="cover" blurRadius={5}>
             <SafeAreaView style={styles.safeArea}>
@@ -183,7 +195,6 @@ const TotalAssetsDetails: React.FC = () => {
                             <TextInput placeholder="Search by name, barcode, or serial number..." placeholderTextColor="#999" style={styles.searchInput} />
                         </View>
 
-                        {/* Table Header */}
                         <View style={styles.tableHeader}>
                             <Text style={[styles.headerCell, styles.cellSNo]}>S.No</Text>
                             <Text style={[styles.headerCell, styles.cellAssetName]}>Asset Name</Text>
@@ -192,8 +203,9 @@ const TotalAssetsDetails: React.FC = () => {
                             <Text style={[styles.headerCell, styles.cellAction, { textAlign: 'center' }]}>Action</Text>
                         </View>
                         
+                        {/* --- DATA SOURCE CORRECTED --- */}
                         <FlatList
-                            data={civilAssetsData}
+                            data={assets}
                             renderItem={renderAsset}
                             keyExtractor={item => item.id}
                             showsVerticalScrollIndicator={false}
@@ -333,6 +345,23 @@ const styles = StyleSheet.create({
         fontSize: 12, // Smaller font
         fontWeight: '600',
         marginLeft: 4, // Space between icon and text
+    },
+    centeredView: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#3C4048', // A dark background
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        color: '#FFFFFF',
+    },
+    errorText: {
+        fontSize: 18,
+        color: '#DC3545',
+        textAlign: 'center',
+        paddingHorizontal: 20,
     },
 
 });

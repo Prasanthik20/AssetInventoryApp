@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- TABLE: Roles ----
+model Roles {
+  roleId   BigInt  @id @default(autoincrement()) @map("roleId")
+  roleName String? @map("roleName")
+
+  // Relation: One Role can have many Users
+  Users Users[]
+}
+
+// ---- TABLE: Users ----
+model Users {
+  userId       BigInt  @id @default(autoincrement()) @map("userId")
+  
+  // This MUST be unique because another table is linking to it.
+  employeeId   BigInt  @unique @map("employeeId")
+  
+  fullName     String? @map("fullName")
+  email        String  @unique
+  passwordHash String  @map("passwordHash")
+  phoneNumber  String? @map("phoneNumber")
+  address      String?
+  photoURL     String? @map("photoURL")
+  roleId       BigInt? @map("roleId")
+
+  // Relation to the Roles table
+  role Roles? @relation(fields: [roleId], references: [roleId])
+
+  // Back-relation: A User can be the "assigner" for many assets
+  AssetsAssignedBy Asset_Details[]
+}
+
+// ---- TABLE: Category ----
+model Category {
+  id       BigInt @id @default(autoincrement())
+  
+  // This MUST be unique because other tables are linking to it.
+  categoryId BigInt @unique @map("category_id")
+
+  category String?
+
+  // Back-relations
+  Category_Details Category_Details[]
+  Asset_Details    Asset_Details[]
+}
+
+// ---- TABLE: Category_Details ----
+model Category_Details {
+  id         BigInt @id @default(autoincrement())
+  category_id BigInt?
+  name       String?
+
+  // This MUST be unique to enforce the one-to-one relationship with Asset_Details
+  asset_id   String @unique
+
+  // Relations
+  category Category?     @relation(fields: [category_id], references: [categoryId])
+  asset    Asset_Details @relation(fields: [asset_id], references: [asset_id])
+}
+
+// ---- TABLE: Status ----
+model Status {
+  id     BigInt  @id @default(autoincrement())
+  status String?
+
+  // Back-relation: One Status can apply to many assets
+  Asset_Details Asset_Details[]
+}
+
+// ---- TABLE: Asset_Details ----
+model Asset_Details {
+  id              BigInt     @id @default(autoincrement())
+  category_id     BigInt?
+  name            String?
+  
+  // This MUST be unique because Category_Details is linking to it.
+  asset_id        String     @unique
+  
+  model_no        String?
+  serial_no       String?
+  status_id       BigInt?
+  location        String?
+  assigned_by     BigInt?    // This will link to Users.employeeId
+  warranty_expiry DateTime?  @db.Date
+  purchase_date   DateTime?  @db.Date
+  price           Float?
+
+  // Relations
+  category          Category?         @relation(fields: [category_id], references: [categoryId])
+  status            Status?           @relation(fields: [status_id], references: [id])
+  assignedByUser    Users?            @relation(fields: [assigned_by], references: [employeeId])
+  
+  // Back-relation for the one-to-one link from Category_Details
+  categoryDetails   Category_Details?
+}
