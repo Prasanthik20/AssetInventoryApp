@@ -1,25 +1,11 @@
-import Cors from 'cors';
-import { NextApiRequest, NextApiResponse } from 'next';
+mport { NextApiRequest, NextApiResponse } from 'next';
 
-// Initialize the cors middleware
-const cors = Cors({
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed methods
-  // You can also specify allowed origins, but for local dev, this is fine
-});
-
-// Helper function to run the middleware
-function runMiddleware(req: NextApiRequest, res: NextApiResponse, fn: Function) {
-  return new Promise((resolve, reject) => {
-    fn(req, res, (result: any) => {
-      if (result instanceof Error) {
-        return reject(result);
-      }
-      return resolve(result);
-    });
-  });
-}
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse, next: Function) {
-  await runMiddleware(req, res, cors);
-  return next();
+/**
+ * NOTE: This utility is deprecated. CORS handling is now managed globally 
+ * and more effectively by the next.js middleware file (e.g., middleware.ts)
+ * which ensures the OPTIONS preflight is handled correctly before routing.
+ */
+export function withCors(handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>) {
+  // Return the original handler directly.
+  return handler;
 }

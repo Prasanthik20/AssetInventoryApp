@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Alert, SafeAreaView, ImageBackground, FlatList,
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../../navigation/types';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import axios from 'axios';
 
@@ -13,54 +14,54 @@ interface Asset {
     serialNumber: string;
     barcode: string;
     assetName: string;
-    status: {
-        type: string;
-        assignedTo: string | null;
-        location: string;
-    };
+    status: string;
+    assignedTo: string | null;
+    assignedBy: string | null;
+    location: string;
+    
 }
 interface Status {
     id: number;
     status: string;
 }
 // Define the navigation stack param list
-export type RootStackParamList = {
-    TotalAssetsDetails: undefined;
-    AssetFullDetails: { assetId: string };
-};
+type AssetsDetailsNavigationProp = StackNavigationProp<
+    RootStackParamList,
+    'TotalAssetDetails'
+>;
 
-type AssetsDetailsNavigationProp = StackNavigationProp<RootStackParamList, 'TotalAssetsDetails'>;
-
-const StatusBadge = ({ status, allStatuses = [] }: { status: Asset['status'], allStatuses?: Status[] }) => {
-    
+const StatusBadge = ({
+    status,
+    assignedTo,
+    assignedBy,
+    location
+}: {
+    status: string;
+    assignedTo?: string | null;
+    assignedBy?: string | null;
+    location?: string;
+}) => {
     // This is now a more flexible, data-driven approach
     const getStatusStyle = () => {
-        // Find the full status object from the list
-        const statusInfo = allStatuses.find(s => s.status.toLowerCase() === status.type.toLowerCase());
-
-        // Default styles if no match is found
         let backgroundColor = '#F8F9FA';
         let borderColor = '#6C757D';
         let textColor = '#495057';
 
-        if (statusInfo) {
-            // Assign colors based on the status name from the database
-            switch (statusInfo.status.toLowerCase()) {
-                case 'assigned':
-                    backgroundColor = '#E6F3FF'; borderColor = '#007BFF'; textColor = '#0056b3';
-                    break;
-                case 'overdue':
-                    backgroundColor = '#FDEDED'; borderColor = '#DC3545'; textColor = '#a71d2a';
-                    break;
-                case 'returned':
-                    backgroundColor = '#E9F7EF'; borderColor = '#28A745'; textColor = '#1c7430';
-                    break;
-                case 'unassigned':
-                    backgroundColor = '#F8F9FA'; borderColor = '#6C757D'; textColor = '#495057';
-                    break;
-                // You can add more cases here for new statuses like "Under Maintenance"
-            }
+        switch (status?.toLowerCase()) {
+            case 'assigned':
+                backgroundColor = '#E6F3FF'; borderColor = '#007BFF'; textColor = '#0056b3';
+                break;
+            case 'overdue':
+                backgroundColor = '#FDEDED'; borderColor = '#DC3545'; textColor = '#a71d2a';
+                break;
+            case 'returned':
+                backgroundColor = '#E9F7EF'; borderColor = '#28A745'; textColor = '#1c7430';
+                break;
+            case 'unassigned':
+                backgroundColor = '#F8F9FA'; borderColor = '#6C757D'; textColor = '#495057';
+                break;
         }
+
         return { backgroundColor, borderColor, textColor };
     };
 
@@ -68,9 +69,20 @@ const StatusBadge = ({ status, allStatuses = [] }: { status: Asset['status'], al
 
     return (
         <View style={[styles.statusContainer, { backgroundColor, borderColor }]}>
-            <Text style={[styles.statusText, { color: textColor }]}>{status.type}</Text>
+            
+            {/* STATUS LABEL */}
+            <Text style={[styles.statusText, { color: textColor }]}>
+                {status}
+            </Text>
+
+            {/* WHO ASSIGNED, OR WHERE? */}
             <Text style={[styles.statusSubtext, { color: textColor }]}>
-                {status.assignedTo ? `To: ${status.assignedTo}` : `At: ${status.location}`}
+                {assignedBy
+                    ? `By: ${assignedBy}`
+                    : assignedTo
+                        ? `To: ${assignedTo}`
+                        : `At: ${location}`
+                }
             </Text>
         </View>
     );
@@ -123,42 +135,54 @@ const TotalAssetsDetails: React.FC = () => {
     };
 
     // --- RENDER FUNCTION IS NOW SEPARATE AND CLEAN ---
-    const renderAsset = ({ item, index }: { item: Asset, index: number }) => { 
-        const isOverdue = item.status.type === 'Overdue';
+   const renderAsset = ({ item, index }: { item: Asset, index: number }) => { 
+    
+    const isOverdue = item.status?.toLowerCase() === 'overdue';
         return (
-            <View style={styles.assetRow}>
-                <Text style={styles.cellSNo}>{index + 1}</Text>
-                <View style={styles.cellAssetName}>
-                    <Text style={styles.assetName}>{item.assetName}</Text>
-                    <Text style={styles.assetSubtext}>S/N: {item.serialNumber}</Text>
-                </View>
-                <Text style={styles.cellBarcode}>{item.barcode}</Text>
-                <View style={styles.cellStatus}>
-                    <StatusBadge status={item.status} />
-                </View>
-                <View style={styles.cellAction}>
-                    <View style={styles.actionButtonsContainer}>
-                        {isOverdue && (
-                            <TouchableOpacity
-                                style={[styles.actionButton, styles.notifyButton]}
-                                onPress={() => handleOpenModal({ id: item.id, name: item.assetName })}
-                            >
-                                <Ionicons name="notifications-outline" size={14} color="#fff" />
-                                <Text style={styles.actionButtonText}>Notify</Text>
-                            </TouchableOpacity>
-                        )}
+        <View style={styles.assetRow}>
+            <Text style={styles.cellSNo}>{index + 1}</Text>
+
+            <View style={styles.cellAssetName}>
+                <Text style={styles.assetName}>{item.assetName}</Text>
+                <Text style={styles.assetSubtext}>S/N: {item.serialNumber}</Text>
+            </View>
+
+            <Text style={styles.cellBarcode}>{item.barcode}</Text>
+
+            <View style={styles.cellStatus}>
+                <StatusBadge
+                    status={item.status}
+                    assignedTo={item.assignedTo}
+                    assignedBy={item.assignedBy}
+                    location={item.location}
+                />
+            </View>
+
+            <View style={styles.cellAction}>
+                <View style={styles.actionButtonsContainer}>
+
+                    {isOverdue && (
                         <TouchableOpacity
-                            style={[styles.actionButton, styles.knowMoreButton]}
-                            onPress={() => navigation.navigate('AssetFullDetails', { assetId: item.id })}
+                            style={[styles.actionButton, styles.notifyButton]}
+                            onPress={() => handleOpenModal({ id: item.id, name: item.assetName })}
                         >
-                            <Text style={styles.actionButtonText}>Know More</Text>
-                            <Ionicons name="arrow-forward" size={14} color="#fff" />
+                            <Ionicons name="notifications-outline" size={14} color="#fff" />
+                            <Text style={styles.actionButtonText}>Notify</Text>
                         </TouchableOpacity>
-                    </View>
+                    )}
+
+                    <TouchableOpacity
+                        style={[styles.actionButton, styles.knowMoreButton]}
+                        onPress={() => navigation.navigate('AssetFullDetails', { asset: item })}
+                    >
+                        <Text style={styles.actionButtonText}>Know More</Text>
+                        <Ionicons name="arrow-forward" size={14} color="#fff" />
+                    </TouchableOpacity>
                 </View>
             </View>
-        );
-    };
+        </View>
+    );
+};
 
     // --- LOADING AND ERROR CHECKS MOVED HERE (THE CORRECT LOCATION) ---
     if (loading) {

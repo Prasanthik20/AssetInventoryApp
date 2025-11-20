@@ -43,7 +43,7 @@ model Category {
   id       BigInt @id @default(autoincrement())
   
   // This MUST be unique because other tables are linking to it.
-  categoryId BigInt @unique @map("category_id")
+  categoryId BigInt @unique @map("categoryId")
 
   category String?
 
@@ -55,14 +55,14 @@ model Category {
 // ---- TABLE: Category_Details ----
 model Category_Details {
   id         BigInt @id @default(autoincrement())
-  category_id BigInt?
+  categoryId BigInt?
   name       String?
 
   // This MUST be unique to enforce the one-to-one relationship with Asset_Details
   asset_id   String @unique
 
   // Relations
-  category Category?     @relation(fields: [category_id], references: [categoryId])
+  category Category?     @relation(fields: [categoryId], references: [categoryId])
   asset    Asset_Details @relation(fields: [asset_id], references: [asset_id])
 }
 
@@ -78,7 +78,7 @@ model Status {
 // ---- TABLE: Asset_Details ----
 model Asset_Details {
   id              BigInt     @id @default(autoincrement())
-  category_id     BigInt?
+  categoryId     BigInt?
   name            String?
   
   // This MUST be unique because Category_Details is linking to it.
@@ -88,16 +88,17 @@ model Asset_Details {
   serial_no       String?
   status_id       BigInt?
   location        String?
-  assigned_by     BigInt?    // This will link to Users.employeeId
+  assigned_by     BigInt?  
+  assigned_to     BigInt? // This will link to Users.employeeId
   warranty_expiry DateTime?  @db.Date
   purchase_date   DateTime?  @db.Date
   price           Float?
 
   // Relations
-  category          Category?         @relation(fields: [category_id], references: [categoryId])
+  category          Category?         @relation(fields: [categoryId], references: [categoryId])
   status            Status?           @relation(fields: [status_id], references: [id])
   assignedByUser    Users?            @relation(fields: [assigned_by], references: [employeeId])
-  
+  assignedToUser    Users?            @relation(fields: [assigned_to], references: [employeeId])
   // Back-relation for the one-to-one link from Category_Details
   categoryDetails   Category_Details?
 }

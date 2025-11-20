@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ImageBackground } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from "expo-linear-gradient";
@@ -27,10 +27,62 @@ const CompanyDashboard: React.FC = () => {
     // 3. Use the strongly-typed navigation hook
     const navigation = useNavigation<DashboardNavigationProp>();
 
-    const users = [
-        { id: '1', name: 'John Smith', role: 'Supervisor', status: 'Active' },
-        { id: '2', name: 'Jane Doe', role: 'Operator', status: 'Active' },
-    ];
+    const [users, setUsers] = useState([]);
+
+useEffect(() => {
+  fetchUsers();
+  fetchDashboardData();
+}, []);
+
+const fetchUsers = async () => {
+  try {
+    const res = await fetch("http://localhost:3000/api/auth/users");
+    const data = await res.json();
+
+    if (res.ok && Array.isArray(data.users)) {
+      setUsers(data.users);
+      setTotalUsers(data.count);
+    } else {
+      setUsers([]);
+      console.error("Users API format error:", data);
+    }
+  } catch (error) {
+    console.error("Users API Error:", error);
+    setUsers([]);
+  }
+};
+
+    // -------------------------
+  // 📌 STATE FOR API DATA
+  // -------------------------
+  const [totalAssets, setTotalAssets] = useState<number | null>(null);
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+  const [fieldAssets, setFieldAssets] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // ------------------------------------
+  // 📌 FETCH DASHBOARD METRICS FROM API
+  // ------------------------------------
+  const fetchDashboardData = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/api/dashboard"); // <-- change to your backend IP
+      const data = await response.json();
+
+      setTotalAssets(data.totalAssets);
+      setTotalUsers(data.totalUsers);
+      setFieldAssets(data.fieldAssets);
+    } catch (error) {
+      console.log("Dashboard API Error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+ // -------------------------
+  // 📌 RUN ON PAGE OPEN
+  // -------------------------
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
     return (
         <ImageBackground
@@ -71,15 +123,15 @@ const CompanyDashboard: React.FC = () => {
                             {/* 4. Converted Views to Touchables with onPress navigation */}
                             <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('TotalAssetDetails')}>
                                 <Ionicons name="settings-outline" size={24} color="#6B46C1" />
-                                <Text style={styles.metricValue}>4500</Text>
+                                <Text style={styles.metricValue}>{totalAssets}</Text>
                                 <Text style={styles.metricLabel}>Total Assets</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('CompanyUsersScreen')}>
                                 <Ionicons name="people-outline" size={24} color="#6B46C1" />
-                                <Text style={styles.metricValue}>250</Text>
+                                <Text style={styles.metricValue}>{totalUsers}</Text>
                                 <Text style={styles.metricLabel}>Total Users</Text>
-                                <Text style={styles.metricSubLabel}>Supervisors: 15</Text>
+                                <Text style={styles.metricSubLabel}></Text>
                             </TouchableOpacity>
 
                             <View style={styles.metricBox}>
@@ -89,7 +141,7 @@ const CompanyDashboard: React.FC = () => {
 
                              <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('CompanyUsersScreen')}>
                                 <Ionicons name="people-outline" size={24} color="#6B46C1" />
-                                <Text style={styles.metricValue}>250</Text>
+                                <Text style={styles.metricValue}>{totalUsers}</Text>
                                 <Text style={styles.metricLabel}>Total Users</Text>
                                 <Text style={styles.metricSubLabel}>Supervisors: 15</Text>
                             </TouchableOpacity>
@@ -103,7 +155,7 @@ const CompanyDashboard: React.FC = () => {
 
                             <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('FieldAssets')}>
                                 <Ionicons name="map-outline" size={24} color="#6B46C1" />
-                                <Text style={styles.metricValue}>1700</Text>
+                                <Text style={styles.metricValue}>{fieldAssets}</Text>
                                 <Text style={styles.metricLabel}>Field Assets</Text>
                             </TouchableOpacity>
                         </View>
@@ -120,16 +172,15 @@ const CompanyDashboard: React.FC = () => {
                                         <Text style={[styles.headerCell, {textAlign: 'center'}]}>Actions</Text>
                                     </View>
                                     {users.map(user => (
-                                        <View style={styles.tableRow} key={user.id}>
-                                            <Text style={[styles.cellText, {flex: 2}]}>{user.name}</Text>
-                                            <Text style={styles.cellText}>{user.role}</Text>
-                                            <Text style={[styles.cellText, { color: '#28A745' }]}>{user.status}</Text>
-                                            <View style={styles.actionCell}>
-                                                <Text style={styles.actionText}>Active</Text>
-                                                <Text style={styles.actionText}>Manage</Text>
-                                            </View>
+                                        <View style={styles.tableRow} key={user.userId}>
+                                        <Text style={[styles.cellText, {flex: 2}]}>{user.fullName}</Text>
+                                        <Text style={styles.cellText}>{user.role?.roleName || "—"}</Text>
+                                        <Text style={[styles.cellText, { color: '#28A745' }]}>Active</Text>
+                                        <View style={styles.actionCell}>
+                                            <Text style={styles.actionText}>Manage</Text>
                                         </View>
-                                    ))}
+                                    </View>
+                ))}
                                 </View>
                             </View>
 

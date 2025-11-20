@@ -2,7 +2,11 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-// --- MODIFICATION: Corrected all import paths to match your folder structure ---
+// Import the shared navigation types
+import { RootStackParamList } from "./src/navigation/types";
+
+// Create navigator with imported type
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 // Client Screens
 import CompanyLoginScreen from "./src/screens/Client/CompanyLoginScreen";
@@ -17,7 +21,7 @@ import AddCompanyUser from "./src/screens/Admin/AddCompanyUser";
 import SupervisorDashboard from "./src/screens/Supervisor/SupervisorDashboard";
 
 // Operator Screens
-import OperatorDashboard from "./src/screens/Operator/OperatorDashboard"; 
+import OperatorDashboard from "./src/screens/Operator/OperatorDashboard";
 
 // Super Admin Screens
 import SuperAdminLoginScreen from "./src/screens/SuperAdmin/SuperAdminLoginScreen";
@@ -29,39 +33,18 @@ import OfficeAssets from "./src/screens/AssetDetails/OfficeAssets";
 import FieldAssets from "./src/screens/AssetDetails/FieldAssets";
 import AddEditAsset from "./src/screens/AssetDetails/AddEditAsset";
 import AssignAssetScreen from "./src/screens/AssetDetails/AssignAssetScreen";
-import AssetFullDetails from './src/screens/AssetDetails/AssetFullDetails';
-import ReturnAssetScreen from './src/screens/AssetDetails/ReturnAssetScreen';
-
-
-export type RootStackParamList = {
-  CompanyLogin: undefined;
-  AddCompany: undefined;
-  CompanyDashboard: undefined;
-  CompanyUsersScreen : undefined;
-  AddCompanyUser : undefined;
-  SupervisorDashboard: undefined;
-  OperatorDashboard : undefined;
-  SuperAdminLogin: undefined;
-  SuperAdminDashboard: undefined;
-  TotalAssetDetails: undefined;
-  OfficeAssets: undefined;
-  FieldAssets: undefined;
-  AddEditAsset: undefined;
-  AssignAsset: undefined; // Made consistent with navigation calls
-  AssetFullDetails: { assetId: string }; 
-  ReturnAsset: undefined; // Made consistent with navigation calls
-};
-
-const Stack = createNativeStackNavigator<RootStackParamList>();
+import AssetFullDetails from "./src/screens/AssetDetails/AssetFullDetails";
+import ReturnAssetScreen from "./src/screens/AssetDetails/ReturnAssetScreen";
 
 function App(): React.JSX.Element {
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="CompanyLogin">
+
         {/* Client Flow */}
         <Stack.Screen name="CompanyLogin" component={CompanyLoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AddCompany" component={AddCompanyScreen} options={{ headerShown: false }} />
-        
+
         {/* Admin Flow */}
         <Stack.Screen name="CompanyDashboard" component={CompanyDashboard} options={{ headerShown: false }} />
         <Stack.Screen name="CompanyUsersScreen" component={CompanyUsersScreen} options={{ headerShown: false }} />
@@ -72,12 +55,12 @@ function App(): React.JSX.Element {
 
         {/* Operator Flow */}
         <Stack.Screen name="OperatorDashboard" component={OperatorDashboard} options={{ headerShown: false }} />
-        
+
         {/* Super Admin Flow */}
         <Stack.Screen name="SuperAdminLogin" component={SuperAdminLoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="SuperAdminDashboard" component={SuperAdminDashboard} options={{ headerShown: false }} />
-        
-        {/* Asset Management Flow */}
+
+        {/* Asset Management */}
         <Stack.Screen name="TotalAssetDetails" component={TotalAssetDetails} options={{ headerShown: false }} />
         <Stack.Screen name="OfficeAssets" component={OfficeAssets} options={{ headerShown: false }} />
         <Stack.Screen name="FieldAssets" component={FieldAssets} options={{ headerShown: false }} />
@@ -85,6 +68,7 @@ function App(): React.JSX.Element {
         <Stack.Screen name="AssignAsset" component={AssignAssetScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AssetFullDetails" component={AssetFullDetails} options={{ headerShown: false }} />
         <Stack.Screen name="ReturnAsset" component={ReturnAssetScreen} options={{ headerShown: false }} />
+
       </Stack.Navigator>
     </NavigationContainer>
   );

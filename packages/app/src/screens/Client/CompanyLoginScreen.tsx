@@ -33,11 +33,6 @@ export default function CompanyLoginScreen() {
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
-
-  const mockAdminUser = { email: "admin@company.com", password: "admin" };
-  const mockSupervisorUser = { email: "supervisor@company.com", password: "super" };
-  const mockOperatorUser = { email: "operator@company.com", password: "pass" };
 
   const handleLogin = async () => {
         if (!email || !password) {
@@ -48,10 +43,16 @@ export default function CompanyLoginScreen() {
         try {
             // Call your Next.js API endpoint
             // For mobile development, you must use your computer's IP address, not 'localhost'
-            const response : any= await axios.post('http://127.0.0.1:3000/api/auth/login', {
-                email: email,
-                password: password,
-            });
+            const response : any= await axios.post('http://localhost:3000/api/auth/login', {
+                  // Data Payload
+                    email: email,
+                    password: password,
+                },
+                { // Configuration Object (for headers, etc.)
+                 headers: { 
+                        'Content-Type': 'application/json' 
+                    },}
+            );
 
             // The request was successful (status 200)
             const  role  = response.data.user.roleName;
@@ -91,7 +92,7 @@ export default function CompanyLoginScreen() {
         <View style={styles.loginContainer}>
             {/* Left Decorative Panel */}
             <View style={styles.leftPanel}>
-                <Image
+                <Image 
                     source={require("../../assets/Asq_Logo_IV.png")}
                     style={styles.image}
                 />
