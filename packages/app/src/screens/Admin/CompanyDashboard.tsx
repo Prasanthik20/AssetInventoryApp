@@ -149,8 +149,8 @@ const fetchUsers = async () => {
                             <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('OfficeAssets')}>
                                 <Ionicons name="business-outline" size={24} color="#6B46C1" />
                                 <Text style={styles.metricValue}>2800</Text>
-                                <Text style={styles.metricLabel}>Office Subsets</Text>
-                                <Text style={styles.metricSubLabel}>Operators: 235</Text>
+                                <Text style={styles.metricLabel}>Office Assets</Text>
+                                <Text style={styles.metricSubLabel}>Operators</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('FieldAssets')}>

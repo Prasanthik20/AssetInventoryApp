@@ -7,98 +7,67 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ---- TABLE: Roles ----
 model Roles {
   roleId   BigInt  @id @default(autoincrement()) @map("roleId")
-  roleName String? @map("roleName")
-
-  // Relation: One Role can have many Users
-  Users Users[]
+  roleName String  @map("roleName")
+  Users    Users[]
 }
 
-// ---- TABLE: Users ----
 model Users {
-  userId       BigInt  @id @default(autoincrement()) @map("userId")
-  
-  // This MUST be unique because another table is linking to it.
-  employeeId   BigInt  @unique @map("employeeId")
-  
-  fullName     String? @map("fullName")
-  email        String  @unique
-  passwordHash String  @map("passwordHash")
-  phoneNumber  String? @map("phoneNumber")
-  address      String?
-  photoURL     String? @map("photoURL")
-  roleId       BigInt? @map("roleId")
-
-  // Relation to the Roles table
-  role Roles? @relation(fields: [roleId], references: [roleId])
-
-  // Back-relation: A User can be the "assigner" for many assets
-  AssetsAssignedBy Asset_Details[]
+  userId           BigInt          @id @default(autoincrement()) @map("userId")
+  employeeId       BigInt          @unique @map("employeeId")
+  fullName         String          @map("fullName")
+  email            String          @unique
+  passwordHash     String          @map("passwordHash")
+  phoneNumebr      String?
+  address          String?
+  photoURL         String?         @map("photoURL")
+  roleId           BigInt          @map("roleId")
+  AssetsAssignedBy Asset_Details[] @relation("AssetsAssignedBy")
+  AssetsAssignedTo Asset_Details[] @relation("AssetsAssignedTo")
+  role             Roles           @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
 }
 
-// ---- TABLE: Category ----
 model Category {
-  id       BigInt @id @default(autoincrement())
-  
-  // This MUST be unique because other tables are linking to it.
-  categoryId BigInt @unique @map("categoryId")
-
-  category String?
-
-  // Back-relations
-  Category_Details Category_Details[]
+  id               BigInt             @id @default(autoincrement())
+  categoryId       BigInt             @unique @map("categoryId")
+  category         String?
   Asset_Details    Asset_Details[]
+  Category_Details Category_Details[]
 }
 
-// ---- TABLE: Category_Details ----
 model Category_Details {
-  id         BigInt @id @default(autoincrement())
-  categoryId BigInt?
-  name       String?
-
-  // This MUST be unique to enforce the one-to-one relationship with Asset_Details
-  asset_id   String @unique
-
-  // Relations
-  category Category?     @relation(fields: [categoryId], references: [categoryId])
-  asset    Asset_Details @relation(fields: [asset_id], references: [asset_id])
+  id            BigInt         @id(map: "Category_Details_pkey1") @default(autoincrement())
+  categoryId    BigInt
+  name          String
+  asset_Id      String?        @unique
+  Asset_Details Asset_Details? @relation(fields: [asset_Id], references: [asset_Id], onDelete: NoAction, onUpdate: NoAction)
+  category      Category       @relation(fields: [categoryId], references: [categoryId], onDelete: NoAction, onUpdate: NoAction, map: "Category_Details_categoryId_fkey1")
 }
 
-// ---- TABLE: Status ----
 model Status {
-  id     BigInt  @id @default(autoincrement())
-  status String?
-
-  // Back-relation: One Status can apply to many assets
+  id            BigInt          @id @default(autoincrement())
+  status        String
   Asset_Details Asset_Details[]
 }
 
-// ---- TABLE: Asset_Details ----
 model Asset_Details {
-  id              BigInt     @id @default(autoincrement())
-  categoryId     BigInt?
-  name            String?
-  
-  // This MUST be unique because Category_Details is linking to it.
-  asset_id        String     @unique
-  
-  model_no        String?
-  serial_no       String?
-  status_id       BigInt?
-  location        String?
-  assigned_by     BigInt?  
-  assigned_to     BigInt? // This will link to Users.employeeId
-  warranty_expiry DateTime?  @db.Date
-  purchase_date   DateTime?  @db.Date
-  price           Float?
-
-  // Relations
-  category          Category?         @relation(fields: [categoryId], references: [categoryId])
-  status            Status?           @relation(fields: [status_id], references: [id])
-  assignedByUser    Users?            @relation(fields: [assigned_by], references: [employeeId])
-  assignedToUser    Users?            @relation(fields: [assigned_to], references: [employeeId])
-  // Back-relation for the one-to-one link from Category_Details
-  categoryDetails   Category_Details?
+  id               BigInt            @id @unique @default(autoincrement())
+  categoryId       BigInt
+  name             String
+  asset_Id         String?           @unique(map: "Asset_Details_assetId_key")
+  model_no         String?
+  serial_no        String?
+  status_id        BigInt?
+  assigned_by      BigInt?
+  warranty_expiry  DateTime?         @db.Date
+  purchase_date    DateTime?         @db.Date
+  price            String?
+  location         String?
+  assigned_to      BigInt?
+  assignedByUser   Users?            @relation("AssetsAssignedBy", fields: [assigned_by], references: [employeeId], onDelete: NoAction, onUpdate: NoAction)
+  assignedToUser   Users?            @relation("AssetsAssignedTo", fields: [assigned_to], references: [employeeId], onDelete: NoAction, onUpdate: NoAction)
+  status           Status?           @relation(fields: [status_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  category         Category          @relation(fields: [categoryId], references: [categoryId], onDelete: NoAction, onUpdate: NoAction, map: "Category_Details_categoryId_fkey")
+  Category_Details Category_Details?
 }

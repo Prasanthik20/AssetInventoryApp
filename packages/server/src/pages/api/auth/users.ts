@@ -17,11 +17,19 @@ export default async function usersCoreHandler(req: NextApiRequest, res: NextApi
   try {
     // Corrected Query: Fetch all users and join with Roles to get the roleName
     const sqlQuery = `
-   SELECT u.*, r."roleName"
-      FROM "Users" AS u
-      LEFT JOIN "Roles" AS r
-          ON u."roleId" = r."roleId"
-      ORDER BY u."userId" ASC;
+   SELECT u.*, r."roleName",
+         json_agg(
+           json_build_object(
+             'id', a.id,
+             'name', a.name,
+             'barcode', a."asset_Id"
+           )
+         ) FILTER (WHERE a.id IS NOT NULL) AS assignedAssets
+  FROM "Users" AS u
+  LEFT JOIN "Roles" AS r ON u."roleId" = r."roleId"
+  LEFT JOIN "Asset_Details" AS a ON a."assigned_to" = u."employeeId"
+  GROUP BY u."userId", r."roleName"
+  ORDER BY u."userId" ASC;
 `;
 
     const result = await query(sqlQuery, []);
@@ -38,7 +46,8 @@ export default async function usersCoreHandler(req: NextApiRequest, res: NextApi
       // Use the fetched roleName
       role: {                  // <--- FIXED
     roleName: user.roleName || 'Unassigned'
-    }
+    },
+    assignedAssets: user.assignedassets || [],
     }));
 
     res.status(200).json({

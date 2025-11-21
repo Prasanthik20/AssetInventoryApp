@@ -1,74 +1,89 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground, FlatList, TouchableOpacity, TextInput, Image } from 'react-native';
+import { 
+    View, 
+    Text, 
+    StyleSheet, 
+    SafeAreaView, 
+    ImageBackground, 
+    FlatList, 
+    TouchableOpacity, 
+    TextInput, 
+    Image, 
+    ActivityIndicator 
+} from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Mock Data for all users, including assigned assets for operators
-const companyUsersData = [
-    {
-        id: '1',
-        name: 'John Smith',
-        email: 'john.s@company.com',
-        role: 'Supervisor',
-        status: 'Active',
-        avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
-        assignedAssets: [],
-    },
-    {
-        id: '2',
-        name: 'Jane Doe',
-        email: 'jane.d@company.com',
-        role: 'Operator',
-        status: 'Active',
-        avatarUrl: 'https://randomuser.me/api/portraits/women/44.jpg',
-        assignedAssets: [
-            { id: 'a1', name: 'Laptop Pro', barcode: 'BAR456' },
-            { id: 'a3', name: 'Safety Vest', barcode: 'BAR901' },
-        ],
-    },
-    {
-        id: '3',
-        name: 'Mike Richards',
-        email: 'mike.r@company.com',
-        role: 'Operator',
-        status: 'Active',
-        avatarUrl: 'https://randomuser.me/api/portraits/men/35.jpg',
-        assignedAssets: [
-            { id: 'a5', name: 'Tablet', barcode: 'TAB456' },
-        ],
-    },
-     {
-        id: '4',
-        name: 'Sarah Connor',
-        email: 'sarah.c@company.com',
-        role: 'Supervisor',
-        status: 'Inactive',
-        avatarUrl: 'https://randomuser.me/api/portraits/women/33.jpg',
-        assignedAssets: [],
-    },
-    // ... add more users
-];
+interface Asset {
+    id: string;
+    name: string;
+    barcode: string;
+}
+
+interface User {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    status: string;
+    avatarUrl: string;
+    assignedAssets: Asset[];
+}
 
 const CompanyUsersScreen: React.FC = () => {
-    const navigation = useNavigation<any>(); // Replace 'any' with your specific navigation type
+    const navigation = useNavigation<any>();
+
+    const [companyUsersData, setCompanyUsersData] = React.useState<User[]>([]);
+    const [loading, setLoading] = React.useState(false);
     const [filter, setFilter] = React.useState('All');
     const [searchQuery, setSearchQuery] = React.useState('');
 
-    // Memoized filtering logic for performance
+    // Fetch users from Next.js API
+    const fetchUsers = async () => {
+        try {
+            setLoading(true);
+            const response = await fetch('http://localhost:3000/api/auth/users'); // replace with your API URL
+            const data = await response.json();
+
+            // Map API response to local state structure
+            const users: User[] = data.users.map((u: any) => ({
+                id: u.userId.toString(),
+                name: u.fullName,
+                email: u.email,
+                role: u.role?.roleName || 'Unassigned',
+                status: 'Active', // default
+                avatarUrl: u.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
+                assignedAssets: (u.assignedAssets || []).map((a: any) => ({
+                    id: a.id.toString(),
+                    name: a.name,
+                    barcode: a.barcode
+                })),
+            }));
+
+            setCompanyUsersData(users);
+        } catch (err) {
+            console.error('Error fetching users:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    React.useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    // Filter & Search
     const filteredUsers = React.useMemo(() => {
         return companyUsersData
-            .filter(user => {
-                if (filter === 'All') return true;
-                return user.role === filter;
-            })
+            .filter(user => (filter === 'All' ? true : user.role === filter))
             .filter(user =>
                 user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 user.email.toLowerCase().includes(searchQuery.toLowerCase())
             );
-    }, [filter, searchQuery]);
+    }, [filter, searchQuery, companyUsersData]);
 
-    const renderUser = ({ item }: { item: typeof companyUsersData[0] }) => (
+    const renderUser = ({ item }: { item: User }) => (
         <View style={styles.userCard}>
             <View style={styles.cardHeader}>
                 <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
@@ -79,8 +94,10 @@ const CompanyUsersScreen: React.FC = () => {
                 <View style={styles.roleBadge}>
                     <Text style={styles.roleText}>{item.role}</Text>
                 </View>
-                 <View style={[styles.statusIndicator, { backgroundColor: item.status === 'Active' ? '#28A745' : '#DC3545' }]} />
+                <View style={[styles.statusIndicator, { backgroundColor: item.status === 'Active' ? '#28A745' : '#DC3545' }]} />
             </View>
+
+            {/* Assigned Assets */}
             {item.role === 'Operator' && item.assignedAssets.length > 0 && (
                 <View style={styles.assetsSection}>
                     <Text style={styles.assetsTitle}>Assigned Assets ({item.assignedAssets.length})</Text>
@@ -116,7 +133,7 @@ const CompanyUsersScreen: React.FC = () => {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Search and Filter Section */}
+                    {/* Search & Filter */}
                     <View style={styles.controlsContainer}>
                         <View style={styles.searchContainer}>
                             <Feather name="search" size={20} color="#888" style={styles.searchIcon} />
@@ -142,14 +159,18 @@ const CompanyUsersScreen: React.FC = () => {
                         </View>
                     </View>
 
-                    {/* User List */}
-                    <FlatList
-                        data={filteredUsers}
-                        renderItem={renderUser}
-                        keyExtractor={item => item.id}
-                        contentContainerStyle={styles.listContainer}
-                        showsVerticalScrollIndicator={false}
-                    />
+                    {/* Users List */}
+                    {loading ? (
+                        <ActivityIndicator size="large" color="#6B46C1" style={{ marginTop: 50 }} />
+                    ) : (
+                        <FlatList
+                            data={filteredUsers}
+                            renderItem={renderUser}
+                            keyExtractor={item => item.id}
+                            contentContainerStyle={styles.listContainer}
+                            showsVerticalScrollIndicator={false}
+                        />
+                    )}
                 </View>
             </SafeAreaView>
         </ImageBackground>
@@ -157,71 +178,35 @@ const CompanyUsersScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-     backgroundImage: {
-    flex: 1,
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-    safeArea: {
-        flex: 1,
-        width: '100%',
-        // Redundant but safe, ensures content is centered
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+    backgroundImage: { flex: 1, width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
+    safeArea: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' },
     container: {
         width: '90%',
-         maxWidth: 1100,
+        maxWidth: 1100,
         height: '90%',
-        backgroundColor: '#F3F4F8', // Solid light background
+        backgroundColor: '#F3F4F8',
         borderRadius: 25,
         overflow: 'hidden',
-        // Softer shadow to match the image
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.1,
         shadowRadius: 20,
         elevation: 10,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: 'rgba(60, 60, 80, 0.7)',
-        padding: 15,
-    },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(60, 60, 80, 0.7)', padding: 15 },
     backButton: { padding: 5 },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
     addUserButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
     addUserText: { color: '#fff', marginLeft: 5, fontWeight: '600' },
     controlsContainer: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#EAEAEA' },
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        paddingHorizontal: 15,
-        marginBottom: 15,
-    },
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 15, marginBottom: 15 },
     searchIcon: { marginRight: 10 },
     searchInput: { flex: 1, height: 45, fontSize: 15 },
     filterContainer: { flexDirection: 'row', justifyContent: 'space-around' },
     filterButton: { paddingVertical: 10, paddingHorizontal: 25, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 3 },
     filterText: { fontWeight: '600' },
     listContainer: { padding: 20 },
-    userCard: {
-        backgroundColor: '#fff',
-        borderRadius: 15,
-        padding: 15,
-        marginBottom: 15,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-        elevation: 2,
-    },
+    userCard: { backgroundColor: '#fff', borderRadius: 15, padding: 15, marginBottom: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
     cardHeader: { flexDirection: 'row', alignItems: 'center' },
     avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 15 },
     userInfo: { flex: 1 },

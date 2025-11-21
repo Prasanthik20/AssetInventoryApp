@@ -1,29 +1,54 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ImageBackground, FlatList, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
-// Mock Data filtered for "In Field" assets
-const fieldAssetsData = [
-  { id: '1', name: 'Laptop Pro', barcode: 'BAR456', assignedTo: 'Jane D.', dueDate: 'Due Tomorrow' },
-  { id: '3', name: 'Safety Vest', barcode: 'BAR901', assignedTo: 'John S.', dueDate: 'Due in 5 days' },
-  { id: '5', name: 'Tablet', barcode: 'TAB456', assignedTo: 'Mike R.', dueDate: 'OVERDUE' },
-  // ... add more field assets
-];
+interface Asset {
+  id: number;
+  assetName: string;
+  barcode: string;
+  serialNumber: string;
+  category: string;
+  status: string;
+  assignedBy: string | null;
+  assignedTo: string | null;
+  location: string;
+  purchaseDate: string;
+  warrantyExpiry: string;
+  price: number;
+}
 
 const FieldAssets: React.FC = () => {
     const navigation = useNavigation();
+    const [assets, setAssets] = useState<Asset[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const renderAsset = ({ item }: { item: typeof fieldAssetsData[0] }) => (
-        <View style={styles.assetRow}>
-            <Ionicons name="map-outline" size={24} color="#3B59B8" style={styles.assetIcon} />
-            <View style={styles.assetInfo}>
-                <Text style={styles.assetName}>{item.name} ({item.barcode})</Text>
-                <Text style={styles.assetSubtext}>Assigned to: {item.assignedTo}</Text>
-            </View>
-            <Text style={[styles.assetValue, item.dueDate === 'OVERDUE' && {color: 'red'}]}>{item.dueDate}</Text>
-        </View>
-    );
+    const fetchAssets = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/assets');
+      const data = await res.json();
+      const fieldAssets = data.assets.filter(
+        (asset: Asset) => asset.status === 'Assigned' || asset.status === 'Overdue');
+    } catch (err) {
+      console.error('Error fetching office assets:', err);
+      setAssets([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchAssets();
+  }, []);
+
+     const renderAsset = ({ item }: { item: Asset }) => (
+    <View style={styles.assetRow}>
+      <Ionicons name="business-outline" size={24} color="#3B59B8" style={styles.assetIcon} />
+      <View style={styles.assetInfo}>
+        <Text style={styles.assetName}>{item.assetName} ({item.barcode})</Text>
+        <Text style={styles.assetSubtext}>Last User: {item.assignedTo || 'N/A'}</Text>
+      </View>
+    </View>
+  );
 
     return (
         <ImageBackground source={require("../../assets/Company-bg.webp")} style={styles.backgroundImage} resizeMode="cover" blurRadius={5}>
@@ -46,7 +71,7 @@ const FieldAssets: React.FC = () => {
 
                     {/* Asset List */}
                     <FlatList
-                        data={fieldAssetsData}
+                        data={assets}
                         renderItem={renderAsset}
                         keyExtractor={item => item.id}
                         contentContainerStyle={styles.listContainer}

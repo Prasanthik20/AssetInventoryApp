@@ -1,27 +1,59 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ImageBackground, FlatList, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
-// Mock Data filtered for "In Office" assets
-const officeAssetsData = [
-  { id: '2', name: 'Drill', barcode: 'BAR789', lastUser: 'John S.' },
-  { id: '4', name: 'Projector', barcode: 'PROJ123', lastUser: 'Jane D.' },
-  // ... add more office assets
-];
+interface Asset {
+  id: number;
+  assetName: string;
+  barcode: string;
+  serialNumber: string;
+  category: string;
+  status: string;
+  assignedBy: string | null;
+  assignedTo: string | null;
+  location: string;
+  purchaseDate: string;
+  warrantyExpiry: string;
+  price: number;
+}
+
 
 const OfficeAssets: React.FC = () => {
-    const navigation = useNavigation();
+  const navigation = useNavigation();
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    const renderAsset = ({ item }: { item: typeof officeAssetsData[0] }) => (
-        <View style={styles.assetRow}>
-            <Ionicons name="business-outline" size={24} color="#3B59B8" style={styles.assetIcon} />
-            <View style={styles.assetInfo}>
-                <Text style={styles.assetName}>{item.name} ({item.barcode})</Text>
-                <Text style={styles.assetSubtext}>Last User: {item.lastUser}</Text>
-            </View>
-        </View>
-    );
+  const fetchAssets = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/assets');
+      const data = await res.json();
+
+      // Filter for Unassigned assets (Office)
+      const officeAssets = data.assets.filter((asset: Asset) => asset.status === 'Unassigned');
+      setAssets(officeAssets);
+    } catch (err) {
+      console.error('Error fetching office assets:', err);
+      setAssets([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAssets();
+  }, []);
+
+  const renderAsset = ({ item }: { item: Asset }) => (
+    <View style={styles.assetRow}>
+      <Ionicons name="business-outline" size={24} color="#3B59B8" style={styles.assetIcon} />
+      <View style={styles.assetInfo}>
+        <Text style={styles.assetName}>{item.assetName} ({item.barcode})</Text>
+        <Text style={styles.assetSubtext}>Last User: {item.assignedTo || 'N/A'}</Text>
+      </View>
+    </View>
+  );
+
 
     return (
         <ImageBackground source={require("../../assets/Company-bg.webp")} style={styles.backgroundImage} resizeMode="cover" blurRadius={5}>
@@ -44,7 +76,7 @@ const OfficeAssets: React.FC = () => {
 
                     {/* Asset List */}
                     <FlatList
-                        data={officeAssetsData}
+                        data={assets}
                         renderItem={renderAsset}
                         keyExtractor={item => item.id}
                         contentContainerStyle={styles.listContainer}
