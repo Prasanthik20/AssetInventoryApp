@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // 2️⃣ Fetch all assets after the update
         const sqlQuery = `
-            SELECT
+           SELECT
                 a.id,
                 a.name AS "assetName",
                 a."asset_Id" AS "barcode",
@@ -38,15 +38,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 a."purchase_date" AS "purchaseDate",
                 a.price,
                 a."warranty_expiry" AS "warrantyExpiry",
-                cat.category AS "category",
-                s.status AS "status",
-                u."fullName" AS "assignedBy",
-                assignee."fullName" AS "assignedTo"
+
+            cat.category AS "category",
+            s.status AS "status",
+
+            -- Supervisor & Operator names
+            u."fullName" AS "assignedBy",
+            assignee."fullName" AS "assignedTo",
+
+            -- Assignment table fields
+                aa.id AS "assignmentId",
+                aa.expected_return_date AS "expectedReturnDate",
+
+            -- Correct based on your DB structure
+                aa."operator_employeeId"     AS "operatorId",
+                aa."supervisor_employeeId"   AS "senderId"
+
             FROM "Asset_Details" a
-            LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId"
-            LEFT JOIN "Status" s ON a.status_id = s.id
-            LEFT JOIN "Users" u ON a.assigned_by = u."employeeId"
-            LEFT JOIN "Users" assignee ON a.assigned_to = assignee."employeeId"
+            LEFT JOIN "Category" cat 
+                ON a."categoryId" = cat."categoryId"
+            LEFT JOIN "Status" s 
+            ON a.status_id = s.id
+
+            LEFT JOIN "Users" u 
+            ON a.assigned_by = u."employeeId"
+            LEFT JOIN "Users" assignee 
+            ON a.assigned_to = assignee."employeeId"
+
+            LEFT JOIN "Asset_Assignments" aa 
+            ON aa."assetId" = a.id   -- ✔ FIXED (correct camelCase)
+
             ORDER BY a.id ASC;
         `;
 
@@ -64,7 +85,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             location: asset.location,
             purchaseDate: asset.purchaseDate,
             warrantyExpiry: asset.warrantyExpiry,
-            price: asset.price
+            price: asset.price,
+            expectedReturnDate: asset.expectedReturnDate || null,
+            assignmentId: asset.assignmentId || null,
+            operatorId: asset.operatorId || null,
+            senderId: asset.senderId || null,
+            receiverId: asset.operatorId || null
         }));
 
         return res.status(200).json({

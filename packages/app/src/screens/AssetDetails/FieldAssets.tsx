@@ -165,14 +165,6 @@ const sendNotification = async (assetId: string, reason: string) => {
           >
             <Text style={styles.notifyText}>Notify</Text>
           </TouchableOpacity>
-
-          {/* Quick notify with default reason
-          <TouchableOpacity
-            onPress={() => quickNotify(item)}
-            style={[styles.notifyBtn, { backgroundColor: '#27B2C3' }]}
-          >
-            <Text style={styles.notifyText}>Quick Notify</Text>
-          </TouchableOpacity> */}
         </View>
       )}
     </View>
