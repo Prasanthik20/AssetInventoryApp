@@ -14,26 +14,24 @@ import {
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-
-interface Asset {
-    id: string;
-    name: string;
-    barcode: string;
-}
+import { StackNavigationProp } from '@react-navigation/stack';
+import { Asset, RootStackParamList } from '../../navigation/types';
 
 interface User {
     id: string;
     name: string;
+    employeeId?: string;
     email: string;
     role: string;
     status: string;
     avatarUrl: string;
-    assignedAssets: Asset[];
+    assignedAssets: Array<{ id: string; name: string; barcode: string }>;
 }
 
-const CompanyUsersScreen: React.FC = () => {
-    const navigation = useNavigation<any>();
+type CompanyUsersNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyUsersScreen'>;
 
+const CompanyUsersScreen: React.FC = () => {
+    const navigation = useNavigation<CompanyUsersNavigationProp>();
     const [companyUsersData, setCompanyUsersData] = React.useState<User[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [filter, setFilter] = React.useState('All');
@@ -49,6 +47,7 @@ const CompanyUsersScreen: React.FC = () => {
             // Map API response to local state structure
             const users: User[] = data.users.map((u: any) => ({
                 id: u.userId.toString(),
+                employeeId: u.employeeId.toString(), 
                 name: u.fullName,
                 email: u.email,
                 role: u.role?.roleName || 'Unassigned',
@@ -83,33 +82,43 @@ const CompanyUsersScreen: React.FC = () => {
             );
     }, [filter, searchQuery, companyUsersData]);
 
-    const renderUser = ({ item }: { item: User }) => (
-        <View style={styles.userCard}>
-            <View style={styles.cardHeader}>
-                <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
-                <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{item.name}</Text>
-                    <Text style={styles.userEmail}>{item.email}</Text>
+     const renderUser = ({ item }: { item: User }) => (
+        <TouchableOpacity
+                disabled={item.role !== 'Operator'}
+                onPress={() => {
+                if (item.role === "Operator") {
+                    navigation.navigate("FieldAssets", {
+                    employeeId: item.employeeId?.toString() ?? "",
+                    operatorName: item.name,
+                });
+            }
+        }}>
+            <View style={styles.userCard}>
+                <View style={styles.cardHeader}>
+                    <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
+                    <View style={styles.userInfo}>
+                        <Text style={styles.userName}>{item.name}</Text>
+                        <Text style={styles.userEmail}>{item.email}</Text>
+                    </View>
+                    <View style={styles.roleBadge}>
+                        <Text style={styles.roleText}>{item.role}</Text>
+                    </View>
+                    {item.role === 'Operator' && <Ionicons name="chevron-forward" size={20} color="#888" style={{ marginLeft: 10 }} />}
                 </View>
-                <View style={styles.roleBadge}>
-                    <Text style={styles.roleText}>{item.role}</Text>
-                </View>
-                <View style={[styles.statusIndicator, { backgroundColor: item.status === 'Active' ? '#28A745' : '#DC3545' }]} />
-            </View>
 
-            {/* Assigned Assets */}
-            {item.role === 'Operator' && item.assignedAssets.length > 0 && (
-                <View style={styles.assetsSection}>
-                    <Text style={styles.assetsTitle}>Assigned Assets ({item.assignedAssets.length})</Text>
-                    {item.assignedAssets.map(asset => (
-                        <View key={asset.id} style={styles.assetItem}>
-                            <Ionicons name="cube-outline" size={16} color="#555" />
-                            <Text style={styles.assetText}>{asset.name} ({asset.barcode})</Text>
-                        </View>
-                    ))}
-                </View>
-            )}
-        </View>
+                {item.role === 'Operator' && item.assignedAssets.length > 0 && (
+                    <View style={styles.assetsSection}>
+                        <Text style={styles.assetsTitle}>Assigned Assets ({item.assignedAssets.length})</Text>
+                        {item.assignedAssets.map(asset => (
+                            <View key={asset.id} style={styles.assetItem}>
+                                <Ionicons name="cube-outline" size={16} color="#555" />
+                                <Text style={styles.assetText}>{asset.name} ({asset.barcode})</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+            </View>
+        </TouchableOpacity> // ✅ CORRECT: Closing tag now correctly wraps the entire card
     );
 
     return (

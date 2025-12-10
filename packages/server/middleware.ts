@@ -5,33 +5,28 @@ export function middleware(req: NextRequest) {
   // Allowed origins — only localhost
   const allowedOrigins = [
     "http://localhost:8081",
+    "http://localhost:8082", // <- Add your frontend port
     "http://localhost:3000",
   ];
 
-  const origin = req.headers.get("origin");
-  const responseHeaders = new Headers();
-
-  // Set Access-Control-Allow-Origin dynamically if origin is allowed
-  if (origin && allowedOrigins.includes(origin)) {
-    responseHeaders.set("Access-Control-Allow-Origin", origin);
+  const origin = req.headers.get("origin") || "";
+  
+  const headers = new Headers();
+  if (allowedOrigins.includes(origin)) {
+    headers.set("Access-Control-Allow-Origin", origin);
   }
+  headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  headers.set("Access-Control-Allow-Credentials", "true");
 
-  // Set CORS headers
-  responseHeaders.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  responseHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  responseHeaders.set("Access-Control-Allow-Credentials", "true");
-
-  // Handle preflight OPTIONS request
+  // Preflight OPTIONS request
   if (req.method === "OPTIONS") {
-    return new NextResponse(null, { status: 200, headers: responseHeaders });
+    return new NextResponse(null, { status: 200, headers });
   }
 
-  // Continue with request and attach headers
-  const response = NextResponse.next();
-  responseHeaders.forEach((value, key) => response.headers.set(key, value));
-
-  return response;
+  // For other requests, forward request with headers attached
+  return NextResponse.next({ request: req, headers });
 }
 
-// Apply middleware only to /api routes
+// Apply middleware only to API routes
 export const config = { matcher: "/api/:path*" };

@@ -9,25 +9,38 @@ datasource db {
 
 model Roles {
   roleId   BigInt  @id @default(autoincrement()) @map("roleId")
-  roleName String  @map("roleName")
+  roleName String? @map("roleName")
   Users    Users[]
 }
 
 model Users {
-  userId           BigInt          @id @default(autoincrement()) @map("userId")
-  employeeId       BigInt          @unique @map("employeeId")
-  fullName         String          @map("fullName")
-  email            String          @unique
-  passwordHash     String          @map("passwordHash")
-  phoneNumebr      String?
-  address          String?
-  photoURL         String?         @map("photoURL")
-  roleId           BigInt          @map("roleId")
-  AssetsAssignedBy Asset_Details[] @relation("AssetsAssignedBy")
-  AssetsAssignedTo Asset_Details[] @relation("AssetsAssignedTo")
-  role             Roles           @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
+  userId                BigInt              @id @default(autoincrement()) @map("userId")
+  employeeId            BigInt              @unique @map("employeeId")
+  fullName              String?             @map("fullName")
+  email                 String              @unique
+  passwordHash          String              @map("passwordHash")
+  phoneNumber           String?             // Corrected spelling
+  address               String?
+  photoURL              String?             @map("photoURL")
+  roleId                BigInt?             @map("roleId")
+  
+  role                  Roles?              @relation(fields: [roleId], references: [roleId])
+  
+  // Relations to assets this user has been assigned
+  AssetsAssignedTo      Asset_Details[]     @relation("AssetsAssignedTo")
+  // Relations to assets this user has assigned to others
+  AssetsAssignedBy      Asset_Details[]     @relation("AssetsAssignedBy")
+
+  // Relations for assignments history
+  operatorAssignments   Asset_Assignments[] @relation("OperatorAssignments")
+  supervisorAssignments Asset_Assignments[] @relation("SupervisorAssignments")
+  
+  // Relations for notifications
+  sentNotifications     Notifications[]     @relation("SentNotifications")
+  receivedNotifications Notifications[]     @relation("ReceivedNotifications")
 }
 
+// ... (Category and Category_Details models are complex, keeping as is for now)
 model Category {
   id               BigInt             @id @default(autoincrement())
   categoryId       BigInt             @unique @map("categoryId")
@@ -35,15 +48,15 @@ model Category {
   Asset_Details    Asset_Details[]
   Category_Details Category_Details[]
 }
-
 model Category_Details {
   id            BigInt         @id(map: "Category_Details_pkey1") @default(autoincrement())
   categoryId    BigInt
   name          String
   asset_Id      String?        @unique
-  Asset_Details Asset_Details? @relation(fields: [asset_Id], references: [asset_Id], onDelete: NoAction, onUpdate: NoAction)
-  category      Category       @relation(fields: [categoryId], references: [categoryId], onDelete: NoAction, onUpdate: NoAction, map: "Category_Details_categoryId_fkey1")
+  Asset_Details Asset_Details? @relation(fields: [asset_Id], references: [asset_Id])
+  category      Category       @relation(fields: [categoryId], references: [categoryId], map: "Category_Details_categoryId_fkey1")
 }
+
 
 model Status {
   id            BigInt          @id @default(autoincrement())
@@ -52,22 +65,61 @@ model Status {
 }
 
 model Asset_Details {
-  id               BigInt            @id @unique @default(autoincrement())
-  categoryId       BigInt
-  name             String
-  asset_Id         String?           @unique(map: "Asset_Details_assetId_key")
-  model_no         String?
-  serial_no        String?
-  status_id        BigInt?
-  assigned_by      BigInt?
-  warranty_expiry  DateTime?         @db.Date
-  purchase_date    DateTime?         @db.Date
-  price            String?
-  location         String?
-  assigned_to      BigInt?
-  assignedByUser   Users?            @relation("AssetsAssignedBy", fields: [assigned_by], references: [employeeId], onDelete: NoAction, onUpdate: NoAction)
-  assignedToUser   Users?            @relation("AssetsAssignedTo", fields: [assigned_to], references: [employeeId], onDelete: NoAction, onUpdate: NoAction)
-  status           Status?           @relation(fields: [status_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  category         Category          @relation(fields: [categoryId], references: [categoryId], onDelete: NoAction, onUpdate: NoAction, map: "Category_Details_categoryId_fkey")
-  Category_Details Category_Details?
+  id                BigInt            @id @unique @default(autoincrement())
+  categoryId        BigInt
+  name              String
+  asset_Id          String?           @unique(map: "Asset_Details_assetId_key")
+  model_no          String?
+  serial_no         String?
+  status_id         BigInt?
+  assigned_by       BigInt? // employeeId of supervisor
+  assigned_to       BigInt? // employeeId of operator
+  warranty_expiry   DateTime?         @db.Date
+  purchase_date     DateTime?         @db.Date
+  price             String?
+  location          String?
+  
+  // Corrected Relations
+  assignedByUser    Users?            @relation("AssetsAssignedBy", fields: [assigned_by], references: [employeeId])
+  assignedToUser    Users?            @relation("AssetsAssignedTo", fields: [assigned_to], references: [employeeId])
+  status            Status?           @relation(fields: [status_id], references: [id])
+  category          Category          @relation(fields: [categoryId], references: [categoryId], map: "Category_Details_categoryId_fkey")
+  Category_Details  Category_Details?
+
+  assignments       Asset_Assignments[]
+  notifications     Notifications[]
+}
+
+model Asset_Assignments {
+  id                    BigInt    @id @default(autoincrement())
+  assetId               BigInt
+  operator_employeeId   BigInt
+  supervisor_employeeId BigInt
+  projectName           String?
+  location              String?
+  assigned_date         DateTime? @db.Date
+  expected_return_date  DateTime? @db.Date
+  notes                 String?
+
+  asset                 Asset_Details @relation(fields: [assetId], references: [id])
+  operator              Users         @relation("OperatorAssignments", fields: [operator_employeeId], references: [employeeId])
+  supervisor            Users         @relation("SupervisorAssignments", fields: [supervisor_employeeId], references: [employeeId])
+  notifications         Notifications[] 
+}
+
+model Notifications {
+  id          BigInt      @id @default(autoincrement())
+  assetId     BigInt
+  assignmentId  BigInt? 
+  reply       String?
+  senderId    BigInt      // supervisor employeeId
+  receiverId  BigInt      // operator employeeId
+  reason      String
+  status      String      @default("unread")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  asset       Asset_Details   @relation(fields: [assetId], references: [id])
+  assignment    Asset_Assignments? @relation(fields: [assignmentId], references: [id])
+  sender      Users           @relation("SentNotifications", fields: [senderId], references: [employeeId])
+  receiver    Users           @relation("ReceivedNotifications", fields: [receiverId], references: [employeeId])
 }

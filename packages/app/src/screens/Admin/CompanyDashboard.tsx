@@ -2,14 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ImageBackground } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 
 // --- For Type Safety with React Navigation ---
 import { StackNavigationProp } from '@react-navigation/stack';
 
 // 1. Define your navigation routes, including the new asset screens
 export type RootStackParamList = {
-  CompanyDashboard: undefined;
+  CompanyDashboard: {
+  adminName: string;
+  adminImage: string | null;
+  roleName: string;
+};
   AddCompanyUser: undefined;
   TotalAssetDetails: undefined;
   CompanyUsersScreen : undefined;
@@ -20,19 +24,22 @@ export type RootStackParamList = {
 
 // 2. Create a specific type for this screen's navigation prop
 type DashboardNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyDashboard'>;
-
+type DashboardRoute = RouteProp<RootStackParamList, "CompanyDashboard">;
 
 const CompanyDashboard: React.FC = () => {
 
     // 3. Use the strongly-typed navigation hook
     const navigation = useNavigation<DashboardNavigationProp>();
+    const route = useRoute<DashboardRoute>();
 
+    const { adminName, adminImage, roleName } = route.params;
     const [users, setUsers] = useState([]);
+  const [totalAssets, setTotalAssets] = useState<number | null>(null);
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+  const [officeAssets, setOfficeAssets] = useState<number | null>(null);
+  const [fieldAssets, setFieldAssets] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
-useEffect(() => {
-  fetchUsers();
-  fetchDashboardData();
-}, []);
 
 const fetchUsers = async () => {
   try {
@@ -52,14 +59,6 @@ const fetchUsers = async () => {
   }
 };
 
-    // -------------------------
-  // 📌 STATE FOR API DATA
-  // -------------------------
-  const [totalAssets, setTotalAssets] = useState<number | null>(null);
-  const [totalUsers, setTotalUsers] = useState<number | null>(null);
-  const [fieldAssets, setFieldAssets] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-
   // ------------------------------------
   // 📌 FETCH DASHBOARD METRICS FROM API
   // ------------------------------------
@@ -67,9 +66,8 @@ const fetchUsers = async () => {
     try {
       const response = await fetch("http://localhost:3000/api/dashboard"); // <-- change to your backend IP
       const data = await response.json();
-
       setTotalAssets(data.totalAssets);
-      setTotalUsers(data.totalUsers);
+      setOfficeAssets(data.officeAssets);   // FIXED
       setFieldAssets(data.fieldAssets);
     } catch (error) {
       console.log("Dashboard API Error:", error);
@@ -81,8 +79,10 @@ const fetchUsers = async () => {
   // 📌 RUN ON PAGE OPEN
   // -------------------------
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  fetchUsers();
+  fetchDashboardData();
+}, []);
+
 
     return (
         <ImageBackground
@@ -94,26 +94,28 @@ const fetchUsers = async () => {
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.container}>
                     {/* Left Panel */}
-                    <LinearGradient
-                        colors={['#6E56B3', '#4A328C']}
-                        style={styles.leftPanel}
-                    >
-                        <Image
-                            source={{ uri: "https://i.imgur.com/vJAU86z.png" }} // Updated graphic
-                            style={styles.leftPanelImage}
-                        />
-                        <Text style={styles.leftPanelTitle}>COMPANY OVERVIEW</Text>
-                        <Text style={styles.leftPanelSubtitle}>ASSETFLOW</Text>
-                    </LinearGradient>
+                    <View style={styles.leftPanel}>
+                        <Image source={{ uri: adminImage || "https://i.imgur.com/6VBx3io.png",
+                                        }}
+                                style={{ width: 120, height: 120, borderRadius: 40 }}/>
+  
+                        <Text style={{ fontSize: 40, fontWeight: "bold", marginTop: 10 }}>
+                                {adminName}
+                        </Text>
+
+                        <Text style={{ fontSize: 30, color: "gray" }}>
+                                {roleName}
+                        </Text>
+                    </View>
 
                     {/* Right Panel */}
                     <View style={styles.rightPanel}>
                         {/* Header */}
                         <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Company Admin Dashboard</Text>
+                            <Text style={styles.headerTitle}>Dashboard</Text>
                             <View style={styles.headerRight}>
                                 <Ionicons name="person-outline" size={16} color="#333" />
-                                <Text style={styles.userText}>Admin</Text>
+                                <Text style={styles.userText}>{ roleName }</Text>
                                 <Ionicons name="settings-outline" size={20} color="#333" />
                             </View>
                         </View>
@@ -148,7 +150,7 @@ const fetchUsers = async () => {
 
                             <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('OfficeAssets')}>
                                 <Ionicons name="business-outline" size={24} color="#6B46C1" />
-                                <Text style={styles.metricValue}>2800</Text>
+                                <Text style={styles.metricValue}>{officeAssets}</Text>
                                 <Text style={styles.metricLabel}>Office Assets</Text>
                                 <Text style={styles.metricSubLabel}>Operators</Text>
                             </TouchableOpacity>
@@ -225,8 +227,9 @@ const styles = StyleSheet.create({
         flexDirection: "row",
     },
     leftPanel: {
-        width: "35%",
+        width: "25%",
         justifyContent: "center",
+        backgroundColor: "rgba(192, 215, 243, 0.52)",
         alignItems: "center",
         padding: 20,
         // The semi-transparent gradient is applied directly in the component
@@ -253,7 +256,7 @@ const styles = StyleSheet.create({
     rightPanel: {
         flex: 1,
         // --- MODIFICATION: Made background semi-transparent white ---
-        backgroundColor: "rgba(255, 255, 255, 0.4)",
+        backgroundColor: "rgba(61, 138, 233, 0.52)",
         padding: 25,
     },
     header: {

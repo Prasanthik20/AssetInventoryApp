@@ -1,42 +1,64 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground, TouchableOpacity, Switch, Image, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground, TouchableOpacity, Switch, Image, TextInput,Modal,
+  FlatList,
+  Pressable, } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from "@react-navigation/stack";
+import useAssetMeta from "../../hooks/useAssetMeta";
+import { Asset, RootStackParamList } from "../../navigation/types";
 
-// Define the structure for our new asset data
-interface AssetData {
-    assetName: string;
-    category: string;
-    status: string;
-    location: string;
-    modelNumber: string;
-    serialNumber: string;
-    purchaseDate: string;
-    purchasePrice: string;
-    warrantyExpiry: string;
-}
+type NavigationProp = StackNavigationProp<RootStackParamList, "AddEditAsset">;
+
 
 const AddEditAsset: React.FC = () => {
-    const navigation = useNavigation<any>();
-    const [isEnabled, setIsEnabled] = useState(true);
+  const navigation = useNavigation<NavigationProp>();
+  const { categories, statuses } = useAssetMeta();
 
-    // Initial state is empty for adding a new asset
-    const [assetData, setAssetData] = useState<AssetData>({
-        assetName: '',
-        category: 'Heavy Machinery',
-        status: 'Available',
-        location: 'Main Yard',
-        modelNumber: '',
-        serialNumber: '',
-        purchaseDate: '',
-        purchasePrice: '',
-        warrantyExpiry: '',
-    });
+ const [isEnabled, setIsEnabled] = useState(true);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
 
-    const handleInputChange = (field: keyof AssetData, value: string) => {
-        setAssetData(prev => ({ ...prev, [field]: value }));
-    };
+const [assetData, setAssetData] = useState<Omit<Asset, 'id'>>({
+  assetName: "",
+  category: "",
+  status: "",
+  location: "",
+  modelNumber: "",
+  serialNumber: "",
+  purchaseDate: "",
+  warrantyExpiry: "",
+  price: "",
+});
+
+  
+  // Keep assetData in sync if categories/statuses arrive after mount
+   useEffect(() => {
+     setAssetData((prev) => ({
+    ...prev,
+    category: prev.category || categories?.[0]?.category || "",
+    status: prev.status || statuses?.[0]?.status || "",
+  }));
+}, [categories, statuses]);
+
+  const handleInputChange = (field: keyof Asset, value: string) =>
+    setAssetData((prev) => ({ ...prev, [field]: value }));
+
+  const handleSelectCategory = (c: { id: number | string; category: string }) => {
+    setAssetData((prev) => ({ ...prev, category: c.category }));
+    setShowCategoryPicker(false);
+  };
+
+  const handleSelectStatus = (s: { id: number | string; status: string }) => {
+    setAssetData((prev) => ({ ...prev, status: s.status }));
+    setShowStatusPicker(false);
+  };
+
+  const handleCreate = () => {
+    navigation.navigate("AssetFullDetails", { asset: assetData as any });
+  };
+
 
     return (
         <ImageBackground
@@ -97,13 +119,13 @@ const AddEditAsset: React.FC = () => {
                                     <Text style={styles.label}>Category</Text>
                                     <Switch value={isEnabled} onValueChange={setIsEnabled} trackColor={{ false: "#E9E9EA", true: "#81b0ff" }} thumbColor={"#f4f3f4"} style={{ transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }] }} />
                                 </View>
-                                <TouchableOpacity style={styles.pickerInput}>
+                                <TouchableOpacity style={styles.pickerInput} onPress={() => setShowCategoryPicker(true)}>
                                     <Text style={styles.pickerText}>{assetData.category}</Text>
                                     <Ionicons name="chevron-down" size={18} color="#555" />
                                 </TouchableOpacity>
 
                                 <Text style={styles.label}>Status</Text>
-                                <TouchableOpacity style={styles.pickerInput}>
+                                <TouchableOpacity style={styles.pickerInput} onPress={() => setShowStatusPicker(true)}>
                                     <Text style={styles.pickerText}>{assetData.status}</Text>
                                     <Ionicons name="chevron-down" size={18} color="#555" />
                                 </TouchableOpacity>
@@ -129,21 +151,27 @@ const AddEditAsset: React.FC = () => {
                                     <Text style={styles.pickerText}>{assetData.location}</Text>
                                     <Ionicons name="chevron-down" size={18} color="#555" />
                                 </TouchableOpacity>
-
                                 <Text style={styles.label}>Warranty Expiry</Text>
-                                <TextInput style={[styles.textInput, styles.singleTextInput]} placeholder="YYYY-MM-DD" value={assetData.warrantyExpiry} onChangeText={v => handleInputChange('warrantyExpiry', v)} placeholderTextColor="#555" />
-                                
-                                <Text style={styles.label}>Purchase Date</Text>
-                                <TextInput style={[styles.textInput, styles.singleTextInput]} placeholder="YYYY-MM-DD" value={assetData.purchaseDate} onChangeText={v => handleInputChange('purchaseDate', v)} placeholderTextColor="#555" />
+                                <TextInput style={[styles.textInput, styles.singleTextInput]}
+                                        placeholder="YYYY-MM-DD" value={assetData.warrantyExpiry as string} onChangeText={(v) =>
+                                        handleInputChange("warrantyExpiry", v) } placeholderTextColor="#555"/>
 
+                                <Text style={styles.label}>Purchase Date</Text>
+                                <TextInput style={[styles.textInput, styles.singleTextInput]}
+                                        placeholder="YYYY-MM-DD" value={assetData.purchaseDate as string}
+                                        onChangeText={(v) => handleInputChange("purchaseDate", v)} placeholderTextColor="#555"/>
                                 <Text style={styles.label}>Purchase Price</Text>
-                                <TextInput style={[styles.textInput, styles.singleTextInput]} placeholder="Price (e.g., 1500.00)" value={assetData.purchasePrice} onChangeText={v => handleInputChange('purchasePrice', v)} keyboardType="numeric" placeholderTextColor="#555"/>
+                                <TextInput style={[styles.textInput, styles.singleTextInput]} placeholder="Price (e.g., 1500.00)" value={assetData.price} onChangeText={v => handleInputChange('price', v)} keyboardType="numeric" placeholderTextColor="#555"/>
                             </View>
                         </View>
 
                         {/* Action Buttons */}
                         <View style={styles.footer}>
-                            <TouchableOpacity>
+                            <TouchableOpacity onPress={() => {
+        // Navigate & pass assetData (include generated id to satisfy Asset type)
+                                const assetWithId = { ...assetData, id: Date.now().toString() } as Asset;
+                                navigation.navigate("AssetFullDetails", { asset: assetWithId });
+                            }}>
                                 <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.saveButton}>
                                     <Text style={styles.buttonText}>CREATE ASSET</Text>
                                 </LinearGradient>
@@ -154,6 +182,57 @@ const AddEditAsset: React.FC = () => {
                         </View>
                     </View>
                 </View>
+                {/* Category Picker Modal */}
+        <Modal visible={showCategoryPicker} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <FlatList
+                data={categories}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={styles.modalItem}
+                    onPress={() => handleSelectCategory(item)}
+                  >
+                    <Text style={styles.modalItemText}>{item.category}</Text>
+                  </Pressable>
+                )}
+              />
+              <TouchableOpacity
+                style={styles.modalClose}
+                onPress={() => setShowCategoryPicker(false)}
+              >
+                <Text style={{ color: "#fff" }}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Status Picker Modal */}
+        <Modal visible={showStatusPicker} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <FlatList
+                data={statuses}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={styles.modalItem}
+                    onPress={() => handleSelectStatus(item)}
+                  >
+                    <Text style={styles.modalItemText}>{item.status}</Text>
+                  </Pressable>
+                )}
+              />
+              <TouchableOpacity
+                style={styles.modalClose}
+                onPress={() => setShowStatusPicker(false)}
+              >
+                <Text style={{ color: "#fff" }}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
             </SafeAreaView>
         </ImageBackground>
     );
@@ -265,6 +344,12 @@ const styles = StyleSheet.create({
     saveButton: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: 10 },
     cancelButton: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: 10, backgroundColor: 'rgba(234, 234, 234, 0.8)', marginLeft: 15 },
     buttonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+    modalContainer: { backgroundColor: "#fff", borderRadius: 10, width: "80%", maxHeight: "50%" },
+    modalItem: { paddingVertical: 6, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#eee", minHeight: 32, justifyContent: "center" },
+    modalClose: { backgroundColor: "#27B2C3", paddingVertical: 10, alignItems: "center", borderBottomLeftRadius: 10, borderBottomRightRadius: 10 },
+    modalItemText: { fontSize: 13, color: "#333", },
+
 });
 
 export default AddEditAsset;

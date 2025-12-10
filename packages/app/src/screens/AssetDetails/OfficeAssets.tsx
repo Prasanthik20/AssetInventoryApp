@@ -78,7 +78,7 @@ const OfficeAssets: React.FC = () => {
                     <FlatList
                         data={assets}
                         renderItem={renderAsset}
-                        keyExtractor={item => item.id}
+                        keyExtractor={item => item.id.toString()}
                         contentContainerStyle={styles.listContainer}
                     />
                 </View>

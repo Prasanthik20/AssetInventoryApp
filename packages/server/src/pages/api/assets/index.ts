@@ -8,6 +8,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
+        // 1️⃣ Update assets: Assigned → Overdue if expected_return_date < today
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+        const updateQuery = `
+             UPDATE "Asset_Details"
+                SET status_id = (
+                SELECT id FROM "Status" WHERE status = 'Overdue' LIMIT 1
+             )
+            WHERE status_id = (
+            SELECT id FROM "Status" WHERE status = 'Assigned' LIMIT 1
+            )
+            AND id IN (
+            SELECT "assetId" FROM "Asset_Assignments"
+            WHERE "expected_return_date" < CURRENT_DATE
+            );
+        `;
+
+        await query(updateQuery);
+
+        // 2️⃣ Fetch all assets after the update
         const sqlQuery = `
             SELECT
                 a.id,
@@ -18,19 +38,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 a."purchase_date" AS "purchaseDate",
                 a.price,
                 a."warranty_expiry" AS "warrantyExpiry",
-
-                -- joined tables
                 cat.category AS "category",
                 s.status AS "status",
                 u."fullName" AS "assignedBy",
                 assignee."fullName" AS "assignedTo"
-
             FROM "Asset_Details" a
             LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId"
             LEFT JOIN "Status" s ON a.status_id = s.id
             LEFT JOIN "Users" u ON a.assigned_by = u."employeeId"
             LEFT JOIN "Users" assignee ON a.assigned_to = assignee."employeeId"
-
             ORDER BY a.id ASC;
         `;
 

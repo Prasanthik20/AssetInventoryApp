@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/types';
-
+import useAssetMeta from "../../hooks/useAssetMeta";
 
 
 type AssetFullDetailsRouteProp = RouteProp<
@@ -38,9 +38,10 @@ const DisplayField = ({ label, value, icon, children }: { label: string, value?:
 const AssetFullDetails: React.FC = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<AssetFullDetailsRouteProp>();
-
-     const { asset } = route.params;
-
+    const { categories, statuses } = useAssetMeta();
+    const { asset } = route.params;
+    const matchedCategory = categories.find(c => String(c.id) === String(asset.category));
+    const matchedStatus = statuses.find(s => String(s.id) === String(asset.status));
     if (!asset) {
         return <Text>Asset not found!</Text>;
     }
@@ -94,13 +95,14 @@ const AssetFullDetails: React.FC = () => {
                             <View style={styles.formColumn}>
                                 <Text style={styles.sectionTitle}>General Details</Text>
                                 <DisplayField label="Asset Name" value={asset.assetName} icon="truck" />
-                                <DisplayField label="Category" icon="layers">
+                                
+                                <DisplayField  label="Category" value={matchedCategory?.category || asset.category} icon="layers">
                                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                                         <Text style={styles.valueText}>{asset.category}</Text>
                                         <Switch value={true} trackColor={{ false: "#E9E9EA", true: "#81b0ff" }} thumbColor={"#f4f3f4"} style={{ transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }] }} />
                                     </View>
                                 </DisplayField>
-                                <DisplayField label="Status" value={asset.status} icon="check-circle" />
+                                <DisplayField  label="Status" value={matchedStatus?.status || asset.status} icon="check-circle" />
                                 <DisplayField label="Model Number" value={asset.modelNumber} icon="archive" />
                                 <DisplayField label="Serial Number" value={asset.serialNumber} icon="hash" />
                                 <DisplayField label="Price" value={asset.price} icon="dollar" />
@@ -119,8 +121,8 @@ const AssetFullDetails: React.FC = () => {
                                 <DisplayField label="Current Location" value={asset.location} icon="map-pin" />
                                 <DisplayField label="Assigned By" value={asset.assignedBy} icon="user-check" />
                                 <DisplayField label="Assigned To" value={asset.assignedTo} icon="user-check" />
-                                <DisplayField label="Warranty Expiry" value={asset.warrantyExpiry} icon="calendar" />
-                                <DisplayField label="Purchase Date" value={asset.purchaseDate} icon="calendar" />
+                                <DisplayField label="Warranty Expiry" value={asset.warrantyExpiry instanceof Date ? asset.warrantyExpiry.toLocaleDateString() : String(asset.warrantyExpiry)} icon="calendar" />
+                                <DisplayField label="Purchase Date" value={asset.purchaseDate instanceof Date ? asset.purchaseDate.toLocaleDateString() : String(asset.purchaseDate)} icon="calendar" />
                             </View>
                         </View>
                         

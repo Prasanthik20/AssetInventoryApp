@@ -19,9 +19,21 @@ import axios from 'axios';
 
 export type RootStackParamList = {
   CompanyLogin: undefined;
-  CompanyDashboard: undefined;
-  SupervisorDashboard: undefined;
-  OperatorDashboard : undefined;
+  CompanyDashboard: {
+    adminName: string;
+    adminImage: string | null;
+    roleName: string;
+  };
+  SupervisorDashboard: {
+    supervisorName: string;
+    roleName: string;
+    employeeId: string;
+  }
+  OperatorDashboard : {
+    operatorName : string;
+    roleName : string;
+    employeeId: string;
+  }
   SuperAdminLogin: undefined;
 };
 
@@ -60,11 +72,23 @@ export default function CompanyLoginScreen() {
 
             // Navigate based on the role received from the backend
             if (role === 'Admin') {
-                navigation.navigate("CompanyDashboard");
+                navigation.navigate("CompanyDashboard", {
+                    adminName: response.data.user.fullName,
+                    adminImage: response.data.user.photoURL,
+                    roleName: response.data.user.roleName,
+             });
             } else if (role === 'Supervisor') {
-                navigation.navigate("SupervisorDashboard");
+                navigation.navigate("SupervisorDashboard", {
+                    supervisorName: response.data.user.fullName,
+                    roleName: response.data.user.roleName,
+                    employeeId: response.data.user.employeeId, 
+                });
             } else if (role === 'Operator') {
-                navigation.navigate("OperatorDashboard");
+                navigation.navigate("OperatorDashboard", {
+                    operatorName: response.data.user.fullName,
+                    roleName: response.data.user.roleName,
+                    employeeId: response.data.user.employeeId, 
+                });
             } else {
                 // Handle other roles or default case
                 navigation.navigate("CompanyLogin");
@@ -174,6 +198,8 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
+        backgroundColor:"rgba(61, 138, 233, 0.52)"
+
     },
     loginContainer: {
         flexDirection: 'row',
@@ -183,6 +209,8 @@ const styles = StyleSheet.create({
         maxHeight: 550,
         // --- MODIFICATION: Increased transparency for "frosted glass" effect ---
         backgroundColor: "rgba(255, 255, 255, 0.35)",
+        // backgroundColor:"rgba(61, 138, 233, 0.52)",
+
         borderRadius: 25,
         overflow: 'hidden',
         borderWidth: 1,

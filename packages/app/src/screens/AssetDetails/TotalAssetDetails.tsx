@@ -3,27 +3,16 @@ import { View, Text, StyleSheet, Alert, SafeAreaView, ImageBackground, FlatList,
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../navigation/types';
+import { Asset, RootStackParamList } from '../../navigation/types';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import axios from 'axios';
 
 
-// Define the structure of an Asset from the API
-interface Asset {
-    id: string;
-    serialNumber: string;
-    barcode: string;
-    assetName: string;
-    status: string;
-    assignedTo: string | null;
-    assignedBy: string | null;
-    location: string;
-    
-}
 interface Status {
     id: number;
     status: string;
 }
+
 // Define the navigation stack param list
 type AssetsDetailsNavigationProp = StackNavigationProp<
     RootStackParamList,

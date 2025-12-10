@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Modal,
+    TouchableOpacity,
+    TextInput,
+    Alert,
+} from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -8,14 +16,27 @@ interface Props {
     onClose: () => void;
     onSubmit: (reason: string) => void;
     assetName: string;
+    title?: string;
 }
 
-const OverdueNotificationModal: React.FC<Props> = ({ visible, onClose, onSubmit, assetName }) => {
+const OverdueNotificationModal: React.FC<Props> = ({
+    visible,
+    onClose,
+    onSubmit,
+    assetName,
+    title
+}) => {
+
     const [reason, setReason] = useState('');
+
+    // 🔥 Auto-clear input each time modal opens
+    useEffect(() => {
+        if (visible) setReason('');
+    }, [visible]);
 
     const handleSubmit = () => {
         if (!reason.trim()) {
-            Alert.alert("Reason Required", "Please provide a reason for the delay.");
+            Alert.alert("Reason Required", "Please provide details.");
             return;
         }
         onSubmit(reason);
@@ -30,53 +51,69 @@ const OverdueNotificationModal: React.FC<Props> = ({ visible, onClose, onSubmit,
         >
             <View style={styles.centeredView}>
                 <View style={styles.modalView}>
+
+                    {/* CLOSE BUTTON */}
                     <TouchableOpacity style={styles.closeButton} onPress={onClose}>
                         <Feather name="x" size={24} color="#555" />
                     </TouchableOpacity>
-                    <Text style={styles.modalTitle}>Notify Supervisor</Text>
-                    <Text style={styles.modalSubtitle}>
-                        Provide a reason for the overdue status of: <Text style={{ fontWeight: 'bold' }}>{assetName}</Text>
+
+                    {/* TITLE */}
+                    <Text style={styles.modalTitle}>
+                        {title || 'Provide Details'}
                     </Text>
 
+                    {/* SUBTITLE */}
+                    <Text style={styles.modalSubtitle}>
+                        Enter message for: <Text style={{ fontWeight: 'bold' }}>{assetName}</Text>
+                    </Text>
+
+                    {/* INPUT */}
                     <TextInput
                         style={styles.reasonInput}
-                        placeholder="e.g., Project extended, equipment requires maintenance..."
+                        placeholder="Enter your message..."
                         placeholderTextColor="#888"
                         multiline
                         value={reason}
                         onChangeText={setReason}
                     />
 
+                    {/* SUBMIT BUTTON */}
                     <TouchableOpacity onPress={handleSubmit} style={styles.submitButton}>
-                         <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.submitButtonGradient}>
-                            <Text style={styles.submitButtonText}>Send Notification</Text>
+                        <LinearGradient
+                            colors={['#27B2C3', '#40D69B']}
+                            style={styles.submitButtonGradient}
+                        >
+                            <Text style={styles.submitButtonText}>
+                                {title?.includes("Reply") ? "Send Reply" : "Send Notification"}
+                            </Text>
                         </LinearGradient>
                     </TouchableOpacity>
+
                 </View>
             </View>
         </Modal>
     );
 };
 
+// ---------------------------
+// 🔹 STYLES
+// ---------------------------
+
 const styles = StyleSheet.create({
     centeredView: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'rgba(0,0,0,0.6)',
     },
     modalView: {
         width: '90%',
         maxWidth: 500,
-        backgroundColor: '#F7F8FC',
+        backgroundColor: '#FFFFFF',
         borderRadius: 20,
         padding: 25,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
+        elevation: 6,
     },
     closeButton: {
         position: 'absolute',
@@ -88,6 +125,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#1A202C',
         marginBottom: 10,
+        textAlign: 'center',
     },
     modalSubtitle: {
         fontSize: 15,

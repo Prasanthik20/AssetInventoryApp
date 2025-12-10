@@ -41,26 +41,20 @@ function App(): React.JSX.Element {
     <NavigationContainer>
       <Stack.Navigator initialRouteName="CompanyLogin">
 
-        {/* Client Flow */}
         <Stack.Screen name="CompanyLogin" component={CompanyLoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AddCompany" component={AddCompanyScreen} options={{ headerShown: false }} />
 
-        {/* Admin Flow */}
         <Stack.Screen name="CompanyDashboard" component={CompanyDashboard} options={{ headerShown: false }} />
         <Stack.Screen name="CompanyUsersScreen" component={CompanyUsersScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AddCompanyUser" component={AddCompanyUser} options={{ headerShown: false }} />
 
-        {/* Supervisor Flow */}
         <Stack.Screen name="SupervisorDashboard" component={SupervisorDashboard} options={{ headerShown: false }} />
 
-        {/* Operator Flow */}
         <Stack.Screen name="OperatorDashboard" component={OperatorDashboard} options={{ headerShown: false }} />
 
-        {/* Super Admin Flow */}
         <Stack.Screen name="SuperAdminLogin" component={SuperAdminLoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="SuperAdminDashboard" component={SuperAdminDashboard} options={{ headerShown: false }} />
 
-        {/* Asset Management */}
         <Stack.Screen name="TotalAssetDetails" component={TotalAssetDetails} options={{ headerShown: false }} />
         <Stack.Screen name="OfficeAssets" component={OfficeAssets} options={{ headerShown: false }} />
         <Stack.Screen name="FieldAssets" component={FieldAssets} options={{ headerShown: false }} />
@@ -72,6 +66,4 @@ function App(): React.JSX.Element {
       </Stack.Navigator>
     </NavigationContainer>
   );
-}
-
-export default App;
+}export default App;

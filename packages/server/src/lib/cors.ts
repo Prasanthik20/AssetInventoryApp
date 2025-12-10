@@ -1,4 +1,4 @@
-mport { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 
 /**
  * NOTE: This utility is deprecated. CORS handling is now managed globally 
