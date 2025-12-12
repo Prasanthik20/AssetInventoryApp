@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
         const updateQuery = `
-             UPDATE "Asset_Details"
+            UPDATE "Asset_Details"
                 SET status_id = (
                 SELECT id FROM "Status" WHERE status = 'Overdue' LIMIT 1
              )

@@ -16,6 +16,8 @@ export type Asset = {
   assignmentId?: number | null;
   operatorId?: number | null;
   senderId?: number | null;
+  supervisorEmployeeId?: number;
+  operatorEmployeeId?: number;
   // add other fields if needed
 };
 

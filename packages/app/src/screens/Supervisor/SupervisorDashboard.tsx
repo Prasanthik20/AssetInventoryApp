@@ -5,6 +5,17 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import axios from 'axios';
 import { Picker } from '@react-native-picker/picker';
+import { RootStackParamList } from '../../navigation/types';
+
+type DashboardNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  'SupervisorDashboard'
+>;
+
+type DashboardRouteProp = RouteProp<
+  RootStackParamList,
+  'SupervisorDashboard'
+>;
 
 export type SupervisorStackParamList = {
   SupervisorDashboard: {
@@ -22,25 +33,17 @@ export type SupervisorStackParamList = {
   FieldAssets: undefined;
 };
 
-type DashboardNavigationProp = StackNavigationProp<
-  SupervisorStackParamList,
-  'SupervisorDashboard'
->;
-type DashboardRoute = RouteProp<
-  SupervisorStackParamList,
-  'SupervisorDashboard'
->;
-
 interface OperatorReply {
   notificationId: number;
   operatorName: string;
   assetName: string;
   reason : string;
+  reply: string;
 }
 
 const SupervisorDashboard: React.FC = () => {
   const navigation = useNavigation<DashboardNavigationProp>();
-  const route = useRoute<DashboardRoute>();
+  const route = useRoute<DashboardRouteProp>();
 
   const { supervisorName, roleName, employeeId } = route.params;
    const [metricsData, setMetricsData] = useState({ totalAssets: 0, officeAssets: 0, fieldAssets: 0 });
@@ -57,47 +60,36 @@ const SupervisorDashboard: React.FC = () => {
     { title: 'Assets in Field', icon: 'walk-outline', value: metricsData.fieldAssets, navigateTo: 'FieldAssets' as keyof SupervisorStackParamList },
   ];
 
-  const recentActivity = [
-    {
-      icon: 'document-text-outline',
-      text: 'John S. assigned Laptop #BAR456 to Jane D.',
-      subtext: 'Jane D.',
-      timestamp: '23-01-2025',
-    },
-    {
-      icon: 'hardware-chip-outline',
-      text: 'New asset added: Drill #BAR789',
-      subtext: 'System',
-      timestamp: '22-01-2025',
-    },
-    {
-      icon: 'archive-outline',
-      text: 'Laptop #BAR759 returned by David R.',
-      subtext: 'David R.',
-      timestamp: '21-01-2025',
-    },
-  ];
-
 const fetchDashboardData = async () => {
-    if (!employeeId) return;
-    try {
-      setLoading(true);
-      
-      const [metricsRes, repliesRes] = await Promise.all([
-        axios.get(`http://localhost:3000/api/dashboard/metrics`), // Corrected URL
-        axios.get(`http://localhost:3000/api/notifications/supervisor?id=${employeeId}`), // Corrected URL
-      ]);
+  if (!employeeId) return;
+  try {
+    setLoading(true);
 
-      setMetricsData(metricsRes.data);
-      setOperatorReplies(repliesRes.data);
+    const [metricsRes, repliesRes] = await Promise.all([
+      axios.get(`http://localhost:3000/api/dashboard/metrics`),
+      axios.get(`http://localhost:3000/api/notifications/supervisor?id=${employeeId}`)
+    ]);
 
-    } catch (error) {
-      console.log('Dashboard Data Fetch Error:', error);
-      Alert.alert("Error", "Failed to load dashboard data.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Backend already returns ONLY operator replies (supervisor inbox)
+    const formatted = repliesRes.data.notifications.map((n: any) => ({
+      notificationId: n.notificationId,
+      operatorName: n.receiverName ,     // sender = operator
+      assetName: n.asset.name,
+      reason: n.reason,
+      reply: n.reply
+    }));
+    console.log("Dashboard API Response:", { metrics: metricsRes.data, replies: repliesRes.data, formatted });
+    setMetricsData(metricsRes.data);
+    setOperatorReplies(formatted);
+
+  } catch (error) {
+    console.log('Dashboard Data Fetch Error:', error);
+    Alert.alert("Error", "Failed to load dashboard data.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // --- CORRECTED useEffect: Single hook, dependent on employeeId ---
   useEffect(() => {
@@ -109,17 +101,45 @@ const fetchDashboardData = async () => {
     setExtendModalVisible(true);
   };
   
+  const handleLogout = () => {
+  Alert.alert(
+    "Logout",
+    "Are you sure you want to logout?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: () => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "CompanyLogin" }],
+          });
+        }
+      }
+    ]
+  );
+};
+
   const handleExtendDate = async (notificationId: number, days: number) => {
-    try {
-      const response = await axios.post(`http://localhost:3000/api/assets/extend-return-date`, { notificationId, daysToExtend: days }); // Corrected URL
-      Alert.alert("Success", response.data.message);
-      setExtendModalVisible(false);
-      fetchDashboardData(); // Refresh all data
-    } catch (err: any) {
-      console.error("Extend Return Date Error:", err);
-      Alert.alert("Error", err.response?.data?.message || "Failed to extend return date.");
-    }
-  };
+  try {
+    const response = await axios.post(`http://localhost:3000/api/assets/extend-return-date`, { 
+      notificationId,
+      daysToExtend : days
+    });
+
+    Alert.alert("Success", response.data.extensionMessage);
+    setExtendModalVisible(false);
+
+    // Remove from UI immediately
+    setOperatorReplies(prev => prev.filter(n => n.notificationId !== notificationId));
+
+  } catch (err: any) {
+    console.error("Extend Return Date Error:", err);
+    Alert.alert("Error", err.response?.data?.message || "Failed to extend return date.");
+  }
+};
+
 
  
   return (
@@ -139,11 +159,28 @@ const fetchDashboardData = async () => {
               <Text style={styles.headerTitle}>{supervisorName}</Text>
             </View>
             <View style={styles.headerRight}>
-              <Feather name="user" size={16} color="#333" />
-              <Text style={styles.userText}>{roleName}</Text>
-              <Switch trackColor={{ false: '#E9E9EA', true: '#34C759' }} thumbColor="#f4f3f4" value={true} style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }} />
-              <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
-            </View>
+            <Feather name="user" size={16} color="#333" />
+            <Text style={styles.userText}>{roleName}</Text>
+            <Switch
+              trackColor={{ false: '#E9E9EA', true: '#34C759' }}
+              thumbColor="#f4f3f4"
+              value={true}
+              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+            />
+
+            <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
+
+            {/* 🔴 ADD LOGOUT BUTTON HERE */}
+            <TouchableOpacity onPress={() =>
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "CompanyLogin" }],
+              })
+            }
+            >
+              <Feather name="log-out" size={22} color="red" style={{ marginLeft: 10 }} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* --- Main content area is now a separate container --- */}
@@ -179,7 +216,7 @@ const fetchDashboardData = async () => {
                                     <Ionicons name="chatbubbles-outline" size={24} color="#4A55A2" />
                                     <View style={styles.activityTextContainer}>
                                         <Text style={styles.activityText}>Reply from <Text style={{fontWeight: 'bold'}}>{item.operatorName}</Text> regarding <Text style={{fontWeight: 'bold'}}>{item.assetName}</Text></Text>
-                                        <Text style={styles.activitySubtext}>“{item.reason}”</Text>
+                                        <Text style={styles.activitySubtext}>“{item.reply ? item.reply : item.reason}”</Text>
                                     </View>
                                     <TouchableOpacity onPress={() => openExtendModal(item)} style={styles.extendButton}>
                                         <Text style={styles.extendButtonText}>Extend</Text>
@@ -250,7 +287,7 @@ const fetchDashboardData = async () => {
               <Text style={styles.modalTitle}>Extend Return Date</Text>
               <Text style={styles.modalSubtitle}>
                   Asset: {selectedItem?.assetName}{"\n"}
-                  Reason: "{selectedItem?.reason}"
+                  Reason: "{selectedItem?.reply ?? selectedItem?.reason}"
               </Text>
 
       {/* Dropdown for selecting days (1-10) */}

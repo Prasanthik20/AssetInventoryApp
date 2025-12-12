@@ -13,17 +13,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { id: receiverEmployeeId } = req.query;
+    const { id: receiverEmployeeId, role } = req.query;
 
-    if (!receiverEmployeeId || typeof receiverEmployeeId !== 'string') {
+    if (!receiverEmployeeId || typeof receiverEmployeeId !== "string") {
       return res.status(400).json({ message: "Valid numeric receiver ID is required." });
     }
+
+    let extraCondition = "";
+
+    // OPERATOR MODE → only show notifications without reply (pending)
+    if (role === "operator") {
+      extraCondition = `AND n.reply IS NULL`;
+    }
+
+    // SUPERVISOR MODE → show all notifications
+    // no extra condition
 
     const sqlQuery = `
       SELECT
         n.id AS "notificationId",
         n."assignmentId",
         n.reason,
+        n.reply,
         n.status AS "notificationStatus",
         n.created_at AS "createdAt",
 
@@ -36,6 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN "Asset_Details" a ON n."assetId" = a.id
       LEFT JOIN "Users" s ON n."senderId" = s."employeeId"
       WHERE n."receiverId" = $1
+      ${extraCondition}
       ORDER BY n.created_at DESC;
     `;
 
@@ -45,6 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       notificationId: row.notificationId,
       assignmentId: row.assignmentId,
       reason: row.reason,
+      reply: row.reply,
       status: row.notificationStatus,
       createdAt: row.createdAt,
       asset: {

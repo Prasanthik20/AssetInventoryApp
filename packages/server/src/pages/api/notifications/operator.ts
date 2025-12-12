@@ -1,0 +1,76 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import query from "@/lib/db";
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", ["GET"]);
+    return res.status(405).end(`Method ${req.method} Not Allowed`);
+  }
+
+  const operatorId = req.query.id;
+
+  if (!operatorId) {
+    return res.status(400).json({ message: "Operator ID missing" });
+  }
+
+  try {
+    const sql = `
+      SELECT 
+        n.id AS "notificationId",
+        n.reason,
+        n.reply,
+        n.status,
+        n.created_at AS "createdAt",
+
+        ad.id AS "assetId",
+        ad.name AS "assetName",
+
+        s."employeeId" AS "senderId",
+        s."fullName"  AS "senderName",
+
+        r."employeeId" AS "receiverId",
+        r."fullName"  AS "receiverName"
+
+      FROM "Notifications" n
+      LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
+      LEFT JOIN "Users" s ON s."employeeId" = n."senderId"
+      LEFT JOIN "Users" r ON r."employeeId" = n."receiverId"
+      
+      WHERE n."receiverId" = $1
+        AND n.status In ('Unread', 'Resolved')
+      ORDER BY n.created_at DESC;
+    `;
+
+    const result = await query(sql, [operatorId]);
+
+    const formatted = result.rows.map((n) => ({
+      id: n.notificationId,
+      notificationId: n.notificationId,
+      reason: n.reason,
+      reply: n.reply,
+      status: n.status,
+      createdAt: n.createdAt,
+
+      asset: {
+        id: n.assetId,
+        name: n.assetName,
+      },
+
+      sender: {
+        employeeId: n.senderId,
+        name: n.senderName,
+      },
+
+      receiver: {
+        employeeId: n.receiverId,
+        name: n.receiverName,
+      }
+    }));
+
+    return res.status(200).json({ notifications: formatted });
+
+  } catch (error) {
+    console.log("Operator Notifications Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}

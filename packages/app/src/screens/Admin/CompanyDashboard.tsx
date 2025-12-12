@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ImageBac
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
-
 // --- For Type Safety with React Navigation ---
 import { StackNavigationProp } from '@react-navigation/stack';
 

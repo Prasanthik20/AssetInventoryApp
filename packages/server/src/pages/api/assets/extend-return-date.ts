@@ -2,44 +2,78 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method Not Allowed" });
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ message: "Method Not Allowed" });
 
   const { notificationId, daysToExtend } = req.body;
-
-  if (!daysToExtend) {
-    return res.status(400).json({ message: "daysToExtend is required" });
+  if (!notificationId || !daysToExtend) {
+    return res.status(400).json({ message: "notificationId and daysToExtend are required" });
   }
 
   try {
-    // 1) Update expected return date
-    await query(
-      `
-      UPDATE "Asset_Assignments"
-      SET expected_return_date = expected_return_date + ($2 || ' days')::interval
-      WHERE id = (
-        SELECT "assignmentId" FROM "Notifications" WHERE id = $1
-      );
-      `,
-      [notificationId, daysToExtend]
-    );
-
-    // 2) Clear operator reply
-    await query(
-      `
-      UPDATE "Notifications"
-      SET reply = NULL
-      WHERE id = $1
-      `,
+    // 1️⃣ Get assignment and asset info from the notification
+    const notifRes: any = await query(
+      `SELECT "assignmentId", "assetId", "senderId", "receiverId"
+       FROM "Notifications"
+       WHERE id = $1`,
       [notificationId]
     );
 
-    return res.status(200).json({ message: "Return date extended successfully" });
+    if (!notifRes.rows.length) return res.status(404).json({ message: "Notification not found" });
+
+    const { assignmentId, assetId, senderId: operatorId, receiverId: supervisorId } = notifRes.rows[0];
+
+    // 2️⃣ Update expected return date in Asset_Assignments
+    await query(
+      `UPDATE "Asset_Assignments"
+       SET expected_return_date = expected_return_date + ($1 * INTERVAL '1 day')
+       WHERE id = $2`,
+      [daysToExtend, assignmentId]
+    );
+
+    // 3️⃣ Update status in Asset_Details (set to 'Assigned')
+    // First, get the Status ID for 'Assigned'
+    const statusRes: any = await query(
+      `SELECT id FROM "Status" WHERE status = 'Assigned' LIMIT 1`
+    );
+
+    if (!statusRes.rows.length) return res.status(500).json({ message: "'Assigned' status not found in Status table" });
+
+    const assignedStatusId = statusRes.rows[0].id;
+
+    await query(
+      `UPDATE "Asset_Details"
+       SET status_id = $1
+       WHERE id = $2`,
+      [assignedStatusId, assetId]
+    );
+
+    // 4️⃣ Create notification for operator
+    const extensionMessage = `Asset return date extended by ${daysToExtend} day(s) by supervisor.`;
+    await query(
+      `INSERT INTO "Notifications" 
+       ("assignmentId", "assetId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+      [assignmentId, assetId, supervisorId, operatorId, extensionMessage, null, 'Unread']
+    );
+
+    // 5️⃣ Optional: mark original notification as resolved
+    await query(
+      `UPDATE "Notifications" SET status = 'Resolved' WHERE id = $1`,
+      [ notificationId]
+    );
+
+    return res.status(200).json({
+      message: `Return date extended by ${daysToExtend} day(s)`,
+      extensionMessage
+    });
 
   } catch (error: any) {
-    console.log("Extend API Error:", error);
+    console.error("Extend API Error:", error);
     return res.status(500).json({ message: error.message });
   }
 }

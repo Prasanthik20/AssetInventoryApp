@@ -57,7 +57,6 @@ const FieldAssets: React.FC = () => {
         ? "Overdue"
         : asset.status
     }));
-
     // Step 2: Filter only assigned or overdue assets
     const assignedOrOverdue = processed.filter(
       (asset: Asset) => asset.status === "Assigned" || asset.status === "Overdue"
@@ -171,6 +170,7 @@ const sendNotification = async (assetId: string, reason: string) => {
   );
 
   return (
+    <>
     <ImageBackground
       source={require("../../assets/Company-bg.webp")}
       style={styles.backgroundImage}
@@ -223,8 +223,25 @@ const sendNotification = async (assetId: string, reason: string) => {
           />    
       </SafeAreaView>
     </ImageBackground>
+    
+   <OverdueNotificationModal
+      visible={modalVisible}
+      onClose={() => {
+        setModalVisible(false);
+        setSelectedAsset(null);
+      }}
+      onSubmit={(reason) => {
+        if (selectedAsset) sendNotification(selectedAsset.id, reason);
+        setModalVisible(false);
+        setSelectedAsset(null);
+      }}
+      assetName={selectedAsset?.assetName ?? ''}
+      title="Notify Supervisor"
+    />
+  </>
   );
 };
+
 
 const styles = StyleSheet.create({
   backgroundImage: {

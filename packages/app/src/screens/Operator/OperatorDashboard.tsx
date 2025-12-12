@@ -9,6 +9,7 @@ import {
   Alert,
   Switch,
   FlatList,
+  ScrollView,
   Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,15 +17,35 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import axios from "axios";
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
+import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../navigation/types';
 
-type OperatorRoute = RouteProp<RootStackParamList, "OperatorDashboard">;
+type DashboardNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  'OperatorDashboard'
+>;
+
+type DashboardRouteProp = RouteProp<
+  RootStackParamList,
+  'OperatorDashboard'
+>;
+
+export type OperatorStackParamList = {
+ OperatorDashboard: {
+    operatorName: string;
+    roleName: string;
+    employeeId: string;
+  };
+  ReturnAsset: undefined;
+};
 
 // Define the structure of a Notification from the API
 interface Notification {
-  notificationId: number;
+  id: number;
+  notificationId?: number;
   reason: string;
   status: string;
+  reply: string;
   createdAt: string;
   asset: {
     id: number;
@@ -34,11 +55,15 @@ interface Notification {
     employeeId: number;
     name: string;
   };
+  receiver : {
+    employeeId: number;
+    name: string;
+  }
 }
 
 const OperatorDashboard: React.FC = () => {
-  const navigation = useNavigation<any>();
-  const route = useRoute<OperatorRoute>();
+  const navigation = useNavigation<DashboardNavigationProp>();
+  const route = useRoute<DashboardRouteProp>();
 
   // ----------------------------
   // 🔹 Get operator data
@@ -56,7 +81,6 @@ const OperatorDashboard: React.FC = () => {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({ title: '', assetName: '', onSubmit: (reason: string) => {} });
-  const [selectedOverdueAsset, setSelectedOverdueAsset] = useState("");
 
   // ----------------------------
   // 🔹 Fetch operator assets
@@ -66,16 +90,14 @@ const OperatorDashboard: React.FC = () => {
     try {
       const [assetsRes, notificationsRes] = await Promise.all([
         axios.get(`http://localhost:3000/api/operator/assets?operatorId=${employeeId}`),
-        axios.get(`http://localhost:3000/api/notifications/${employeeId}`)])  ;
+        axios.get(`http://localhost:3000/api/notifications/operator?id=${employeeId}`)])  ;
       //const data = await res.json();
-
-      setMyAssets(assetsRes.data.assets || []);
-      const overdueAssets = (assetsRes.data.assets || []).filter((a: any) =>
-        isAssetOverdue(a.expectedReturnDate)
-      );
-
+        
+      const assets = assetsRes.data.assets || [];
+      const overdueAssets = assets.filter((a: any) => isAssetOverdue(a.expectedReturnDate));
+      setMyAssets(assets);
       setOverdueCount(overdueAssets.length);
-      setAssignedCount(assetsRes.data.assets?.length || 0);
+      setAssignedCount(assets.length);
       setCurrentLocation(assetsRes.data.location || "N/A");
       setNotifications(notificationsRes.data.notifications || []);
     } catch (err) {
@@ -104,30 +126,68 @@ const OperatorDashboard: React.FC = () => {
     // Here you would call your POST /api/notifications endpoint
   };
 
-   const handleReplySubmit = async (replyMessage: string, notification: Notification) => {
-    try {
-        await axios.post(`http://localhost:3000/api/notifications/reply`, {
-            originalNotificationId: notification.notificationId,
-            assetId: notification.asset.id,
-            operatorId: employeeId, // The current user is the sender
-            supervisorId: notification.sender.employeeId, // The original sender is the new receiver
-            replyMessage: replyMessage,
-        });
-        Alert.alert("Reply Sent", "Your reply has been sent to the supervisor.");
-        handleCloseModal();
-        fetchOperatorData(); // Refresh data to show updated notification status
-    } catch (error) {
-        console.error("Failed to send reply:", error);
-        Alert.alert("Error", "Could not send your reply.");
-    }
-  };
+  const handleReplySubmit = async (replyMessage: string, notification: Notification) => {
+  try {
+    await axios.post(`http://localhost:3000/api/notifications/reply`, {
+      originalNotificationId: notification.notificationId,
+      replyMessage: replyMessage,
+      operatorId: Number(employeeId),                 // current operator
+      supervisorId: notification.sender.employeeId,   // original sender (supervisor)
+    });
+
+    Alert.alert("Reply Sent", "Your reply has been sent to the supervisor.");
+    handleCloseModal();
+    fetchOperatorData();
+
+  } catch (error) {
+    console.error("Failed to send reply:", error);
+    Alert.alert("Error", "Could not send your reply.");
+  }
+};
 
   const isAssetOverdue = (expectedReturnDate: string) => {
   if (!expectedReturnDate) return false;
   return new Date(expectedReturnDate) < new Date();
 };
 
-  return (
+const handleLogout = () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: () => {
+            // This call is now type-safe and will work correctly.
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "CompanyLogin" }],
+            });
+          }
+        }
+      ]
+    );
+  };
+
+
+ // EXTENDED DATE FIX
+const getUpdatedReturnDate = (assetId: number) => {
+  const n = notifications.find(
+    (x) =>
+      x.asset.id === assetId &&
+      (x.reason?.toLowerCase().includes("extended") ||
+        x.reply?.toLowerCase().includes("extended"))
+  );
+
+  if (!n) return null;
+
+  const match = (n.reply || n.reason).match(/\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : null;
+};
+
+ return (
     <ImageBackground
       source={require("../../assets/Company-bg.webp")}
       style={styles.backgroundImage}
@@ -136,40 +196,39 @@ const OperatorDashboard: React.FC = () => {
     >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
-          {/* LEFT PANEL */}
           <LinearGradient
             colors={["rgba(93, 113, 200, 0.7)", "rgba(59, 89, 184, 0.8)"]}
             style={styles.leftPanel}
           >
-            <Image
-              source={{ uri: "https://i.imgur.com/gYf2xmm.png" }}
-              style={styles.leftPanelImage}
-            />
-            <Text style={styles.leftPanelTitle}>
-              YOUR ASSIGNED{"\n"}EQUIPMENT
-            </Text>
+            <Image source={{ uri: "https://i.imgur.com/gYf2xmm.png" }} style={styles.leftPanelImage} />
+            <Text style={styles.leftPanelTitle}>YOUR ASSIGNED{"\n"}EQUIPMENT</Text>
             <Text style={styles.leftPanelSubtitle}>ASSETFLOW PRO</Text>
           </LinearGradient>
 
-          {/* RIGHT PANEL */}
-          <View style={styles.rightPanel}>
+          <ScrollView style={styles.rightPanel} contentContainerStyle={{ paddingBottom: 50 }}>
             {/* HEADER */}
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>{operatorName}</Text>
+           <View style={styles.header}>
+             <Text style={styles.headerTitle}>{operatorName}</Text>
 
-              <View style={styles.headerRight}>
-                <Feather name="user" size={16} color="#333" />
-                <Text style={styles.userText}>{roleName}</Text>
+             <View style={styles.headerRight}>
+               <Feather name="user" size={16} color="#333" />
+               <Text style={styles.userText}>{roleName}</Text>
 
-                <Switch
-                  trackColor={{ false: "#E9E9EA", true: "#34C759" }}
-                  thumbColor={"#f4f3f4"}
-                  value={true}
-                  style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                />
-                <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
-              </View>
-            </View>
+               <Switch
+                 trackColor={{ false: "#E9E9EA", true: "#34C759" }}
+                 thumbColor={"#f4f3f4"}
+                 value={true}
+                 style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+               />
+
+               <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
+
+               {/* 🔥 LOGOUT BUTTON ADDED HERE */}
+               <TouchableOpacity onPress={handleLogout} style={{ marginLeft: 10 }}>
+                 <Feather name="log-out" size={20} color="#333" />
+               </TouchableOpacity>
+             </View>
+           </View>
 
             {/* METRICS */}
             <View style={styles.metricsContainer}>
@@ -186,14 +245,11 @@ const OperatorDashboard: React.FC = () => {
                   <Feather name="map-pin" size={18} color="#3B59B8" />
                 </View>
                 <Text style={styles.metricTitle}>Current Location</Text>
-                <Text style={[styles.metricValue, { fontSize: 16 }]}>
-                  {currentLocation}
-                </Text>
+                <Text style={[styles.metricValue, { fontSize: 16 }]}>{currentLocation}</Text>
               </View>
             </View>
 
-
-             {/* --- NEW NOTIFICATIONS SECTION --- */}
+            {/* NOTIFICATIONS */}
             <View style={styles.assetsSection}>
               <Text style={styles.sectionTitle}>Notifications</Text>
               {notifications.length === 0 ? (
@@ -201,28 +257,40 @@ const OperatorDashboard: React.FC = () => {
               ) : (
                 <FlatList
                   data={notifications}
-                  keyExtractor={(item) => item.notificationId.toString()}
-                  renderItem={({ item }) => (
-                    <View style={styles.notificationItem}>
-                      <Ionicons name="notifications-outline" size={24} color="#4A55A2" />
-                      <View style={styles.notificationContent}>
-                        <Text style={styles.notificationText}>
-                          From <Text style={{ fontWeight: 'bold' }}>{item.sender.name}</Text> regarding <Text style={{ fontWeight: 'bold' }}>{item.asset.name}</Text>:
-                        </Text>
-                        <Text style={styles.notificationReason}>"{item.reason}"</Text>
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={({ item }) => {
+                    const isSupervisorMessage = item.reply && String(item.sender.employeeId) !== employeeId;
+
+                    return (
+                      <View style={styles.notificationItem}>
+                        <Ionicons name="notifications-outline" size={24} color="#4A55A2" />
+                        <View style={styles.notificationContent}>
+                          <Text style={styles.notificationText}>
+                            From <Text style={{ fontWeight: 'bold' }}>{item.sender.name}</Text> regarding <Text style={{ fontWeight: 'bold' }}>{item.asset.name}</Text>:
+                          </Text>
+                          <Text style={styles.notificationReason}>
+                            "{item.reply || item.reason}"
+                          </Text>
+                        </View>
+
+                        {!isSupervisorMessage && !item.reply && (
+                          <TouchableOpacity
+                            style={styles.replyButton}
+                            onPress={() =>
+                              handleOpenModal({
+                                title: `Reply to ${item.sender.name}`,
+                                assetName: item.asset.name,
+                                onSubmit: (replyMessage) => handleReplySubmit(replyMessage, item),
+                              })
+                            }
+                          >
+                            <Text style={styles.replyButtonText}>Reply</Text>
+                          </TouchableOpacity>
+                        )}
+                        
                       </View>
-                      <TouchableOpacity
-                        style={styles.replyButton}
-                        onPress={() => handleOpenModal({
-                            title: `Reply to ${item.sender.name}`,
-                            assetName: item.asset.name,
-                            onSubmit: (replyMessage) => handleReplySubmit(replyMessage, item)
-                        })}
-                      >
-                        <Text style={styles.replyButtonText}>Reply</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                    );
+                  }}
                 />
               )}
             </View>
@@ -230,12 +298,14 @@ const OperatorDashboard: React.FC = () => {
             {/* ASSETS LIST */}
             <View style={styles.assetsSection}>
               <Text style={styles.sectionTitle}>My Assets</Text>
-
               {myAssets.length === 0 ? (
                 <Text style={{ color: "#333", marginTop: 10 }}>No assets assigned.</Text>
               ) : (
                 myAssets.map((asset, index) => {
-                  const isOverdue = isAssetOverdue(asset.expectedReturnDate);
+                  const updatedReturnDate = getUpdatedReturnDate(asset.id);
+                  const expectedDate = updatedReturnDate || asset.expectedReturnDate;
+                  const isOverdue = expectedDate && isAssetOverdue(expectedDate);
+                  const isExtended = Boolean(updatedReturnDate);
 
                   return (
                     <View style={styles.assetItem} key={index}>
@@ -245,28 +315,25 @@ const OperatorDashboard: React.FC = () => {
 
                       <View style={styles.assetNameContainer}>
                         <Text style={styles.assetName}>
-                           {asset.name} ({asset.barcode})
+                          {asset.name} ({asset.barcode})
                         </Text>
                       </View>
 
                       <View style={styles.dueDateContainer}>
-                        <Text style={styles.assetDueDate}>
-                            {isOverdue ? "Overdue" : asset.expectedReturnDate || "No due date"}
+                        <Text style={[styles.assetDueDate, isExtended ? { color: "green", fontWeight: "bold" } : {}]}>
+                          {isOverdue ? "Overdue" : expectedDate || "No due date"}
                         </Text>
-                        {/* <Text style={{ fontSize: 12, color: "#555" }}>
-                              Location: {asset.location || "No location"}
-                        </Text> */}
 
                         {isOverdue && (
                           <TouchableOpacity
-                              style={styles.notifyButton}
-                              onPress={() =>handleOpenModal({
-                                  title: "Overdue Asset Notification",
-                                  assetName: asset.name,
-                                  onSubmit: (reason) => handleOverdueSubmit(reason, asset.name)
-                              })
-                        }>
-                            <Text style={styles.notifyButtonText}>Notify</Text>
+                            style={styles.notifyButton}
+                            onPress={() => handleOpenModal({
+                              title: "Overdue Asset Notification",
+                              assetName: asset.name,
+                              onSubmit: (reason) => handleOverdueSubmit(reason, asset.name)
+                            })}
+                          >
+                            <Text style={styles.notifyButtonText}>Update</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -277,19 +344,12 @@ const OperatorDashboard: React.FC = () => {
             </View>
 
             {/* RETURN BUTTON */}
-            <TouchableOpacity
-              onPress={() => navigation.navigate("ReturnAsset")}
-            >
-              <LinearGradient
-                colors={["#27B2C3", "#40D69B"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.returnButton}
-              >
+            <TouchableOpacity onPress={() => navigation.navigate("ReturnAsset")}>
+              <LinearGradient colors={["#27B2C3", "#40D69B"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.returnButton}>
                 <Text style={styles.returnButtonText}>RETURN ASSET</Text>
               </LinearGradient>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
 
         <OverdueNotificationModal
@@ -298,7 +358,6 @@ const OperatorDashboard: React.FC = () => {
           onSubmit={modalConfig.onSubmit}
           assetName={modalConfig.assetName}
           title={modalConfig.title}
-          
         />
       </SafeAreaView>
     </ImageBackground>
@@ -344,6 +403,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 20,
     alignItems: "center",
+    width: "100%",
+    paddingVertical: 10,
   },
   headerTitle: { fontSize: 20, fontWeight: "bold", color: "#000000ff" },
   headerRight: {
