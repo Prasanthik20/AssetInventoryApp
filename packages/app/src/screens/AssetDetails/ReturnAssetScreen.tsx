@@ -4,16 +4,30 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
+import { useRoute, RouteProp } from '@react-navigation/native';
+import axios from 'axios';
+import { Asset, RootStackParamList } from '../../navigation/types';
 
-// Mock Data
-const operatorAssets = [
-    { id: 'a1', name: 'Excavator', barcode: 'BAR456', status: 'Overdue' },
-    { id: 'a2', name: 'Jackhammer', barcode: 'BAR789', status: 'Due in 3 days' },
-    { id: 'a3', name: 'Safety Vest', barcode: 'BAR901', status: 'No due date' },
-];
+type LocalRootStackParamList = {
+    OperatorDashboard: {
+        operatorName: string;
+        roleName: string;
+        employeeId: string;
+    };
+    ReturnAsset: {
+        assets: any[];
+        employeeId: string;
+    };
+};
+
+type ReturnAssetRouteProp = RouteProp<LocalRootStackParamList, 'ReturnAsset'>;
+
 
 const ReturnAssetScreen: React.FC = () => {
+    const route = useRoute<ReturnAssetRouteProp>();
+    const { assets } = route.params;
     const navigation = useNavigation<any>();
+    const employeeId = parseInt(route.params.employeeId, 10);
     const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedOverdueAsset, setSelectedOverdueAsset] = useState('');
@@ -35,26 +49,54 @@ const ReturnAssetScreen: React.FC = () => {
     const handleScanBarcode = () => Alert.alert("Scan Barcode", "Camera functionality for scanning returns would be implemented here.");
     const handleUploadPhoto = () => Alert.alert("Upload Photo", "Image library to upload proof of asset condition would be implemented here.");
 
-    const toggleAssetSelection = (id: string) => {
+    const toggleAssetSelection = (id: string | number) => {
+        const assetId = typeof id === 'string' ? id : id.toString();
         setSelectedAssets(current =>
-            current.includes(id) ? current.filter(assetId => assetId !== id) : [...current, id]
+            current.includes(assetId) ? current.filter(aid => aid !== assetId) : [...current, assetId]
         );
     };
 
-    const handleReturn = () => {
-        if (selectedAssets.length === 0) {
-            Alert.alert("No Assets Selected", "Please select at least one asset to return.");
-            return;
-        }
-        console.log("Returning asset IDs:", selectedAssets);
-        Alert.alert(
-            "Return Submitted",
-            `Your request to return ${selectedAssets.length} asset(s) has been submitted.`,
-            [{ text: "OK", onPress: () => navigation.goBack() }]
-        );
+    const getAssetStatus = (expectedReturnDate?: string) => {
+        if (!expectedReturnDate) return 'No due date';
+        return new Date(expectedReturnDate) < new Date()
+            ? 'Overdue'
+            : 'Due soon';
     };
+   const handleReturn = async () => {
+    if (selectedAssets.length === 0) {
+        Alert.alert("No Assets Selected", "Please select at least one asset to return.");
+        return;
+    }
 
-    const renderAssetItem = ({ item }: { item: typeof operatorAssets[0] }) => {
+    try {
+        const response = await axios.post(
+            "http://localhost:3000/api/operator/returnAsset",
+            {
+                assetIds: selectedAssets.map(id => parseInt(id, 10)),
+                employeeId: employeeId,
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    // Example: Authorization header if needed
+                    // 'Authorization': `Bearer ${token}`,
+                },
+                // Optional: include credentials for cookies
+                // withCredentials: true,
+            }
+        );
+
+        Alert.alert("Success", response.data.message, [
+            { text: "OK", onPress: () => navigation.goBack() },
+        ]);
+    } catch (error) {
+        console.error(error);
+        Alert.alert("Error", "Failed to return assets. Please try again.");
+    }
+};
+
+    const renderAssetItem = ({ item }: { item: typeof assets[0] }) => {
         const isSelected = selectedAssets.includes(item.id);
         const isOverdue = item.status === 'Overdue';
 
@@ -113,9 +155,9 @@ const ReturnAssetScreen: React.FC = () => {
                                     Select one or more assets you wish to return.
                                 </Text>
                                 <FlatList
-                                    data={operatorAssets}
+                                    data={assets}
                                     renderItem={renderAssetItem}
-                                    keyExtractor={item => item.id}
+                                    keyExtractor={(item, index) => `${item.id ?? index}-${index}`}
                                     showsVerticalScrollIndicator={false}
                                 />
                             </View>
@@ -153,7 +195,7 @@ const ReturnAssetScreen: React.FC = () => {
                         </TouchableOpacity>
                     </View>
                 </View>
-                
+
                 <OverdueNotificationModal
                     visible={modalVisible}
                     onClose={handleCloseModal}
@@ -167,10 +209,11 @@ const ReturnAssetScreen: React.FC = () => {
 
 // --- STYLES REVISED FOR NEW LAYOUT AND CLEAN AESTHETIC ---
 const styles = StyleSheet.create({
-    backgroundImage: { flex: 1,
+    backgroundImage: {
+        flex: 1,
         width: "100%",
         height: "100%",
-     },
+    },
     safeArea: { flex: 1 },
     container: {
         flex: 1,

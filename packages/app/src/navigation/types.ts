@@ -55,7 +55,10 @@ export type RootStackParamList = {
   AddEditAsset: undefined;
 
   AssetFullDetails: { asset: Asset };
-  ReturnAsset: undefined;
+  ReturnAsset: {
+    assets: any[];
+    employeeId: string;
+  };
   AssignAsset: {
     supervisor_employeeId: string;
     supervisorName: string;

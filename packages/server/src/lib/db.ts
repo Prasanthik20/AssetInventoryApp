@@ -9,6 +9,7 @@ const pool = new Pool({
 // ✅ Export a helper function to run queries easily
 export default async function query(text: string, params?: any[]) {
   const client = await pool.connect();
+  console.log("DB URL:", process.env.DATABASE_URL);
   try {
     const result = await client.query(text, params);
     return result; // same structure as pool.query()

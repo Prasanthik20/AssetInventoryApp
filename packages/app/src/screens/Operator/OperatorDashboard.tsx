@@ -36,7 +36,9 @@ export type OperatorStackParamList = {
     roleName: string;
     employeeId: string;
   };
-  ReturnAsset: undefined;
+  ReturnAsset: {
+    assets: any[];
+  };
 };
 
 // Define the structure of a Notification from the API
@@ -80,7 +82,15 @@ const OperatorDashboard: React.FC = () => {
   const [currentLocation, setCurrentLocation] = useState("N/A");
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [modalConfig, setModalConfig] = useState({ title: '', assetName: '', onSubmit: (reason: string) => {} });
+    const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    assetName: string;
+    onSubmit: (reason: string) => void;
+  }>({
+    title: "",
+    assetName: "",
+    onSubmit: () => {},
+  });
 
   // ----------------------------
   // 🔹 Fetch operator assets
@@ -344,8 +354,19 @@ const getUpdatedReturnDate = (assetId: number) => {
             </View>
 
             {/* RETURN BUTTON */}
-            <TouchableOpacity onPress={() => navigation.navigate("ReturnAsset")}>
-              <LinearGradient colors={["#27B2C3", "#40D69B"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.returnButton}>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate("ReturnAsset", {
+                  assets: myAssets,
+                })
+              }
+            >
+              <LinearGradient
+                colors={["#27B2C3", "#40D69B"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.returnButton}
+              >
                 <Text style={styles.returnButtonText}>RETURN ASSET</Text>
               </LinearGradient>
             </TouchableOpacity>
