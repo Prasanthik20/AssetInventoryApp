@@ -358,6 +358,7 @@ const getUpdatedReturnDate = (assetId: number) => {
               onPress={() =>
                 navigation.navigate("ReturnAsset", {
                   assets: myAssets,
+                  employeeId: employeeId,
                 })
               }
             >
