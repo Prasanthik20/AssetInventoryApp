@@ -57,7 +57,7 @@ export type RootStackParamList = {
   AssetFullDetails: { asset: Asset };
   ReturnAsset: {
     assets: any[];
-    employeeId: string;
+    operatorEmployeeId: string;
   };
   AssignAsset: {
     supervisor_employeeId: string;

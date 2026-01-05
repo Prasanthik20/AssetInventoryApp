@@ -30,17 +30,6 @@ type DashboardRouteProp = RouteProp<
   'OperatorDashboard'
 >;
 
-export type OperatorStackParamList = {
- OperatorDashboard: {
-    operatorName: string;
-    roleName: string;
-    employeeId: string;
-  };
-  ReturnAsset: {
-    assets: any[];
-  };
-};
-
 // Define the structure of a Notification from the API
 interface Notification {
   id: number;
@@ -358,7 +347,7 @@ const getUpdatedReturnDate = (assetId: number) => {
               onPress={() =>
                 navigation.navigate("ReturnAsset", {
                   assets: myAssets,
-                  employeeId: employeeId,
+                  operatorEmployeeId: employeeId.toString(),
                 })
               }
             >

@@ -2,54 +2,65 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    // Handle preflight OPTIONS request
+
     if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8081'); // allow your frontend
+        res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8081');
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
         return res.status(200).end();
     }
 
-    // Set CORS headers for actual requests
     res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8081');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method !== 'POST') {
-        res.setHeader('Allow', ['POST']);
-        return res.status(405).end(`Method ${req.method} Not Allowed`);
+        return res.status(405).end();
     }
 
     try {
         const { assetIds, operatorEmployeeId } = req.body;
 
-        if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
-            return res.status(400).json({ message: 'assetIds is required and should be a non-empty array.' });
+        if (!Array.isArray(assetIds) || assetIds.length === 0) {
+            return res.status(400).json({ message: 'assetIds required' });
         }
 
-        if (!operatorEmployeeId || typeof operatorEmployeeId !== 'number') {
-            return res.status(400).json({ message: 'operatorEmployeeId is required and should be a number.' });
+        if (typeof operatorEmployeeId !== 'number') {
+            return res.status(400).json({ message: 'operatorEmployeeId required' });
         }
 
-        const assetIdsInt = assetIds.map((id: string | number) => parseInt(String(id)));
+        const assetIdsInt = assetIds.map(Number);
 
-        const updateQuery = `
-          UPDATE "Asset_Assignments"
-          SET expected_return_date = NOW()
-          WHERE "operator_employeeId" = $1
-          AND "assetId" = ANY($2::bigint[])
-          RETURNING *;
-        `;
+        // 1️⃣ Mark assignment as returned
+        await query(
+            `
+            UPDATE "Asset_Assignments"
+            SET expected_return_date = NOW()
+            WHERE "operator_employeeId" = $1
+            AND "assetId" = ANY($2::bigint[])
+            `,
+            [operatorEmployeeId, assetIdsInt]
+        );
 
-        const updatedAssets = await query(updateQuery, [operatorEmployeeId, assetIdsInt]);
+        // 2️⃣ Unassign asset
+        await query(
+            `
+            UPDATE "Asset_Details"
+            SET 
+                assigned_to = NULL,
+                assigned_by = NULL,
+                status_id = (
+                    SELECT id FROM "Status" WHERE status = 'Unassigned'
+                )
+            WHERE id = ANY($1::bigint[])
+            `,
+            [assetIdsInt]
+        );
 
         return res.status(200).json({
-            message: 'Assets returned successfully',
-            updatedCount: updatedAssets.rowCount,
-            updatedAssets: updatedAssets.rows,
+            message: 'Assets returned and unassigned successfully',
         });
+
     } catch (error) {
-        console.error('Return Asset API Error:', error);
-        return res.status(500).json({ message: 'Internal server error.', error });
+        console.error(error);
+        return res.status(500).json({ message: 'Server error' });
     }
 }

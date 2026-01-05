@@ -8,26 +8,13 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import axios from 'axios';
 import { Asset, RootStackParamList } from '../../navigation/types';
 
-type LocalRootStackParamList = {
-    OperatorDashboard: {
-        operatorName: string;
-        roleName: string;
-        employeeId: string;
-    };
-    ReturnAsset: {
-        assets: any[];
-        employeeId: string;
-    };
-};
-
-type ReturnAssetRouteProp = RouteProp<LocalRootStackParamList, 'ReturnAsset'>;
-
+type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
 const ReturnAssetScreen: React.FC = () => {
     const route = useRoute<ReturnAssetRouteProp>();
-    const { assets } = route.params;
+    const { assets, operatorEmployeeId } = route.params;
     const navigation = useNavigation<any>();
-    const employeeId = parseInt(route.params.employeeId, 10);
+    const employeeId = Number(operatorEmployeeId);
     const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedOverdueAsset, setSelectedOverdueAsset] = useState('');
@@ -73,7 +60,7 @@ const ReturnAssetScreen: React.FC = () => {
             "http://localhost:3000/api/operator/returnAsset",
             {
                 assetIds: selectedAssets.map(id => parseInt(id, 10)),
-                employeeId: employeeId,
+                operatorEmployeeId: employeeId,
             },
             {
                 headers: {
@@ -86,6 +73,7 @@ const ReturnAssetScreen: React.FC = () => {
                 // withCredentials: true,
             }
         );
+        console.log("RETURN ASSET PARAMS:", route.params);
 
         Alert.alert("Success", response.data.message, [
             { text: "OK", onPress: () => navigation.goBack() },
