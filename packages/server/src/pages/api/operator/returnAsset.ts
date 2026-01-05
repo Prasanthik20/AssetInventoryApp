@@ -32,26 +32,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // 1️⃣ Mark assignment as returned
         await query(
             `
-            UPDATE "Asset_Assignments"
-            SET expected_return_date = NOW()
-            WHERE "operator_employeeId" = $1
-            AND "assetId" = ANY($2::bigint[])
-            `,
-            [operatorEmployeeId, assetIdsInt]
+          UPDATE "Asset_Assignments"
+    SET expected_return_date = NOW()
+    WHERE "operator_employeeId" = $1
+    AND "assetId" = ANY($2::bigint[])
+    -- Remove the 'IS NOT NULL' check to ensure it catches all rows
+    `,
+    [operatorEmployeeId, assetIdsInt]
         );
 
         // 2️⃣ Unassign asset
         await query(
             `
-            UPDATE "Asset_Details"
-            SET 
-                assigned_to = NULL,
-                assigned_by = NULL,
-                status_id = (
-                    SELECT id FROM "Status" WHERE status = 'Unassigned'
-                )
-            WHERE id = ANY($1::bigint[])
-            `,
+           UPDATE "Asset_Details"
+    SET
+        assigned_to = NULL,
+        assigned_by = NULL,
+        status_id = (SELECT id FROM "Status" WHERE status = 'Unassigned')
+    WHERE id = ANY($1::bigint[])
+    `,
             [assetIdsInt]
         );
 

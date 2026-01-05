@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import axios from 'axios';
-import { Asset, RootStackParamList } from '../../navigation/types';
+import { AssignedAsset, RootStackParamList } from '../../navigation/types';
 
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
@@ -15,7 +15,7 @@ const ReturnAssetScreen: React.FC = () => {
     const { assets, operatorEmployeeId } = route.params;
     const navigation = useNavigation<any>();
     const employeeId = Number(operatorEmployeeId);
-    const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
+    const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedOverdueAsset, setSelectedOverdueAsset] = useState('');
     const [photo, setPhoto] = useState<string | null>(null);
@@ -36,12 +36,15 @@ const ReturnAssetScreen: React.FC = () => {
     const handleScanBarcode = () => Alert.alert("Scan Barcode", "Camera functionality for scanning returns would be implemented here.");
     const handleUploadPhoto = () => Alert.alert("Upload Photo", "Image library to upload proof of asset condition would be implemented here.");
 
-    const toggleAssetSelection = (id: string | number) => {
-        const assetId = typeof id === 'string' ? id : id.toString();
+    const toggleAssetSelection = (id: number) => {
         setSelectedAssets(current =>
-            current.includes(assetId) ? current.filter(aid => aid !== assetId) : [...current, assetId]
+            current.includes(id)
+                ? current.filter(aid => aid !== id)
+                : [...current, id]
         );
     };
+
+
 
     const getAssetStatus = (expectedReturnDate?: string) => {
         if (!expectedReturnDate) return 'No due date';
@@ -49,49 +52,70 @@ const ReturnAssetScreen: React.FC = () => {
             ? 'Overdue'
             : 'Due soon';
     };
-   const handleReturn = async () => {
-    if (selectedAssets.length === 0) {
-        Alert.alert("No Assets Selected", "Please select at least one asset to return.");
-        return;
-    }
 
-    try {
-        const response = await axios.post(
-            "http://localhost:3000/api/operator/returnAsset",
-            {
-                assetIds: selectedAssets.map(id => parseInt(id, 10)),
+    const handleReturn = async () => {
+        if (!employeeId || isNaN(employeeId)) {
+            Alert.alert("Error", "Invalid operator employee ID.");
+            return;
+        }
+
+        if (selectedAssets.length === 0) {
+            Alert.alert("No Assets Selected", "Please select at least one asset to return.");
+            return;
+        }
+
+        try {
+            const payload = {
+                assetIds: assets
+                    .filter(a => selectedAssets.includes(a.assignmentId))
+                    .map(a => a.assetId),
                 operatorEmployeeId: employeeId,
-            },
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    // Example: Authorization header if needed
-                    // 'Authorization': `Bearer ${token}`,
-                },
-                // Optional: include credentials for cookies
-                // withCredentials: true,
-            }
-        );
-        console.log("RETURN ASSET PARAMS:", route.params);
+            };
 
-        Alert.alert("Success", response.data.message, [
-            { text: "OK", onPress: () => navigation.goBack() },
-        ]);
-    } catch (error) {
-        console.error(error);
-        Alert.alert("Error", "Failed to return assets. Please try again.");
-    }
-};
+            console.log("RETURN PAYLOAD 👉", payload);
 
-    const renderAssetItem = ({ item }: { item: typeof assets[0] }) => {
-        const isSelected = selectedAssets.includes(item.id);
-        const isOverdue = item.status === 'Overdue';
+            const response = await axios.post(
+                "http://localhost:3000/api/operator/returnAsset",
+                payload
+            );
+
+            console.log("RETURN RESPONSE 👉", response.data);
+
+            if (response.status === 200) {
+            // Alert should be triggered here
+            Alert.alert(
+                "Success ✅",
+                "Assets returned successfully",
+                [
+                    { 
+                        text: "OK", 
+                        onPress: () => {
+                            // Small delay ensures DB is updated before Dashboard re-fetches
+                            setTimeout(() => navigation.navigate("OperatorDashboard", { refresh: Date.now() }), 500);
+                        } 
+                    }
+                ]
+            );
+        }
+        } catch (error: any) {
+            console.error("Return asset error:", error?.response?.data || error.message);
+
+            Alert.alert(
+                "Error ❌",
+                error?.response?.data?.message || "Failed to return assets."
+            );
+        }
+    };
+
+
+    const renderAssetItem = ({ item }: { item: AssignedAsset }) => {
+        const id = item.assignmentId; // ✅ UNIQUE & SAFE
+        const isSelected = selectedAssets.includes(id);
 
         return (
             <TouchableOpacity
                 style={[styles.assetRow, isSelected && styles.assetRowSelected]}
-                onPress={() => toggleAssetSelection(item.id)}
+                onPress={() => toggleAssetSelection(id)}
             >
                 <Ionicons
                     name={isSelected ? 'checkbox' : 'checkbox-outline'}
@@ -99,22 +123,40 @@ const ReturnAssetScreen: React.FC = () => {
                     color={isSelected ? '#3B59B8' : '#888'}
                     style={styles.checkboxIcon}
                 />
+
                 <View style={styles.assetInfo}>
-                    <Text style={styles.assetName}>{item.name} ({item.barcode})</Text>
+                    <Text style={styles.assetName}>
+                        {item.assetName} {item.barcode ? `(${item.barcode})` : ''}
+                    </Text>
                 </View>
+
                 <View style={styles.statusActionContainer}>
-                    <Text style={[styles.assetStatus, isOverdue && styles.assetStatusOverdue]}>
+                    <Text
+                        style={[
+                            styles.assetStatus,
+                            item.isOverdue && styles.assetStatusOverdue,
+                        ]}
+                    >
                         {item.status}
                     </Text>
-                    {isOverdue && (
-                        <TouchableOpacity style={styles.notifyButton} onPress={() => handleOpenModal(item.name)}>
-                            <Ionicons name="notifications-outline" size={16} color="#DC3545" />
+
+                    {item.isOverdue && (
+                        <TouchableOpacity
+                            style={styles.notifyButton}
+                            onPress={() => handleOpenModal(item.assetName)}
+                        >
+                            <Ionicons
+                                name="notifications-outline"
+                                size={16}
+                                color="#DC3545"
+                            />
                         </TouchableOpacity>
                     )}
                 </View>
             </TouchableOpacity>
         );
     };
+
 
     return (
         <ImageBackground
@@ -145,7 +187,7 @@ const ReturnAssetScreen: React.FC = () => {
                                 <FlatList
                                     data={assets}
                                     renderItem={renderAssetItem}
-                                    keyExtractor={(item, index) => `${item.id ?? index}-${index}`}
+                                    keyExtractor={(item) => item.assignmentId.toString()}
                                     showsVerticalScrollIndicator={false}
                                 />
                             </View>

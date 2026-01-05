@@ -1,26 +1,40 @@
+// types.ts
+
 export type Asset = {
-  id: string;
-  serialNumber?: string;
-  barcode?: string;
-  assetName?: string;
-  status?: string;
+  assetId: number;          // Asset_Details.id
+  assetCode?: string;       // asset_Id (barcode)
+  assetName: string;
   modelNumber?: string;
-  assignedTo?: string | null;
-  assignedBy?: string | null;
+  serialNumber?: string;
+  category?: string;
+  status?: string;
   location?: string;
   price?: string;
-  purchaseDate?: String| Date;
-  warrantyExpiry?: String | Date;
-  category?: string;
-  expectedReturnDate?: string | null;
-  assignmentId?: number | null;
-  operatorId?: number | null;
-  senderId?: number | null;
-  supervisorEmployeeId?: number;
-  operatorEmployeeId?: number;
-  // add other fields if needed
+  purchaseDate?: string;
+  warrantyExpiry?: string;
 };
 
+export type AssetAssignment = {
+  assignmentId: number;            // PRIMARY KEY
+  assetId: number;
+  operatorEmployeeId: number;
+  supervisorEmployeeId: number;
+  expectedReturnDate?: string | null;
+  assignedDate?: string;
+  location?: string;
+  notes?: string;
+};
+
+export type AssignedAsset = {
+  assignmentId: number;    // ✅ FlatList key
+  assetId: number;
+  assetName: string;
+  barcode?: string;
+  location?: string;
+  expectedReturnDate?: string | null;
+  status: "Assigned" | "Overdue";
+  isOverdue: boolean;
+};
 export type RootStackParamList = {
   CompanyLogin: undefined;
   AddCompany: undefined;
@@ -56,7 +70,7 @@ export type RootStackParamList = {
 
   AssetFullDetails: { asset: Asset };
   ReturnAsset: {
-    assets: any[];
+    assets: AssignedAsset[];
     operatorEmployeeId: string;
   };
   AssignAsset: {

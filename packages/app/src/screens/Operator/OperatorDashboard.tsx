@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback  } from "react";
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp, useFocusEffect  } from "@react-navigation/native";
 import axios from "axios";
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -104,9 +104,23 @@ const OperatorDashboard: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchOperatorData();
-  }, [employeeId]);
+useFocusEffect(
+  useCallback(() => {
+    let isActive = true;
+
+    const refreshData = async () => {
+      if (employeeId && isActive) {
+        await fetchOperatorData();
+      }
+    };
+
+    refreshData();
+
+    return () => {
+      isActive = false;
+    };
+  }, [employeeId]) // This is correct, but ensure fetchOperatorData is fresh
+);
 
   // ----------------------------
   // 🔹 Modal Handlers
@@ -347,7 +361,7 @@ const getUpdatedReturnDate = (assetId: number) => {
               onPress={() =>
                 navigation.navigate("ReturnAsset", {
                   assets: myAssets,
-                  operatorEmployeeId: employeeId.toString(),
+                  operatorEmployeeId: employeeId,
                 })
               }
             >

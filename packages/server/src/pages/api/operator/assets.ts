@@ -21,16 +21,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
      */
     const assetsQuery = `
       SELECT 
-        ad.id,
-        ad.name AS "assetName",
-        ad."asset_Id" AS "barcode",
-        ad.location AS "assetLocation",
-        aa.expected_return_date AS "expectedReturnDate"
-      FROM "Asset_Assignments" aa
-      INNER JOIN "Asset_Details" ad 
-        ON ad.id = aa."assetId"
-      WHERE aa."operator_employeeId" = $1
-      ORDER BY aa.assigned_date DESC;
+    aa.id AS "assignmentId",
+    ad.id AS "assetId",
+    ad.name AS "assetName",
+    ad."asset_Id" AS "barcode",
+    ad.location AS "assetLocation",
+    aa.expected_return_date AS "expectedReturnDate"
+  FROM "Asset_Assignments" aa
+  INNER JOIN "Asset_Details" ad ON ad.id = aa."assetId"
+  WHERE aa."operator_employeeId" = $1
+    -- This ensures that if returnasset.ts set assigned_to to NULL, 
+    -- the asset will stop showing on the dashboard.
+    AND ad.assigned_to = $1 
+  ORDER BY aa.assigned_date DESC;
     `;
 
     const assetsResult = await query(assetsQuery, [operatorEmployeeId]);
@@ -48,8 +51,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const isOverdue = due ? due < today : false;
 
       return {
-        id: asset.id,
-        name: asset.assetName,
+        assignmentId: Number(asset.assignmentId), // 🔥 UNIQUE
+        assetId: Number(asset.assetId),
+        assetName: asset.assetName,
         barcode: asset.barcode,
         location: asset.assetLocation,
         expectedReturnDate: asset.expectedReturnDate,
