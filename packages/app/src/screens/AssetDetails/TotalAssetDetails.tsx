@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Alert, SafeAreaView, ImageBackground, FlatList,
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { Asset, RootStackParamList } from '../../navigation/types';
+import { Asset,AssignedAsset, RootStackParamList } from '../../navigation/types';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import axios from 'axios';
 
@@ -153,7 +153,7 @@ const TotalAssetsDetails: React.FC = () => {
                     {isOverdue && (
                         <TouchableOpacity
                             style={[styles.actionButton, styles.notifyButton]}
-                            onPress={() => handleOpenModal({ id: item.id, name: item.assetName })}
+                            onPress={() => handleOpenModal({ id: item.assetId.toString(), name: item.assetName })}
                         >
                             <Ionicons name="notifications-outline" size={14} color="#fff" />
                             <Text style={styles.actionButtonText}>Notify</Text>
@@ -220,7 +220,7 @@ const TotalAssetsDetails: React.FC = () => {
                         <FlatList
                             data={assets}
                             renderItem={renderAsset}
-                            keyExtractor={item => item.id}
+                            keyExtractor={(item, index) => (item.assetId || index).toString()}
                             showsVerticalScrollIndicator={false}
                         />
                     </View>

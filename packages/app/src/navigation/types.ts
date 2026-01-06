@@ -1,17 +1,19 @@
 // types.ts
 
 export type Asset = {
-  assetId: number;          // Asset_Details.id
-  assetCode?: string;       // asset_Id (barcode)
+  assetId: number;          // Asset_Details.id      
   assetName: string;
   modelNumber?: string;
   serialNumber?: string;
   category?: string;
   status?: string;
+  barcode?: string;
   location?: string;
   price?: string;
   purchaseDate?: string;
   warrantyExpiry?: string;
+  assignedTo?: string | null; // Add this
+  assignedBy?: string | null; // Add this
 };
 
 export type AssetAssignment = {

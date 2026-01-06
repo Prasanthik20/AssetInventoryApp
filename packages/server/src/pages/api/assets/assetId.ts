@@ -16,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const sqlQuery = `
       SELECT
-        a.id,
+        a.id AS "assetId",
         a.name AS "assetName",
         cat.category AS "category",
         s.status AS "status",
@@ -71,7 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const isOverdue = expectedReturn ? expectedReturn < today : false;
 
     const formatted = {
-      id: asset.id,
+      assetId: asset.assetId,
       assetName: asset.assetName,
       category: asset.category,
       status: isOverdue ? "Overdue" : asset.status, // 🔥 Overdue logic

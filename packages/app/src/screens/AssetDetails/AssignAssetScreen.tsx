@@ -12,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import axios from 'axios';
 import { Asset, RootStackParamList } from '../../navigation/types';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 type AssignAssetNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -49,7 +51,7 @@ const AssignAssetScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [selectedAssets, setSelectedAssets] = useState<Asset[]>([]);
   const [selectedOperator, setSelectedOperator] = useState<any>(null);
 
   const [operatorModal, setOperatorModal] = useState(false);
@@ -62,57 +64,77 @@ const AssignAssetScreen: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
 
+  const [showAssignedPicker, setShowAssignedPicker] = useState(false);
+  const [showDuePicker, setShowDuePicker] = useState(false);
+
   // -------------------- FETCH ASSETS --------------------
- useEffect(() => {
-  const fetchData = async () => {
-    try {
-      setLoading(true);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
 
-      // ----- FETCH ASSETS -----
-      const res = await axios.get("http://localhost:3000/api/assets");
+        // ----- FETCH ASSETS -----
+        const res = await axios.get("http://localhost:3000/api/assets");
 
-      const rawAssets = res.data.assets || res.data.data || res.data || [];
+        const rawData = res.data.assets || res.data || [];
+        const normalizedAssets = rawData.map((a: any) => ({
+          ...a,
+          assetId: a.assetId || a.id,
+        }));
 
-      setAssets(rawAssets);
+        const unassignedAssets = normalizedAssets.filter(
+          (a: any) => a.status?.toLowerCase() === 'unassigned'
+        );
 
-      // ----- FETCH OPERATORS -----
-      const response = await axios.get("http://localhost:3000/api/auth/users");
+        // 🔥 REMOVE DUPLICATES BY assetId
+        const uniqueAssets = Array.from(
+          new Map(unassignedAssets.map(a => [a.assetId, a])).values()
+        ) as Asset[];
 
-      const rawUsers = response.data.users || response.data.data || response.data || [];
+        setAssets(uniqueAssets);
+        // ----- FETCH OPERATORS -----
+        const response = await axios.get("http://localhost:3000/api/auth/users");
 
-      const operatorsList = rawUsers.filter(
-        (u: any) => u.role?.roleName?.toLowerCase() === "operator"
-      );
+        const rawUsers = response.data.users || response.data.data || response.data || [];
 
-      setOperators(operatorsList);
-    } catch (err) {
-      console.log(err);
-      setError("Failed to fetch assets or operators");
-    } finally {
-      setLoading(false);
-    }
-  };
+        const operatorsList = rawUsers.filter(
+          (u: any) => u.role?.roleName?.toLowerCase() === "operator"
+        );
 
-  fetchData();
-}, []);
+        setOperators(operatorsList);
+      } catch (err) {
+        console.log(err);
+        setError("Failed to fetch assets or operators");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   // -------------------- ASSIGN HANDLER --------------------
   const handleAssign = async () => {
-    if (!selectedAsset) {
-      Alert.alert('Error', 'Please select an asset');
+    if (selectedAssets.length === 0) {
+      Alert.alert('Error', 'Please select at least one asset');
       return;
     }
     if (!selectedOperator) {
       Alert.alert('Error', 'Please select an operator');
       return;
     }
-    console.log("Supervisor:", supervisor_employeeId, supervisorName);
+
+    if (!dueDate) {
+      Alert.alert('Error', 'Please select expected return date');
+      return;
+    }
 
     try {
+      // 🔥 Send the array of IDs to your bulk assignment API
       await axios.post('http://localhost:3000/api/assets/assign', {
-        asset_id: selectedAsset.id,
+        assetIds: selectedAssets.map(a => a.assetId), // Change asset_id to assetIds
         operator_employeeId: selectedOperator.employeeId,
-        supervisor_employeeId : supervisor_employeeId,
+        supervisor_employeeId: supervisor_employeeId,
         project_name: projectName,
         destination: location,
         assigned_date: assignedDate,
@@ -120,14 +142,26 @@ const AssignAssetScreen: React.FC = () => {
         notes,
       });
 
-      Alert.alert('Success', 'Asset assigned successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      Alert.alert('Success', `${selectedAssets.length} Assets assigned!`);
+      navigation.goBack();
     } catch (err) {
-      console.log('Assign Error:', err);
-      Alert.alert('Error', 'Failed to assign asset');
+      Alert.alert('Error', 'Failed to assign assets');
     }
   };
+
+  const onAssignedChange = (event: any, selectedDate?: Date) => {
+  setShowAssignedPicker(false); // Close picker
+  if (selectedDate) {
+    setAssignedDate(selectedDate.toISOString().split('T')[0]);
+  }
+};
+
+const onDueChange = (event: any, selectedDate?: Date) => {
+  setShowDuePicker(false); // Close picker
+  if (selectedDate) {
+    setDueDate(selectedDate.toISOString().split('T')[0]);
+  }
+};
 
   // -------------------- SCAN FUNCTIONS --------------------
   const handleScanBarcode = () => {
@@ -139,25 +173,43 @@ const AssignAssetScreen: React.FC = () => {
   };
 
   // -------------------- ASSET ITEM --------------------
-  const renderAssetItem = ({ item }: { item: Asset }) => (
+
+  const toggleAssetSelection = (asset: Asset) => {
+    setSelectedAssets((prev) => {
+      const isSelected = prev.find((a) => a.assetId === asset.assetId);
+      if (isSelected) {
+        return prev.filter((a) => a.assetId !== asset.assetId); // Remove if already selected
+      } else {
+        return [...prev, asset]; // Add if not selected
+      }
+    });
+  };
+  const renderAssetItem = ({ item }: { item: Asset }) => {
+  const isSelected = selectedAssets.some((a) => a.assetId === item.assetId);
+
+  return (
     <TouchableOpacity
       style={[
         styles.assetRow,
-        selectedAsset?.id === item.id && { backgroundColor: '#D0F0FD' },
+        isSelected && { backgroundColor: '#D0F0FD', borderColor: '#3B59B8', borderWidth: 1 },
       ]}
-      onPress={() => {
-        setSelectedAsset(item);
-        setAssetModal(false);
-      }}
+      onPress={() => toggleAssetSelection(item)}
     >
-      <Ionicons name="business-outline" size={24} color="#3B59B8" style={{ marginRight: 12 }} />
-      <View>
-        <Text style={{ fontWeight: '600', fontSize: 15 }}>{item.assetName}</Text>
-        <Text style={{ fontSize: 12, color: '#777' }}>S/N: {item.serialNumber}</Text>
+      <Ionicons
+        name={isSelected ? "checkbox" : "square-outline"}
+        size={24}
+        color="#3B59B8"
+      />
+      <View style={{ marginLeft: 10 }}>
+        <Text style={{ fontWeight: '600' }}>{item.assetName}</Text>
+        {/* Show Serial Number or Barcode so they aren't identical */}
+        <Text style={{ fontSize: 12, color: '#777' }}>
+          S/N: {item.serialNumber || 'N/A'} | ID: {item.assetId}
+        </Text>
       </View>
     </TouchableOpacity>
   );
-
+};
   if (loading) {
     return (
       <View style={styles.centeredView}>
@@ -191,20 +243,19 @@ const AssignAssetScreen: React.FC = () => {
           {/* FORM */}
           <ScrollView contentContainerStyle={styles.formScrollContainer}>
             <View style={styles.formBody}>
-              
+
               {/* LEFT COLUMN */}
               <View style={styles.formColumn}>
-                
+
                 {/* ASSET DROPDOWN */}
-                <Text style={styles.label}>Select Asset (Available in Office)</Text>
-                <TouchableOpacity
-                  style={styles.pickerInput}
-                  onPress={() => setAssetModal(true)}
-                >
+                <Text style={styles.label}>Selected Assets ({selectedAssets.length})</Text>
+                <TouchableOpacity style={styles.pickerInput} onPress={() => setAssetModal(true)}>
                   <Text style={styles.pickerText}>
-                    {selectedAsset ? selectedAsset.assetName : 'Select Asset'}
+                    {selectedAssets.length > 0
+                      ? selectedAssets.map(a => a.assetName).join(', ')
+                      : 'Select Assets'}
                   </Text>
-                  <Ionicons name="chevron-down" size={20} color="#333" />
+                  <Ionicons name="add-circle-outline" size={20} color="#333" />
                 </TouchableOpacity>
 
                 {/* OPERATOR DROPDOWN */}
@@ -262,22 +313,89 @@ const AssignAssetScreen: React.FC = () => {
                   <Text style={styles.scanButtonText}>Scan Asset Barcode</Text>
                 </TouchableOpacity>
 
+                {/* ASSIGNED DATE */}
                 <Text style={styles.label}>Assigned Date</Text>
-                <View style={styles.inputGroup}>
-                  <Feather name="calendar" size={18} color="#555" style={styles.inputIcon} />
-                  <TextInput style={styles.textInput} value={assignedDate} editable={false} />
-                </View>
-
-                <Text style={styles.label}>Expected Return Date</Text>
-                <View style={styles.inputGroup}>
-                  <Feather name="calendar" size={18} color="#555" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="YYYY-MM-DD"
-                    value={dueDate}
-                    onChangeText={setDueDate}
+                {Platform.OS === "web" ? (
+                  <input
+                    type="date"
+                    value={assignedDate}
+                    onChange={(e) => setAssignedDate(e.target.value)}
+                    style={{
+                      width: "100%",
+                      height: 44,
+                      padding: "10px",
+                      borderRadius: 8,
+                      border: "1px solid #ccc",
+                      fontSize: 14,
+                    }}
                   />
-                </View>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.inputGroup}
+                      onPress={() => setShowAssignedPicker(true)}
+                    >
+                      <Feather name="calendar" size={18} color="#555" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.textInput}
+                        value={assignedDate}
+                        editable={false}
+                        pointerEvents="none"
+                      />
+                    </TouchableOpacity>
+
+                    {showAssignedPicker && (
+                      <DateTimePicker
+                        value={new Date(assignedDate)}
+                        mode="date"
+                        onChange={onAssignedChange}
+                      />
+                    )}
+                  </>
+                )}
+
+                {/* EXPECTED RETURN DATE */}
+                <Text style={styles.label}>Expected Return Date</Text>
+                {Platform.OS === "web" ? (
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    min={assignedDate}
+                    style={{
+                      width: "100%",
+                      height: 44,
+                      padding: "10px",
+                      borderRadius: 8,
+                      border: "1px solid #ccc",
+                      fontSize: 14,
+                    }}
+                  />
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.inputGroup}
+                      onPress={() => setShowDuePicker(true)}
+                    >
+                      <Feather name="calendar" size={18} color="#555" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.textInput}
+                        value={dueDate}
+                        editable={false}
+                        pointerEvents="none"
+                      />
+                    </TouchableOpacity>
+
+                    {showDuePicker && (
+                      <DateTimePicker
+                        value={dueDate ? new Date(dueDate) : new Date()}
+                        mode="date"
+                        minimumDate={new Date()}
+                        onChange={onDueChange}
+                      />
+                    )}
+                  </>
+                )}
 
                 <Text style={styles.label}>Upload Photo (Optional)</Text>
                 <TouchableOpacity style={styles.uploadButton} onPress={handleUploadPhoto}>
@@ -313,13 +431,19 @@ const AssignAssetScreen: React.FC = () => {
           onPress={() => setAssetModal(false)}
         >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Asset</Text>
-
+            <Text style={styles.modalTitle}>Select Assets</Text>
             <FlatList
               data={assets}
-              keyExtractor={(item) => item.id.toString()}
+              keyExtractor={(item, index) => `asset-${item.assetId}-${index}`}
               renderItem={renderAssetItem}
             />
+            {/* Add a Close/Done button so the supervisor knows how to finish */}
+            <TouchableOpacity
+              style={styles.doneButton}
+              onPress={() => setAssetModal(false)}
+            >
+              <Text style={styles.doneButtonText}>Done ({selectedAssets.length})</Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -335,21 +459,21 @@ const AssignAssetScreen: React.FC = () => {
             <Text style={styles.modalTitle}>Select Operator</Text>
 
             {operators.map((op) => (
-        <TouchableOpacity
-    key={op.employeeId}
-    style={styles.assetRow}
-    onPress={() => {
-      setSelectedOperator(op); // store full object
-      setOperatorModal(false);
-    }}
-  >
-    <Ionicons name="person-circle-outline" size={24} color="#4A55A2" />
-    <Text style={{ marginLeft: 10, fontSize: 16 }}>
-      {op.fullName} ({op.employeeId})
-    </Text>
-  </TouchableOpacity>
+              <TouchableOpacity
+                key={op.employeeId}
+                style={styles.assetRow}
+                onPress={() => {
+                  setSelectedOperator(op); // store full object
+                  setOperatorModal(false);
+                }}
+              >
+                <Ionicons name="person-circle-outline" size={24} color="#4A55A2" />
+                <Text style={{ marginLeft: 10, fontSize: 16 }}>
+                  {op.fullName} ({op.employeeId})
+                </Text>
+              </TouchableOpacity>
 
-))}
+            ))}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -503,19 +627,31 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '70%',
-  },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 20,
     color: '#1A202C',
   },
+  doneButton: {
+  backgroundColor: '#3B59B8',
+  padding: 15,
+  borderRadius: 10,
+  alignItems: 'center',
+  marginTop: 10
+},
+doneButtonText: {
+  color: '#FFF',
+  fontWeight: 'bold',
+  fontSize: 16
+},
+modalContent: {
+  backgroundColor: 'white',
+  padding: 20,
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  maxHeight: '80%', // Important so the list doesn't go off screen
+},
 });
 
 export default AssignAssetScreen;
