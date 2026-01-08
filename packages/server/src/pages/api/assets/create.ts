@@ -5,7 +5,6 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-
   /* ============================
      CORS
   ============================ */
@@ -30,9 +29,6 @@ export default async function handler(
       status
     } = req.body;
 
-    /* ============================
-       BASIC VALIDATION
-    ============================ */
     if (!assetName || !category) {
       return res
         .status(400)
@@ -42,35 +38,40 @@ export default async function handler(
     /* ============================
        GET CATEGORY ID
     ============================ */
-    const categoryResult = await query(
+    const categoryRes = await query(
       `SELECT "categoryId" FROM "Category" WHERE category = $1 LIMIT 1`,
       [category]
     );
 
-    if (categoryResult.rows.length === 0) {
+    if (!categoryRes.rows.length) {
       return res.status(400).json({ message: "Invalid category" });
     }
 
-    const categoryId = categoryResult.rows[0].categoryId;
+    const categoryId = categoryRes.rows[0].categoryId;
 
     /* ============================
        GET STATUS ID
     ============================ */
-    const statusResult = await query(
+    const statusRes = await query(
       `SELECT id FROM "Status" WHERE status = $1 LIMIT 1`,
       [status || "Unassigned"]
     );
 
-    if (statusResult.rows.length === 0) {
+    if (!statusRes.rows.length) {
       return res.status(400).json({ message: "Invalid status" });
     }
 
-    const statusId = statusResult.rows[0].id;
+    const statusId = statusRes.rows[0].id;
 
     /* ============================
-       INSERT ASSET (FIXED)
+       TRANSACTION START
     ============================ */
-    const result = await query(
+    await query("BEGIN", []);
+
+    /* ============================
+       INSERT INTO Asset_Details
+    ============================ */
+    const insertAsset = await query(
       `
       INSERT INTO "Asset_Details"
       (
@@ -84,9 +85,8 @@ export default async function handler(
         location,
         status_id
       )
-      VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING *
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING id
       `,
       [
         assetName,
@@ -101,13 +101,54 @@ export default async function handler(
       ]
     );
 
+    const assetId = insertAsset.rows[0].id;
+    const assetIdStr = assetId.toString();
+
+    /* ============================
+       UPDATE asset_Id = id
+    ============================ */
+    await query(
+      `
+      UPDATE "Asset_Details"
+      SET "asset_Id" = $1
+      WHERE id = $2
+      `,
+      [assetIdStr, assetId]
+    );
+
+    /* ============================
+       INSERT INTO Category_Details
+    ============================ */
+    await query(
+      `
+      INSERT INTO "Category_Details"
+      ("categoryId", name, "asset_Id")
+      VALUES ($1, $2, $3)
+      `,
+      [categoryId, assetName, assetIdStr]
+    );
+
+    /* ============================
+       COMMIT TRANSACTION
+    ============================ */
+    await query("COMMIT", []);
+
+    /* ============================
+       RETURN FINAL ASSET
+    ============================ */
+    const finalAsset = await query(
+      `SELECT * FROM "Asset_Details" WHERE id = $1`,
+      [assetId]
+    );
+
     return res.status(201).json({
-      message: "Asset created successfully",
-      asset: result.rows[0]
+      message: "Asset created and linked to category successfully",
+      asset: finalAsset.rows[0]
     });
 
   } catch (error: any) {
-    console.error("Create Asset API Error:", error.message);
+    await query("ROLLBACK", []);
+    console.error("Create Asset Error:", error.message);
     return res.status(500).json({ message: error.message });
   }
 }
