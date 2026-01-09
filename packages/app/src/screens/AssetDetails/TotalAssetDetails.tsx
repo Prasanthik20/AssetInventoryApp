@@ -1,22 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, SafeAreaView, ImageBackground, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
-import { Ionicons, Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { Asset,AssignedAsset, RootStackParamList } from '../../navigation/types';
-import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
-import axios from 'axios';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  SafeAreaView,
+  ImageBackground,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
+} from "react-native";
+import { Ionicons, Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { Asset, RootStackParamList } from "../../navigation/types";
+import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-
-interface Status {
-    id: number;
-    status: string;
-}
-
-// Define the navigation stack param list
 type AssetsDetailsNavigationProp = StackNavigationProp<
-    RootStackParamList,
-    'TotalAssetDetails'
+  RootStackParamList,
+  "TotalAssetDetails"
 >;
 
 const StatusBadge = ({
@@ -78,50 +83,107 @@ const StatusBadge = ({
 };
 
 const TotalAssetsDetails: React.FC = () => {
-    const navigation = useNavigation<AssetsDetailsNavigationProp>();
+  const navigation = useNavigation<AssetsDetailsNavigationProp>();
 
-    const [assets, setAssets] = useState<Asset[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [isModalVisible, setModalVisible] = useState(false);
-    const [selectedAsset, setSelectedAsset] = useState<{ id: string, name: string } | null>(null);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  const [supervisorId, setSupervisorId] = useState<number | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [isModalVisible, setModalVisible] = useState(false);
+
+  /* 🔹 Load logged-in supervisor */
+  useEffect(() => {
+    const loadUser = async () => {
+      const user = await AsyncStorage.getItem("user");
+      if (user) {
+        const parsed = JSON.parse(user);
+        setSupervisorId(Number(parsed.employeeId));
+      }
+    };
+    loadUser();
+  }, []);
+
+  /* 🔹 Fetch assigned assets */
     useEffect(() => {
         const fetchAssets = async () => {
             try {
                 setLoading(true);
                 setError(null);
-                const response = await axios.get(`http://localhost:3000/api/assets`);
-                setAssets(response.data.assets);
+
+                const response = await axios.get("http://localhost:3000/api/assets");
+
+                console.log("ASSETS RESPONSE:", response.data);
+
+                const assetsData = Array.isArray(response.data.assets)
+                    ? response.data.assets
+                    : Array.isArray(response.data)
+                        ? response.data
+                        : [];
+
+                setAssets(assetsData);
             } catch (err) {
-                setError('Failed to fetch assets. Please check the server connection.');
-                console.error(err);
+                console.error("Fetch assets error:", err);
+                setError("Failed to fetch assets. Please check the server connection.");
+                setAssets([]);
             } finally {
                 setLoading(false);
             }
         };
+
         fetchAssets();
     }, []);
 
-    const handleOpenModal = (asset: { id: string, name: string }) => {
-        setSelectedAsset(asset);
-        setModalVisible(true);
+  /* 🔹 Open modal */
+  const handleOpenModal = (asset: Asset) => {
+    setSelectedAsset(asset);
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setSelectedAsset(null);
+  };
+
+ /* 🔹 Send notification */
+const handleSubmitNotification = async (reason: string) => {
+  if (!selectedAsset) return;
+
+  // Use senderId directly from the asset object
+  const supervisorIdToUse = selectedAsset.senderId;
+  const operatorIdToUse = selectedAsset.receiverId || selectedAsset.operatorId; 
+
+  console.log("Notification Debug:", { supervisorIdToUse, operatorIdToUse });
+
+  if (!supervisorIdToUse || !operatorIdToUse) {
+    Alert.alert("Error", "Missing sender (Supervisor) or receiver (Operator) ID.");
+    return;
+  }
+
+  try {
+    const payload = {
+      senderId: Number(supervisorIdToUse),
+      receiverId: Number(operatorIdToUse),
+      assetId: Number(selectedAsset.id), // Matches your console log: id: "3"
+      assignmentId: Number(selectedAsset.assignmentId),
+      reason,
     };
 
-    const handleCloseModal = () => {
-        setModalVisible(false);
-        setSelectedAsset(null);
-    };
+    const response = await axios.post("http://localhost:3000/api/notifications/supervisor", payload);
 
-    const handleSubmitNotification = (reason: string) => {
-        if (!selectedAsset) return;
-        console.log(`Sending notification for asset "${selectedAsset.name}" with reason: ${reason}`);
-        Alert.alert(
-            "Notification Sent",
-            `A notification regarding "${selectedAsset.name}" has been sent.`,
-            [{ text: "OK", onPress: handleCloseModal }]
-        );
-    };
+    if (response.status === 200 || response.status === 201) {
+      Alert.alert("Success", "Notification sent successfully!");
+      handleCloseModal();
+    }
+  } catch (error: any) {
+    console.error("API Error Details:", error.response?.data || error.message);
+    Alert.alert(
+      "Notification Failed",
+      error?.response?.data?.message || "Check your network connection"
+    );
+  }
+};
 
     // --- RENDER FUNCTION IS NOW SEPARATE AND CLEAN ---
    const renderAsset = ({ item, index }: { item: Asset, index: number }) => { 
@@ -153,7 +215,7 @@ const TotalAssetsDetails: React.FC = () => {
                     {isOverdue && (
                         <TouchableOpacity
                             style={[styles.actionButton, styles.notifyButton]}
-                            onPress={() => handleOpenModal({ id: item.assetId.toString(), name: item.assetName })}
+                                onPress={() => handleOpenModal(item)}
                         >
                             <Ionicons name="notifications-outline" size={14} color="#fff" />
                             <Text style={styles.actionButtonText}>Notify</Text>
@@ -219,9 +281,12 @@ const TotalAssetsDetails: React.FC = () => {
                         {/* --- DATA SOURCE CORRECTED --- */}
                         <FlatList
                             data={assets}
+                            keyExtractor={(item, index) =>
+                                item
+                                    ? `${item.assignmentId ?? item.assetId ?? 'item'}-${index}`
+                                    : `index-${index}`
+                            }
                             renderItem={renderAsset}
-                            keyExtractor={(item, index) => (item.assetId || index).toString()}
-                            showsVerticalScrollIndicator={false}
                         />
                     </View>
                 </View>
@@ -230,7 +295,7 @@ const TotalAssetsDetails: React.FC = () => {
                         visible={isModalVisible}
                         onClose={handleCloseModal}
                         onSubmit={handleSubmitNotification}
-                        assetName={selectedAsset.name}
+                        assetName={selectedAsset.assetName}
                     />
                 )}
             </SafeAreaView>

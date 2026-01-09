@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import axios from 'axios';
-import { AssignedAsset, RootStackParamList } from '../../navigation/types';
+import { Asset, RootStackParamList } from '../../navigation/types';
 
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
@@ -108,7 +108,7 @@ const ReturnAssetScreen: React.FC = () => {
     };
 
 
-    const renderAssetItem = ({ item }: { item: AssignedAsset }) => {
+    const renderAssetItem = ({ item }: { item: Asset }) => {
         const id = item.assignmentId; // ✅ UNIQUE & SAFE
         const isSelected = selectedAssets.includes(id);
 

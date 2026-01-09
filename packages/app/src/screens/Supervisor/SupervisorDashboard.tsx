@@ -70,27 +70,30 @@ const fetchDashboardData = async () => {
       axios.get(`http://localhost:3000/api/notifications/supervisor?id=${employeeId}`)
     ]);
 
-    // Backend already returns ONLY operator replies (supervisor inbox)
-    const formatted = repliesRes.data.notifications.map((n: any) => ({
+    // FIX: repliesRes.data IS the array [{}, {}, {}]
+    const rawData = Array.isArray(repliesRes.data) 
+      ? repliesRes.data 
+      : (repliesRes.data.notifications || []);
+
+    const formatted = rawData.map((n: any) => ({
       notificationId: n.notificationId,
-      operatorName: n.receiverName ,     // sender = operator
-      assetName: n.asset.name,
+      operatorName: n.operatorName || "Unknown",
+      assetName: n.assetName || "Unknown Asset",
       reason: n.reason,
       reply: n.reply
     }));
-    console.log("Dashboard API Response:", { metrics: metricsRes.data, replies: repliesRes.data, formatted });
+
+    console.log("Formatted Replies for State:", formatted);
+    
     setMetricsData(metricsRes.data);
     setOperatorReplies(formatted);
 
   } catch (error) {
     console.log('Dashboard Data Fetch Error:', error);
-    Alert.alert("Error", "Failed to load dashboard data.");
   } finally {
     setLoading(false);
   }
 };
-
-
   // --- CORRECTED useEffect: Single hook, dependent on employeeId ---
   useEffect(() => {
     fetchDashboardData();
@@ -210,7 +213,7 @@ const fetchDashboardData = async () => {
                     ) : (
                         <FlatList
                             data={operatorReplies}
-                            keyExtractor={(item, index) => (item.notificationId ?? index).toString()}
+                            keyExtractor={(item) => item.notificationId.toString()}
                             renderItem={({ item }) => (
                                 <View style={styles.activityItem}>
                                     <Ionicons name="chatbubbles-outline" size={24} color="#4A55A2" />

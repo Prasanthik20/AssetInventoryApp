@@ -98,7 +98,27 @@ const OperatorDashboard: React.FC = () => {
       setOverdueCount(overdueAssets.length);
       setAssignedCount(assets.length);
       setCurrentLocation(assetsRes.data.location || "N/A");
-      setNotifications(notificationsRes.data.notifications || []);
+      const mappedNotifications = (notificationsRes.data.notifications || []).map((n: any) => ({
+        id: n.id,
+        reason: n.reason,
+        status: n.status,
+        reply: n.reply,
+        createdAt: n.created_at,
+        asset: {
+          id: n.assetId,
+          name: n.assetName || (n.asset ? n.asset.name : "Unknown Asset")
+        },
+        sender: {
+          // This is the critical line:
+          // Ensure you are capturing the ID of the person who SENT the alert (the Supervisor)
+          employeeId: n.senderId || n.sender?.employeeId,
+          name: n.senderName || (n.sender ? n.sender.fullName : "Supervisor")
+        },
+        receiver: {
+          employeeId: n.receiverId || n.receiver?.employeeId,
+          name: n.receiverName || (n.receiver ? n.receiver.fullName : "Operator")
+        },
+      })); setNotifications(mappedNotifications);
     } catch (err) {
       console.log("Operator Assets API Error:", err);
     }
@@ -139,22 +159,34 @@ useFocusEffect(
     // Here you would call your POST /api/notifications endpoint
   };
 
-  const handleReplySubmit = async (replyMessage: string, notification: Notification) => {
+const handleReplySubmit = async (replyMessage: string, notification: Notification) => {
+  // The 'sender' of the original alert is the 'receiver' of this reply
+  const supervisorId = notification.sender?.employeeId; 
+  const operatorId = employeeId; // Current logged-in user
+
+  if (!supervisorId || !operatorId) {
+    Alert.alert("Error", "Required user information is missing. Please refresh.");
+    console.error("IDs missing:", { supervisorId, operatorId });
+    return;
+  }
+
   try {
-    await axios.post(`http://localhost:3000/api/notifications/reply`, {
-      originalNotificationId: notification.notificationId,
-      replyMessage: replyMessage,
-      operatorId: Number(employeeId),                 // current operator
-      supervisorId: notification.sender.employeeId,   // original sender (supervisor)
-    });
+    const payload = {
+      originalNotificationId: Number(notification.id),
+      replyMessage,
+      senderId: Number(operatorId),      // Operator sending the reply
+      receiverId: Number(supervisorId),  // Supervisor receiving the reply
+      status: 'replied'                  // New status
+    };
 
-    Alert.alert("Reply Sent", "Your reply has been sent to the supervisor.");
+    await axios.post(`http://localhost:3000/api/notifications/reply`, payload);
+
+    Alert.alert("Success", "Reply sent successfully!");
     handleCloseModal();
-    fetchOperatorData();
-
-  } catch (error) {
-    console.error("Failed to send reply:", error);
-    Alert.alert("Error", "Could not send your reply.");
+    fetchOperatorData(); // Refresh to see the status change
+  } catch (error: any) {
+    console.error("Reply Error:", error.response?.data || error.message);
+    Alert.alert("Error", "Could not send reply. Check server logs.");
   }
 };
 

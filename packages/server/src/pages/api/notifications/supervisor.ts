@@ -1,48 +1,127 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import query from '@/lib/db';
+import type { NextApiRequest, NextApiResponse } from "next";
+import query from "@/lib/db";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', ['GET']);
-    return res.status(405).end(`Method ${req.method} Not Allowed`);
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  // ✅ Handle preflight OPTIONS request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end(); // very important for CORS
   }
 
-  const supervisorId = req.query.id;
+  try {
+    if (req.method === "GET") return getSupervisorNotifications(req, res);
+    if (req.method === "POST") return sendOverdueNotification(req, res);
+    if (req.method === "PUT") return extendAssetAndResolve(req, res);
+    
+
+    return res.status(405).json({ message: "Method not allowed" });
+  } catch (error: any) {
+    console.error("Supervisor API Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/* ===========================
+   GET Supervisor Notifications
+=========================== */
+async function getSupervisorNotifications(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const supervisorId = Number(req.query.id); // 🔥 MATCH FRONTEND
 
   if (!supervisorId) {
     return res.status(400).json({ message: "Supervisor ID required" });
   }
 
-  try {
-    const sql = `
-      SELECT 
-        n.id AS "notificationId",
-        COALESCE(ad.name, 'Unknown Asset') AS "assetName",
-        COALESCE(op."fullName", 'Unknown Sender') AS "operatorName",
-        n.reason,
-        n.reply,
-        n.status,
-        aa.expected_return_date AS "expectedReturnDate",
-        aa.assigned_date AS "assignedDate"
-      FROM "Notifications" n
-      LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
-      LEFT JOIN "Users" op ON op."employeeId" = n."senderId"
-      LEFT JOIN "Asset_Assignments" aa ON aa."assetId" = n."assetId"
-     WHERE n."receiverId" = $1
-  AND n.status IN ('Unread', 'Replied')
-      ORDER BY n."created_at" DESC;
-    `;
+ const sql = `
+  SELECT
+    n.id                    AS "notificationId",
+    n.reason,
+    n.reply,
+    n.status,
+    n.created_at            AS "createdAt",
 
-    const result = await query(sql, [supervisorId]);
+    ad.id                   AS "assetId",
+    ad.name                 AS "assetName",
 
-    // ⭐ FIXED RESPONSE ⭐
-    return res.status(200).json({
-      notifications: result.rows
-    });
+    u."fullName"            AS "operatorName" -- The person who sent the reply
 
-  } catch (error) {
-    console.log("Supervisor Notification API Error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+  FROM "Notifications" n
+  LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
+  -- Join Users to 'senderId' because in a reply, the Operator is the sender
+  LEFT JOIN "Users" u ON u."employeeId" = n."senderId" 
+
+  WHERE n."receiverId" = $1   -- Supervisor is the Receiver of the reply
+    AND n.status = 'replied'  -- Only show active replies
+  ORDER BY n.created_at DESC
+`;
+
+  const { rows } = await query(sql, [supervisorId]);
+  console.log(`Backend found ${rows.length} replies for ID ${supervisorId}`);
+  return res.status(200).json(rows);
+}
+
+/* ===========================
+   POST Send Overdue Notification
+=========================== */
+async function sendOverdueNotification(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const { assetId, assignmentId, senderId, receiverId, reason } = req.body;
+
+ if (!assetId || !senderId || !receiverId || !reason) {
+  return res.status(400).json({ message: "Missing required fields" });
+}
+
+ const sql = `
+  INSERT INTO "Notifications"
+    ("assetId", "assignmentId", "senderId", "receiverId", "reason", "status")
+  VALUES ($1, $2, $3, $4, $5, 'unread')
+  RETURNING *;
+`;
+
+const { rows } = await query(sql, [
+  assetId,
+  assignmentId || null,
+  senderId,
+  receiverId,
+  reason,
+]);
+
+
+  return res.status(201).json(rows[0]);
+}
+
+/* ===========================
+   PUT Extend Asset & Resolve
+=========================== */
+async function extendAssetAndResolve(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const { notificationId, assignmentId, newReturnDate } = req.body;
+
+  if (!notificationId || !assignmentId || !newReturnDate) {
+    return res.status(400).json({ message: "Missing required fields" });
   }
+
+  await query(
+    `UPDATE "Asset_Assignments"
+     SET expected_return_date = $1
+     WHERE id = $2`,
+    [newReturnDate, assignmentId]
+  );
+
+  await query(
+    `UPDATE "Notifications"
+     SET status = 'resolved'
+     WHERE id = $1`,
+    [notificationId]
+  );
+
+  return res.status(200).json({ message: "Resolved successfully" });
 }

@@ -1,6 +1,7 @@
 // types.ts
 
 export type Asset = {
+  id: number;                 // PRIMARY KEY
   assetId: number;          // Asset_Details.id      
   assetName: string;
   modelNumber?: string;
@@ -14,6 +15,13 @@ export type Asset = {
   warrantyExpiry?: string;
   assignedTo?: string | null; // Add this
   assignedBy?: string | null; // Add this
+  expectedReturnDate?: string | null;
+  assignmentId: number;
+  isOverdue: boolean;
+  senderId?: string | number;   // Changed to allow both for flexibility
+  receiverId?: string | number; // Changed to allow both for flexibility
+  operatorId?: string | number;
+  
 };
 
 export type AssetAssignment = {
@@ -27,16 +35,7 @@ export type AssetAssignment = {
   notes?: string;
 };
 
-export type AssignedAsset = {
-  assignmentId: number;    // ✅ FlatList key
-  assetId: number;
-  assetName: string;
-  barcode?: string;
-  location?: string;
-  expectedReturnDate?: string | null;
-  status: "Assigned" | "Overdue";
-  isOverdue: boolean;
-};
+
 export type RootStackParamList = {
   CompanyLogin: undefined;
   AddCompany: undefined;
@@ -72,7 +71,7 @@ export type RootStackParamList = {
 
   AssetFullDetails: { asset: Asset };
   ReturnAsset: {
-    assets: AssignedAsset[];
+    assets: Asset[];
     operatorEmployeeId: string;
   };
   AssignAsset: {
