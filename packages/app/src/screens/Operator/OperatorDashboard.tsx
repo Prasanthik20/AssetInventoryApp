@@ -180,7 +180,8 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
     };
 
     await axios.post(`http://localhost:3000/api/notifications/reply`, payload);
-
+// 🔥 Remove the replied notification from the UI list immediately
+    setNotifications(prev => prev.filter(item => item.id !== notification.id));
     Alert.alert("Success", "Reply sent successfully!");
     handleCloseModal();
     fetchOperatorData(); // Refresh to see the status change

@@ -55,17 +55,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 4️⃣ Create notification for operator
     const extensionMessage = `Asset return date extended by ${daysToExtend} day(s) by supervisor.`;
     await query(
-      `INSERT INTO "Notifications" 
-       ("assignmentId", "assetId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-      [assignmentId, assetId, supervisorId, operatorId, extensionMessage, null, 'Unread']
-    );
+  `INSERT INTO "Notifications" 
+    ("assignmentId", "assetId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
+    VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW())`,
+  [assignmentId, assetId, supervisorId, operatorId, 'Extension Approved', extensionMessage]
+);
 
     // 5️⃣ Optional: mark original notification as resolved
     await query(
-      `UPDATE "Notifications" SET status = 'Resolved' WHERE id = $1`,
-      [ notificationId]
-    );
+  `UPDATE "Notifications" SET status = 'resolved' WHERE id = $1`,
+  [notificationId]
+);
 
     return res.status(200).json({
       message: `Return date extended by ${daysToExtend} day(s)`,
