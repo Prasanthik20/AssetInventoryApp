@@ -20,20 +20,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
      * 🔥 FIXED SQL QUERY
      */
     const assetsQuery = `
-      SELECT 
+    SELECT DISTINCT ON (ad.id) 
     aa.id AS "assignmentId",
     ad.id AS "assetId",
     ad.name AS "assetName",
     ad."asset_Id" AS "barcode",
     ad.location AS "assetLocation",
-    aa.expected_return_date AS "expectedReturnDate"
+    aa.expected_return_date AS "expectedReturnDate",
+    ad.assigned_by AS "assignedBy",
+    s.status AS "Status"
   FROM "Asset_Assignments" aa
   INNER JOIN "Asset_Details" ad ON ad.id = aa."assetId"
+  INNER JOIN "Status" s ON s.id = ad.status_Id
   WHERE aa."operator_employeeId" = $1
-    -- This ensures that if returnasset.ts set assigned_to to NULL, 
-    -- the asset will stop showing on the dashboard.
-    AND ad.assigned_to = $1 
-  ORDER BY aa.assigned_date DESC;
+    AND ad.assigned_to = $1   
+  ORDER BY ad.id, aa.assigned_date DESC;
     `;
 
     const assetsResult = await query(assetsQuery, [operatorEmployeeId]);
@@ -44,21 +45,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const today = new Date();
 
     const processedAssets = assetsResult.rows.map((asset: any) => {
-      const due = asset.expectedReturnDate
-        ? new Date(asset.expectedReturnDate)
-        : null;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // 🕛 Set to start of today
 
-      const isOverdue = due ? due < today : false;
+      let isOverdue = false;
+      if (asset.expectedReturnDate) {
+        const due = new Date(asset.expectedReturnDate);
+        due.setHours(0, 0, 0, 0); // 🕛 Set to start of the due day
+        isOverdue = due < today;
+      }
 
       return {
-        assignmentId: Number(asset.assignmentId), // 🔥 UNIQUE
+        assignmentId: Number(asset.assignmentId),
         assetId: Number(asset.assetId),
         assetName: asset.assetName,
         barcode: asset.barcode,
         location: asset.assetLocation,
         expectedReturnDate: asset.expectedReturnDate,
-        isOverdue,                        // ⭐ ADDED (frontend uses this)
-        status: isOverdue ? "Overdue" : "Assigned", // ⭐ Added for FieldAssets
+        assignedBy: asset.assignedBy,
+        isOverdue,
+        status: isOverdue ? "Overdue" : "Assigned",
       };
     });
 

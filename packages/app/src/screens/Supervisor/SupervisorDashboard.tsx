@@ -104,26 +104,6 @@ const fetchDashboardData = async () => {
     setExtendModalVisible(true);
   };
   
-  const handleLogout = () => {
-  Alert.alert(
-    "Logout",
-    "Are you sure you want to logout?",
-    [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: () => {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "CompanyLogin" }],
-          });
-        }
-      }
-    ]
-  );
-};
-
   const handleExtendDate = async (notificationId: number, days: number) => {
   try {
     const response = await axios.post(`http://localhost:3000/api/assets/extend-return-date`, { 
@@ -142,8 +122,6 @@ const fetchDashboardData = async () => {
     Alert.alert("Error", err.response?.data?.message || "Failed to extend return date.");
   }
 };
-
-
  
   return (
     <ImageBackground

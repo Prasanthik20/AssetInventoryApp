@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,164 +13,152 @@ import {
 
 import { Ionicons, Feather } from '@expo/vector-icons';
 import axios from 'axios';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
-
 import { Asset, RootStackParamList } from '../../navigation/types';
 
-type FieldAssetsNavProp = StackNavigationProp<
-  RootStackParamList,
-  'FieldAssets'
->;
+type FieldAssetsNavProp = StackNavigationProp<RootStackParamList, 'FieldAssets'>;
 
 const FieldAssets: React.FC = () => {
   const navigation = useNavigation<FieldAssetsNavProp>();
 
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [filteredAssets, setFilteredAssets] = useState<Asset[]>([]); // 🔥 For search filtering
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // 🔥 Check if asset is overdue
-  const isAssetOverdue = (expectedReturnDate?: string | null) => {
-    if (!expectedReturnDate) return false;
+  // 1. 🔥 Corrected Overdue Logic (Moved outside or kept once)
+ const isAssetOverdue = (expectedReturnDate?: string | null) => {
+  if (!expectedReturnDate) return false;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  // 🇮🇳 Get current time in IST
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istToday = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + istOffset);
+  istToday.setHours(0, 0, 0, 0);
 
-    const returnDate = new Date(expectedReturnDate);
-    return returnDate < today;
+  // 📅 Parse the return date
+  const returnDate = new Date(expectedReturnDate);
+  const istReturnDate = new Date(returnDate.getTime() + (returnDate.getTimezoneOffset() * 60000) + istOffset);
+  istReturnDate.setHours(0, 0, 0, 0);
+
+  // If the return date is strictly before today's date in IST, it is overdue
+  return istReturnDate < istToday;
+};
+
+  // 2. 🔥 Fetch assets
+  const fetchAssets = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('http://localhost:3000/api/assets');
+      const data = await res.json();
+
+      const processed = (data.assets || [])
+        .map((asset: Asset) => {
+          const overdue = isAssetOverdue(asset.expectedReturnDate);
+          return {
+            ...asset,
+            // Override status if assigned but date is past
+            status: (asset.status === "Assigned" && overdue) ? "Overdue" : asset.status
+          };
+        })
+        .filter((asset: Asset) => 
+          asset.status === "Assigned" || asset.status === "Overdue"
+        );
+
+      setAssets(processed);
+      setFilteredAssets(processed);
+    } catch (err) {
+      console.error("Error fetching assets:", err);
+      Alert.alert("Error", "Failed to fetch assets.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // 🔥 Fetch assets and filter only assigned + overdue logic
- const fetchAssets = async () => {
-  try {
-    const res = await fetch('http://localhost:3000/api/assets');
-    const data = await res.json();
+  useFocusEffect(
+    useCallback(() => {
+      fetchAssets();
+    }, [])
+  );
 
-    // Step 1: Process all assets to mark overdue
-    const processed = (data.assets || []).map((asset: Asset) => ({
-      ...asset,
-      status: isAssetOverdue(asset.expectedReturnDate)
-        ? "Overdue"
-        : asset.status
-    }));
-    // Step 2: Filter only assigned or overdue assets
-    const assignedOrOverdue = processed.filter(
-      (asset: Asset) => asset.status === "Assigned" || asset.status === "Overdue"
+  // 3. 🔥 Search Logic
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    if (!text.trim()) {
+      setFilteredAssets(assets);
+      return;
+    }
+    const query = text.toLowerCase();
+    const filtered = assets.filter(a => 
+      a.assetName?.toLowerCase().includes(query) || 
+      a.barcode?.toLowerCase().includes(query) ||
+      a.assignedTo?.toLowerCase().includes(query)
     );
+    setFilteredAssets(filtered);
+  };
 
-    setAssets(assignedOrOverdue);
-  } catch (err) {
-    console.error("Error fetching assets:", err);
-    setAssets([]);
-  } finally {
-    setLoading(false);
-  }
-};
-  useEffect(() => {
-    fetchAssets();
-  }, []);
-
-  // 🔥 Open modal
   const openOverdueModal = (asset: Asset) => {
     setSelectedAsset(asset);
     setModalVisible(true);
   };
 
-
-   // Send notification to operator (POST)
-const sendNotification = async (assetId: string, reason: string) => {
-  try {
-    console.log({
-  assetId: assetId,
-  assignmentId: selectedAsset?.assignmentId,
-  senderId: selectedAsset?.senderId,
-  receiverId: selectedAsset?.operatorId,
-  reason,
-});
-    await axios.post(
-      'http://localhost:3000/api/notifications/overdue-assets',
-      {
-        assetId: assetId,  // <-- use assetId (string parameter)
+  const sendNotification = async (assetId: string, reason: string) => {
+    try {
+      await axios.post('http://localhost:3000/api/notifications/overdue-assets', {
+        assetId: assetId,
         assignmentId: selectedAsset?.assignmentId ?? null,
         senderId: selectedAsset?.senderId ?? null,
         receiverId: selectedAsset?.operatorId ?? null,
         reason,
-      }
-      
-    );
-    console.log({
-  assetId: assetId,
-  assignmentId: selectedAsset?.assignmentId,
-  senderId: selectedAsset?.senderId,
-  receiverId: selectedAsset?.operatorId,
-  reason,
-});
-    Alert.alert("Success", "Operator notified successfully!");
-  } catch (err) {
-    console.error(err);
-    Alert.alert("Error", "Could not send notification");
-  }
-};
-
-   // Quick notify (default reason)
-  const quickNotify = async (asset: Asset) => {
-    const defaultReason = "Asset overdue. Please take action.";
-    await sendNotification(asset.id, defaultReason);
+      });
+      Alert.alert("Success", "Operator notified successfully!");
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Could not send notification");
+    }
   };
 
+  const renderAsset = ({ item }: { item: Asset }) => {
+    const showOverdueUI = item.status === "Overdue";
 
-  // 🔥 Render each asset row
-   const renderAsset = ({ item }: { item: Asset }) => (
-    <View style={styles.assetRow}>
-      <Ionicons
-        name="business-outline"
-        size={24}
-        color="#3B59B8"
-        style={styles.assetIcon}
-      />
+    return (
+      <View style={styles.assetRow}>
+        <Ionicons name="business-outline" size={24} color="#3B59B8" style={styles.assetIcon} />
+        <View style={styles.assetInfo}>
+          <Text style={styles.assetName}>{item.assetName} ({item.barcode})</Text>
+          <Text style={styles.assetSubtext}>Last User: {item.assignedTo || "N/A"}</Text>
+          {item.expectedReturnDate && (
+            <Text style={styles.assetSubtext}>
+              Expected Return: {new Date(item.expectedReturnDate).toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                timeZone: 'Asia/Kolkata' // 🔥 Forces display in IST
+              })}
+            </Text>
+          )}
+          {showOverdueUI && (
+            <View style={styles.overdueBadge}>
+              <Text style={styles.overdueText}>OVERDUE</Text>
+            </View>
+          )}
+        </View>
 
-      <View style={styles.assetInfo}>
-        <Text style={styles.assetName}>
-          {item.assetName} ({item.barcode})
-        </Text>
-
-        <Text style={styles.assetSubtext}>
-          Last User: {item.assignedTo || "N/A"}
-        </Text>
-
-        {item.expectedReturnDate && (
-          <Text style={styles.assetSubtext}>
-            Expected Return: {item.expectedReturnDate}
-          </Text>
-        )}
-
-        {item.status === "Overdue" && (
-          <View style={styles.overdueBadge}>
-            <Text style={styles.overdueText}>OVERDUE</Text>
-          </View>
-        )}
-      </View>
-
-      {item.status === "Overdue" && (
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {/* Open modal to enter custom reason */}
-          <TouchableOpacity
-            onPress={() => openOverdueModal(item)}
-            style={styles.notifyBtn}
-          >
+        {showOverdueUI && (
+          <TouchableOpacity onPress={() => openOverdueModal(item)} style={styles.notifyBtn}>
             <Text style={styles.notifyText}>Notify</Text>
           </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
+        )}
+      </View>
+    );
+  };
 
   return (
-    <>
     <ImageBackground
       source={require("../../assets/Company-bg.webp")}
       style={styles.backgroundImage}
@@ -193,55 +181,41 @@ const sendNotification = async (assetId: string, reason: string) => {
               placeholder="Search by name, user, or barcode..."
               placeholderTextColor="#888"
               style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={handleSearch}
             />
           </View>
 
           <FlatList
-            data={assets}
+            data={filteredAssets}
             renderItem={renderAsset}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
+            refreshing={loading}
+            onRefresh={fetchAssets}
+            ListEmptyComponent={<Text style={styles.emptyText}>No assets found in the field.</Text>}
           />
         </View>
 
         <OverdueNotificationModal
-            visible={modalVisible}
-                onClose={() => {
-                            setModalVisible(false);
-                            setSelectedAsset(null);
-                          }}
-                onSubmit={(reason) => {
-            if (selectedAsset) {
-                sendNotification(selectedAsset.id, reason);
-            }
-                setModalVisible(false);
-                setSelectedAsset(null);
-                }}
-              assetName={selectedAsset?.assetName ?? ''}
-              title="Notify Supervisor"
-          />    
+          visible={modalVisible}
+          onClose={() => {
+            setModalVisible(false);
+            setSelectedAsset(null);
+          }}
+          onSubmit={(reason) => {
+            if (selectedAsset) sendNotification(selectedAsset.id.toString(), reason);
+            setModalVisible(false);
+            setSelectedAsset(null);
+          }}
+          assetName={selectedAsset?.assetName ?? ''}
+          title="Notify Operator" // Changed title to reflect Supervisor -> Operator flow
+        />
       </SafeAreaView>
     </ImageBackground>
-    
-   <OverdueNotificationModal
-      visible={modalVisible}
-      onClose={() => {
-        setModalVisible(false);
-        setSelectedAsset(null);
-      }}
-      onSubmit={(reason) => {
-        if (selectedAsset) sendNotification(selectedAsset.id, reason);
-        setModalVisible(false);
-        setSelectedAsset(null);
-      }}
-      assetName={selectedAsset?.assetName ?? ''}
-      title="Notify Supervisor"
-    />
-  </>
   );
 };
-
 
 const styles = StyleSheet.create({
   backgroundImage: {
@@ -305,6 +279,7 @@ const styles = StyleSheet.create({
 
   listContainer: {
     padding: 20,
+    flexGrow: 1,
   },
 
   assetRow: {
@@ -361,6 +336,14 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 13,
     fontWeight: "600",
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 100, // Pushes it down so it's not hidden behind the search bar
+    fontSize: 16,
+    color: '#888',
+    fontWeight: '500',
+    fontStyle: 'italic',
   },
 });
 

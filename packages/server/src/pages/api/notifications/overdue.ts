@@ -1,0 +1,60 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import query from "@/lib/db";
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") return res.status(200).end();
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ message: "Method Not Allowed" });
+  }
+
+  const {
+    assetId,
+    assignmentId,
+    operatorId,
+    supervisorId,
+    reason
+  } = req.body;
+
+  console.log("RECEIVED BODY:", req.body);
+
+  if (!assetId || !operatorId || !supervisorId || !reason) {
+    const missing = [];
+  if (!assetId) missing.push("assetId");
+  if (!operatorId) missing.push("operatorId");
+  if (!supervisorId) missing.push("supervisorId");
+  if (!reason) missing.push("reason");
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  try {
+    const result = await query(
+      `
+      INSERT INTO "Notifications"
+      ("assetId", "assignmentId", "senderId", "receiverId", "reason", "status", "created_at")
+      VALUES ($1, $2, $3, $4, $5, 'unread', NOW())
+      RETURNING *
+      `,
+      [
+        assetId,
+        assignmentId ?? null,
+        operatorId,     // sender = OPERATOR
+        supervisorId,   // receiver = SUPERVISOR
+        reason
+      ]
+    );
+
+    return res.status(200).json({
+      message: "Overdue notification sent to supervisor",
+      notification: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Overdue Notification Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}

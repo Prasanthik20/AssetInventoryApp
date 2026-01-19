@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback  } from "react";
+import React, { useEffect,useState, useCallback  } from "react";
 import {
   View,
   Text,
@@ -89,58 +89,84 @@ const OperatorDashboard: React.FC = () => {
     try {
       const [assetsRes, notificationsRes] = await Promise.all([
         axios.get(`http://localhost:3000/api/operator/assets?operatorId=${employeeId}`),
-        axios.get(`http://localhost:3000/api/notifications/operator?id=${employeeId}`)])  ;
+        axios.get(`http://localhost:3000/api/notifications/operator?id=${employeeId}`)]);
       //const data = await res.json();
-        
-      const assets = assetsRes.data.assets || [];
-      const overdueAssets = assets.filter((a: any) => isAssetOverdue(a.expectedReturnDate));
-      setMyAssets(assets);
+
+      const rawAssets = assetsRes.data.assets || [];
+      // 🔥 DEDUPLICATION LOGIC: Keep only one entry per assetId
+      const uniqueAssetsMap = new Map();
+      rawAssets.forEach((a: any) => {
+        const id = a.assetId || a.id;
+        // If we haven't seen this asset yet, or this record is newer, add it
+        if (!uniqueAssetsMap.has(id)) {
+          uniqueAssetsMap.set(id, {
+            ...a,
+            assignedBy: a.assignedBy || a.assigned_by || a.senderId,
+            assetId: id
+          });
+        }
+      });
+      const normalizedAssets = Array.from(uniqueAssetsMap.values());
+      const overdueAssets = normalizedAssets.filter((a: any) => isAssetOverdue(a.expectedReturnDate));
+      setMyAssets(normalizedAssets);
       setOverdueCount(overdueAssets.length);
-      setAssignedCount(assets.length);
+      setAssignedCount(normalizedAssets.length);
       setCurrentLocation(assetsRes.data.location || "N/A");
-      const mappedNotifications = (notificationsRes.data.notifications || []).map((n: any) => ({
-        id: n.id,
-        reason: n.reason,
-        status: n.status,
-        reply: n.reply,
-        createdAt: n.created_at,
-        asset: {
-          id: n.assetId,
-          name: n.assetName || (n.asset ? n.asset.name : "Unknown Asset")
-        },
-        sender: {
-          // This is the critical line:
-          // Ensure you are capturing the ID of the person who SENT the alert (the Supervisor)
-          employeeId: n.senderId || n.sender?.employeeId,
-          name: n.senderName || (n.sender ? n.sender.fullName : "Supervisor")
-        },
-        receiver: {
-          employeeId: n.receiverId || n.receiver?.employeeId,
-          name: n.receiverName || (n.receiver ? n.receiver.fullName : "Operator")
-        },
-      })); setNotifications(mappedNotifications);
+      const mappedNotifications = (notificationsRes.data.notifications || [])
+        .map((n: any) => ({
+          id: n.id,
+          reason: n.reason,
+          status: n.status, // Ensure status is mapped
+          reply: n.reply,
+          createdAt: n.created_at,
+          asset: {
+            id: n.assetId,
+            name: n.assetName || (n.asset ? n.asset.name : "Unknown Asset")
+          },
+          sender: {
+            employeeId: n.senderId || n.sender?.employeeId,
+            name: n.senderName || (n.sender ? n.sender.fullName : "Supervisor")
+          },
+          receiver: {
+            employeeId: n.receiverId || n.receiver?.employeeId,
+            name: n.receiverName || (n.receiver ? n.receiver.fullName : "Operator")
+          },
+        })) // End of .map()
+        .filter((n: any) => n.status !== 'resolved'); // 🔥 Correct placement: Filter the resulting array
+
+      setNotifications(mappedNotifications);
     } catch (err) {
       console.log("Operator Assets API Error:", err);
     }
   };
 
-useFocusEffect(
-  useCallback(() => {
-    let isActive = true;
+  useEffect(() => {
+  if (route.params?.refresh) {
+    console.log("🔄 Return detected, refreshing dashboard data...");
+    fetchOperatorData();
+    
+    // Clear the refresh param so it doesn't loop
+    navigation.setParams({ refresh: undefined } as any);
+  }
+}, [route.params?.refresh]);
 
-    const refreshData = async () => {
-      if (employeeId && isActive) {
-        await fetchOperatorData();
-      }
-    };
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
 
-    refreshData();
+      const refreshData = async () => {
+        if (employeeId && isActive) {
+          await fetchOperatorData();
+        }
+      };
 
-    return () => {
-      isActive = false;
-    };
-  }, [employeeId]) // This is correct, but ensure fetchOperatorData is fresh
-);
+      refreshData();
+
+      return () => {
+        isActive = false;
+      };
+    }, [employeeId]) // This is correct, but ensure fetchOperatorData is fresh
+  );
 
   // ----------------------------
   // 🔹 Modal Handlers
@@ -150,14 +176,48 @@ useFocusEffect(
     setModalVisible(true);
   };
 
- const handleCloseModal = () => setModalVisible(false);
+  const handleCloseModal = () => setModalVisible(false);
 
- const handleOverdueSubmit = (reason: string, assetName: string) => {
-    console.log(`Reason for overdue asset "${assetName}": ${reason}`);
-    Alert.alert("Notification Sent", "Your supervisor has been notified.");
-    handleCloseModal();
-    // Here you would call your POST /api/notifications endpoint
-  };
+  // Update the signature to accept the asset object
+  const handleOverdueSubmit = async (reason: string, selectedAsset?: any) => {
+    // Use either the passed asset or find it by name as a fallback
+    console.log("Submitting for asset:", modalConfig.assetName);
+    const asset = selectedAsset || myAssets.find(a => a.assetName === modalConfig.assetName);
+
+    if (!asset || (!asset.assignedBy && !asset.assigned_by)) {
+      console.error("Missing Supervisor ID. Asset data:", asset);
+      console.error("Critical: No asset context found for submission");
+      Alert.alert("Error", "Could not identify which asset to update.");
+      return;
+    }
+
+    try {
+      const payload = {
+        assetId: asset.assetId,
+        assignmentId: asset.assignmentId || null,
+        operatorId: Number(employeeId),
+        supervisorId: asset.assignedBy || asset.assigned_by,
+        reason: reason
+      };
+      console.log("DEBUG PAYLOAD:", payload);
+      console.log("🚀 Sending notification for:", asset.assetName);
+
+      const response = await axios.post("http://localhost:3000/api/notifications/overdue", payload, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+    if (response.status === 200) {
+      Alert.alert("Success", "Extension request sent to your supervisor.");
+      handleCloseModal();
+      fetchOperatorData(); // Refresh to ensure synchronization
+    }
+  } catch (error: any) {
+    console.error("Overdue send error:", error.response?.data || error.message);
+    Alert.alert("Error", "Failed to reach server.");
+  }
+};
 
 const handleReplySubmit = async (replyMessage: string, notification: Notification) => {
   // The 'sender' of the original alert is the 'receiver' of this reply
@@ -191,32 +251,24 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
   }
 };
 
-  const isAssetOverdue = (expectedReturnDate: string) => {
+  // 🔥 Enhanced check to ensure we don't mark items as overdue if they are returned
+ const isAssetOverdue = (expectedReturnDate?: string | null) => {
   if (!expectedReturnDate) return false;
-  return new Date(expectedReturnDate) < new Date();
+
+  // 🇮🇳 Get current time in IST
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istToday = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + istOffset);
+  istToday.setHours(0, 0, 0, 0);
+
+  // 📅 Parse the return date
+  const returnDate = new Date(expectedReturnDate);
+  const istReturnDate = new Date(returnDate.getTime() + (returnDate.getTimezoneOffset() * 60000) + istOffset);
+  istReturnDate.setHours(0, 0, 0, 0);
+
+  // If the return date is strictly before today's date in IST, it is overdue
+  return istReturnDate < istToday;
 };
-
-const handleLogout = () => {
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: () => {
-            // This call is now type-safe and will work correctly.
-            navigation.reset({
-              index: 0,
-              routes: [{ name: "CompanyLogin" }],
-            });
-          }
-        }
-      ]
-    );
-  };
-
 
  // EXTENDED DATE FIX
 const getUpdatedReturnDate = (assetId: number) => {
@@ -260,18 +312,16 @@ const getUpdatedReturnDate = (assetId: number) => {
                <Feather name="user" size={16} color="#333" />
                <Text style={styles.userText}>{roleName}</Text>
 
-               <Switch
-                 trackColor={{ false: "#E9E9EA", true: "#34C759" }}
-                 thumbColor={"#f4f3f4"}
-                 value={true}
-                 style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-               />
-
-               <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
-
-               {/* 🔥 LOGOUT BUTTON ADDED HERE */}
-               <TouchableOpacity onPress={handleLogout} style={{ marginLeft: 10 }}>
-                 <Feather name="log-out" size={20} color="#333" />
+               <TouchableOpacity onPress={() => {
+                 setNotifications([]); // 🔥 Clear local notifications state
+                 setMyAssets([]);      // 🔥 Clear assets state
+                 navigation.reset({
+                   index: 0,
+                   routes: [{ name: "CompanyLogin" }],
+                 })
+               }}
+               >
+                 <Feather name="log-out" size={22} color="red" style={{ marginLeft: 10 }} />
                </TouchableOpacity>
              </View>
            </View>
@@ -305,21 +355,34 @@ const getUpdatedReturnDate = (assetId: number) => {
                   data={notifications}
                   keyExtractor={(item) => item.id.toString()}
                   renderItem={({ item }) => {
-                    const isSupervisorMessage = item.reply && String(item.sender.employeeId) !== employeeId;
+                    const isFromSupervisor = String(item.sender.employeeId) !== String(employeeId);
+                    const isResolved = item.status === 'resolved';
 
-                    return (
-                      <View style={styles.notificationItem}>
-                        <Ionicons name="notifications-outline" size={24} color="#4A55A2" />
+                   return (
+                     <View style={[
+                       styles.notificationItem,
+                       isFromSupervisor ? { backgroundColor: '#f0f9ff', borderColor: '#bae6fd', borderWidth: 1 } : {},
+                       isResolved && { opacity: 0.5, backgroundColor: '#f5f5f5' }
+                     ]}>
+                       <Ionicons
+                         name={isResolved ? "checkmark-done-circle" : (isFromSupervisor ? "checkmark-circle-outline" : "notifications-outline")}
+                         size={24}
+                         color={isResolved ? "#999" : (isFromSupervisor ? "#0284c7" : "#4A55A2")}
+                       />
                         <View style={styles.notificationContent}>
-                          <Text style={styles.notificationText}>
-                            From <Text style={{ fontWeight: 'bold' }}>{item.sender.name}</Text> regarding <Text style={{ fontWeight: 'bold' }}>{item.asset.name}</Text>:
-                          </Text>
-                          <Text style={styles.notificationReason}>
-                            "{item.reply || item.reason}"
-                          </Text>
-                        </View>
+                          <Text style={[styles.notificationText, isResolved && { color: '#999' }]}>
+                           {isFromSupervisor ? (
+                             <Text style={{ color: '#0369a1', fontWeight: 'bold' }}>Update from {item.sender.name}:</Text>
+                           ) : (
+                             <Text>From <Text style={{ fontWeight: 'bold' }}>{item.sender.name}</Text>:</Text>
+                           )}
+                         </Text>
+                         <Text style={[styles.notificationReason, isResolved && { color: '#999', fontStyle: 'italic' }]}>
+                           "{item.reply || item.reason}"
+                         </Text>
+                       </View>
 
-                        {!isSupervisorMessage && !item.reply && (
+                        {!isFromSupervisor && !item.reply && !isResolved && (
                           <TouchableOpacity
                             style={styles.replyButton}
                             onPress={() =>
@@ -347,10 +410,15 @@ const getUpdatedReturnDate = (assetId: number) => {
               {myAssets.length === 0 ? (
                 <Text style={{ color: "#333", marginTop: 10 }}>No assets assigned.</Text>
               ) : (
-                myAssets.map((asset, index) => {
-                  const updatedReturnDate = getUpdatedReturnDate(asset.id);
-                  const expectedDate = updatedReturnDate || asset.expectedReturnDate;
-                  const isOverdue = expectedDate && isAssetOverdue(expectedDate);
+                 myAssets.map((asset, index) => {
+                   const updatedReturnDate = getUpdatedReturnDate(asset.assetId);
+                   const rawDate = updatedReturnDate || asset.expectedReturnDate;
+
+                   // 🔥 IST Consistent Formatting
+                   const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString('en-IN', {
+                     day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata'
+                   }) : "No due date";
+                  const isOverdue = rawDate && isAssetOverdue(rawDate);
                   const isExtended = Boolean(updatedReturnDate);
 
                   return (
@@ -361,23 +429,29 @@ const getUpdatedReturnDate = (assetId: number) => {
 
                       <View style={styles.assetNameContainer}>
                         <Text style={styles.assetName}>
-                          {asset.name} ({asset.barcode})
+                          {asset.assetName} ({asset.barcode})
                         </Text>
                       </View>
 
                       <View style={styles.dueDateContainer}>
-                        <Text style={[styles.assetDueDate, isExtended ? { color: "green", fontWeight: "bold" } : {}]}>
-                          {isOverdue ? "Overdue" : expectedDate || "No due date"}
+                        <Text style={[
+                          styles.assetDueDate,
+                          isOverdue ? { color: "red", fontWeight: "bold" } : (isExtended ? { color: "green", fontWeight: "bold" } : {})
+                        ]}>
+                          {isOverdue ? "OVERDUE" : formattedDate}
                         </Text>
 
                         {isOverdue && (
                           <TouchableOpacity
                             style={styles.notifyButton}
-                            onPress={() => handleOpenModal({
-                              title: "Overdue Asset Notification",
-                              assetName: asset.name,
-                              onSubmit: (reason) => handleOverdueSubmit(reason, asset.name)
-                            })}
+                            onPress={() => {
+                              console.log("Opening modal for:", asset.assetName);
+                              handleOpenModal({
+                                title: "Extension Request",
+                                assetName: asset.assetName, // ✅ FIXED
+                                onSubmit: (reason) => handleOverdueSubmit(reason, asset),
+                              });
+                            }}
                           >
                             <Text style={styles.notifyButtonText}>Update</Text>
                           </TouchableOpacity>

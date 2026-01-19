@@ -44,11 +44,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // 2️⃣ Unassign asset
         await query(
             `
-           UPDATE "Asset_Details"
+          UPDATE "Asset_Details"
     SET
         assigned_to = NULL,
         assigned_by = NULL,
-        status_id = (SELECT id FROM "Status" WHERE status = 'Unassigned')
+        status_id = (
+            SELECT id FROM "Status" 
+            WHERE status ILIKE 'Unassigned' 
+            LIMIT 1
+        )
     WHERE id = ANY($1::bigint[])
     `,
             [assetIdsInt]

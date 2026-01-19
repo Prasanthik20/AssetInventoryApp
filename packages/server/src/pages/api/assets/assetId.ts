@@ -19,12 +19,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         a.id AS "assetId",
         a.name AS "assetName",
         cat.category AS "category",
-        s.status AS "status",
+        s.status AS "dbStatus",
         a.model_no AS "modelNumber",
         a.serial_no AS "serialNumber",
         a."asset_Id" AS "barcode",
         a.location,
         u."fullName" AS "assignedBy",
+        a.assigned_to,
         a.warranty_expiry AS "warrantyExpiry",
         a.purchase_date AS "purchaseDate",
         a.price,
@@ -68,13 +69,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? new Date(asset.expected_return_date)
       : null;
 
-    const isOverdue = expectedReturn ? expectedReturn < today : false;
+   // Check 1: Is the date in the past?
+    const isPastDue = expectedReturn ? expectedReturn < today : false;
+    
+    // Check 2: Is it currently assigned to someone in the DB?
+    const isActuallyAssigned = asset.dbStatus === "Assigned" && asset.assigned_to !== null;
 
     const formatted = {
       assetId: asset.assetId,
       assetName: asset.assetName,
       category: asset.category,
-      status: isOverdue ? "Overdue" : asset.status, // 🔥 Overdue logic
+      status: (isActuallyAssigned && isPastDue) ? "Overdue" : asset.dbStatus, // 🔥 Overdue logic
       modelNumber: asset.modelNumber,
       serialNumber: asset.serialNumber,
       barcode: asset.barcode,

@@ -57,6 +57,7 @@ export type RootStackParamList = {
     operatorName: string;
     roleName: string;
     employeeId: string;
+    refresh?: boolean;
   };
 
   SuperAdminLogin: undefined;

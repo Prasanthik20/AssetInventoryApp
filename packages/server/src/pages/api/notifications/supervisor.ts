@@ -43,7 +43,7 @@ async function getSupervisorNotifications(
     n.reply,
     n.status,
     n.created_at            AS "createdAt",
-
+    n."assignmentId",       -- 🔥 Need this for the PUT extend function later
     ad.id                   AS "assetId",
     ad.name                 AS "assetName",
 
@@ -55,7 +55,7 @@ async function getSupervisorNotifications(
   LEFT JOIN "Users" u ON u."employeeId" = n."senderId" 
 
   WHERE n."receiverId" = $1   -- Supervisor is the Receiver of the reply
-    AND n.status = 'replied'  -- Only show active replies
+    AND n.status IN ('unread', 'replied')  -- Only show active replies
   ORDER BY n.created_at DESC
 `;
 
@@ -71,9 +71,9 @@ async function sendOverdueNotification(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { assetId, assignmentId, senderId, receiverId, reason } = req.body;
+  const { assetId, assignmentId, operatorId, receiverId, reason } = req.body;
 
- if (!assetId || !senderId || !receiverId || !reason) {
+ if (!assetId || !operatorId || !receiverId || !reason) {
   return res.status(400).json({ message: "Missing required fields" });
 }
 
@@ -87,7 +87,7 @@ async function sendOverdueNotification(
 const { rows } = await query(sql, [
   assetId,
   assignmentId || null,
-  senderId,
+  operatorId,
   receiverId,
   reason,
 ]);

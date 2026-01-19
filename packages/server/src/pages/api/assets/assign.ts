@@ -2,8 +2,6 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-
-    // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -11,9 +9,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ message: "Method not allowed" });
 
-   try {
+    try {
         const {
-            assetIds, // Receive the array from frontend
+            assetIds,
             operator_employeeId,
             supervisor_employeeId,
             assigned_date,
@@ -27,31 +25,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ message: "No assets selected for assignment" });
         }
 
-        // Get Status ID for 'Assigned'
+        // 1. Get Status ID for 'Assigned' with error handling
         const statusResult = await query(`SELECT id FROM "Status" WHERE status = 'Assigned' LIMIT 1`, []);
+        
+        if (statusResult.rows.length === 0) {
+            return res.status(500).json({ message: "System Error: 'Assigned' status not found in database." });
+        }
+        
         const statusId = statusResult.rows[0].id;
 
-        // Process each asset in the array
-        const results = await Promise.all(assetIds.map(async (id) => {
-            // 1. Update Asset_Details
+        // 2. Start a single loop for the updates
+        // Note: For high-scale apps, use a SQL TRANSACTION here
+        await Promise.all(assetIds.map(async (id) => {
+            const assetId = Number(id);
+
+            // Update Asset_Details: The source of truth for current status
             await query(`
                 UPDATE "Asset_Details"
-                SET status_id = $1, assigned_by = $2, assigned_to = $3, location = $4
+                SET 
+                    status_id = $1, 
+                    assigned_by = $2, 
+                    assigned_to = $3, 
+                    location = $4
                 WHERE id = $5`, 
-                [statusId, supervisor_employeeId, operator_employeeId, destination, id]
+                [statusId, supervisor_employeeId, operator_employeeId, destination, assetId]
             );
 
-            // 2. Insert into Asset_Assignments
-            return query(`
+            // Insert into Asset_Assignments: The history log
+            await query(`
                 INSERT INTO "Asset_Assignments"
                 ("assetId", "operator_employeeId", "supervisor_employeeId", "projectName", "location", "assigned_date", "expected_return_date", "notes")
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING *`,
-                [id, operator_employeeId, supervisor_employeeId, project_name, destination, assigned_date, expected_return_date, notes]
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [assetId, operator_employeeId, supervisor_employeeId, project_name, destination, assigned_date, expected_return_date, notes]
             );
         }));
 
-        return res.status(200).json({ message: `${assetIds.length} Assets assigned successfully` });
+        return res.status(200).json({ 
+            message: `${assetIds.length} Assets assigned successfully`,
+            assignedTo: operator_employeeId 
+        });
 
     } catch (error) {
         console.error("Assign Asset API Error:", error);
