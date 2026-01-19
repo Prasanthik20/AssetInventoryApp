@@ -7,6 +7,7 @@ import {
   ImageBackground,
   TouchableOpacity,
   Alert,
+  RefreshControl,
   Switch,
   FlatList,
   ScrollView,
@@ -69,6 +70,7 @@ const OperatorDashboard: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]); 
   const [assignedCount, setAssignedCount] = useState(0);
   const [currentLocation, setCurrentLocation] = useState("N/A");
+  const [refreshing, setRefreshing] = useState(false);
 
   const [modalVisible, setModalVisible] = useState(false);
     const [modalConfig, setModalConfig] = useState<{
@@ -80,6 +82,17 @@ const OperatorDashboard: React.FC = () => {
     assetName: "",
     onSubmit: () => {},
   });
+
+  const onRefresh = async () => {
+  setRefreshing(true);
+  try {
+    await fetchOperatorData(); // This re-runs your API calls to get updated dates
+  } catch (error) {
+    console.error("Refresh failed:", error);
+  } finally {
+    setRefreshing(false);
+  }
+};
 
   // ----------------------------
   // 🔹 Fetch operator assets
@@ -113,7 +126,9 @@ const OperatorDashboard: React.FC = () => {
       setAssignedCount(normalizedAssets.length);
       setCurrentLocation(assetsRes.data.location || "N/A");
       const mappedNotifications = (notificationsRes.data.notifications || [])
-        .map((n: any) => ({
+        .map((n: any) => {
+          console.log("Raw Notification from API:", n);
+          return{
           id: n.id,
           reason: n.reason,
           status: n.status, // Ensure status is mapped
@@ -131,7 +146,8 @@ const OperatorDashboard: React.FC = () => {
             employeeId: n.receiverId || n.receiver?.employeeId,
             name: n.receiverName || (n.receiver ? n.receiver.fullName : "Operator")
           },
-        })) // End of .map()
+        }
+    }) // End of .map()
         .filter((n: any) => n.status !== 'resolved'); // 🔥 Correct placement: Filter the resulting array
 
       setNotifications(mappedNotifications);
@@ -257,34 +273,33 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
 
   // 🇮🇳 Get current time in IST
   const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istOffset = 5.5 * 60 * 60 * 1000; 
   const istToday = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + istOffset);
   istToday.setHours(0, 0, 0, 0);
 
-  // 📅 Parse the return date
+  // 📅 Parse the date provided (could be original or extended)
   const returnDate = new Date(expectedReturnDate);
   const istReturnDate = new Date(returnDate.getTime() + (returnDate.getTimezoneOffset() * 60000) + istOffset);
   istReturnDate.setHours(0, 0, 0, 0);
 
-  // If the return date is strictly before today's date in IST, it is overdue
+  // Returns true only if the date is strictly in the past
   return istReturnDate < istToday;
 };
 
- // EXTENDED DATE FIX
-const getUpdatedReturnDate = (assetId: number) => {
+ const getUpdatedReturnDate = (assetId: number) => {
   const n = notifications.find(
     (x) =>
       x.asset.id === assetId &&
-      (x.reason?.toLowerCase().includes("extended") ||
-        x.reply?.toLowerCase().includes("extended"))
+      (x.reason?.toLowerCase().includes("extension approved") || // Matches your backend 'reason'
+        x.reply?.toLowerCase().includes("extended"))            // Matches your backend 'reply'
   );
 
   if (!n) return null;
 
-  const match = (n.reply || n.reason).match(/\d{4}-\d{2}-\d{2}/);
-  return match ? match[0] : null;
+  // Instead of trying to find a date string which isn't there,
+  // we return a flag or the original date to indicate it is now valid.
+  return "extended"; 
 };
-
  return (
     <ImageBackground
       source={require("../../assets/Company-bg.webp")}
@@ -303,7 +318,15 @@ const getUpdatedReturnDate = (assetId: number) => {
             <Text style={styles.leftPanelSubtitle}>ASSETFLOW PRO</Text>
           </LinearGradient>
 
-          <ScrollView style={styles.rightPanel} contentContainerStyle={{ paddingBottom: 50 }}>
+         <ScrollView style={styles.rightPanel} contentContainerStyle={{ paddingBottom: 50 }}
+           refreshControl={
+             <RefreshControl
+               refreshing={refreshing}
+               onRefresh={onRefresh}
+               colors={['#3B59B8']} // Android color
+               tintColor={'#3B59B8'} // iOS color
+             />
+           }>
             {/* HEADER */}
            <View style={styles.header}>
              <Text style={styles.headerTitle}>{operatorName}</Text>
@@ -336,27 +359,30 @@ const getUpdatedReturnDate = (assetId: number) => {
                 <Text style={styles.metricValue}>{assignedCount}</Text>
               </View>
 
-              <View style={styles.metricBox}>
-                <View style={styles.metricIconBg}>
-                  <Feather name="map-pin" size={18} color="#3B59B8" />
-                </View>
-                <Text style={styles.metricTitle}>Current Location</Text>
-                <Text style={[styles.metricValue, { fontSize: 16 }]}>{currentLocation}</Text>
-              </View>
-            </View>
+             <View style={styles.metricBox}>
+               <View style={styles.metricIconBg}>
+                 <Feather name="map-pin" size={18} color="#3B59B8" />
+               </View>
+               <Text style={styles.metricTitle}>Current Location</Text>
+               <Text style={[styles.metricValue, { fontSize: 16 }]}>{currentLocation}</Text>
+             </View>
+           </View>
 
-            {/* NOTIFICATIONS */}
-            <View style={styles.assetsSection}>
-              <Text style={styles.sectionTitle}>Notifications</Text>
-              {notifications.length === 0 ? (
-                <Text style={styles.noItemsText}>No new notifications.</Text>
-              ) : (
-                <FlatList
-                  data={notifications}
-                  keyExtractor={(item) => item.id.toString()}
-                  renderItem={({ item }) => {
-                    const isFromSupervisor = String(item.sender.employeeId) !== String(employeeId);
-                    const isResolved = item.status === 'resolved';
+           {/* NOTIFICATIONS */}
+           <View style={styles.assetsSection}>
+             <Text style={styles.sectionTitle}>Notifications</Text>
+             {notifications.length === 0 ? (
+               <Text style={styles.noItemsText}>No new notifications.</Text>
+             ) : (
+               <FlatList
+                 data={notifications}
+                 keyExtractor={(item) => item.id.toString()}
+                 renderItem={({ item }) => {
+                   // 1. Force both to strings and trim for a clean comparison
+                   const isFromSupervisor = Number(item.sender.employeeId) !== Number(employeeId);
+                   // 2. Be less strict with status checks initially to see if it appears
+                   const isResolved = item.status === 'resolved';
+                   const hasReplied = !!item.reply && item.reply.length > 0;
 
                    return (
                      <View style={[
@@ -369,120 +395,128 @@ const getUpdatedReturnDate = (assetId: number) => {
                          size={24}
                          color={isResolved ? "#999" : (isFromSupervisor ? "#0284c7" : "#4A55A2")}
                        />
-                        <View style={styles.notificationContent}>
-                          <Text style={[styles.notificationText, isResolved && { color: '#999' }]}>
+
+                       <View style={styles.notificationContent}>
+                         <Text style={[styles.notificationText, isResolved && { color: '#999' }]}>
                            {isFromSupervisor ? (
-                             <Text style={{ color: '#0369a1', fontWeight: 'bold' }}>Update from {item.sender.name}:</Text>
+                             <Text style={{ color: '#0369a1', fontWeight: 'bold' }}>Update from Supervisor:</Text>
                            ) : (
-                             <Text>From <Text style={{ fontWeight: 'bold' }}>{item.sender.name}</Text>:</Text>
+                             <Text>Your Request for <Text style={{ fontWeight: 'bold' }}>{item.asset.name}</Text>:</Text>
                            )}
                          </Text>
                          <Text style={[styles.notificationReason, isResolved && { color: '#999', fontStyle: 'italic' }]}>
-                           "{item.reply || item.reason}"
+                           "{item.reason}"
                          </Text>
+
+                         {hasReplied && (
+                           <Text style={styles.repliedText}>
+                             <Text style={{ fontWeight: 'bold' }}>Message: </Text>"{item.reply}"
+                           </Text>
+                         )}
                        </View>
 
-                        {!isFromSupervisor && !item.reply && !isResolved && (
-                          <TouchableOpacity
-                            style={styles.replyButton}
-                            onPress={() =>
-                              handleOpenModal({
-                                title: `Reply to ${item.sender.name}`,
-                                assetName: item.asset.name,
-                                onSubmit: (replyMessage) => handleReplySubmit(replyMessage, item),
-                              })
-                            }
-                          >
-                            <Text style={styles.replyButtonText}>Reply</Text>
-                          </TouchableOpacity>
-                        )}
-                        
-                      </View>
-                    );
-                  }}
-                />
-              )}
-            </View>
+                       {/* --- REVISED BUTTON CONDITION --- */}
+                       {isFromSupervisor && !hasReplied && !isResolved && (
+                         <TouchableOpacity
+                           style={styles.replyButton}
+                           onPress={() =>
+                             handleOpenModal({
+                               title: `Reply to Supervisor`,
+                               assetName: item.asset.name,
+                               onSubmit: (replyMessage) => handleReplySubmit(replyMessage, item),
+                             })
+                           }
+                         >
+                           <Text style={styles.replyButtonText}>Reply</Text>
+                         </TouchableOpacity>
+                       )}
+                     </View>
+                   );
+                 }}
+               />
+             )}
+           </View>
 
-            {/* ASSETS LIST */}
-            <View style={styles.assetsSection}>
-              <Text style={styles.sectionTitle}>My Assets</Text>
-              {myAssets.length === 0 ? (
-                <Text style={{ color: "#333", marginTop: 10 }}>No assets assigned.</Text>
-              ) : (
-                 myAssets.map((asset, index) => {
-                   const updatedReturnDate = getUpdatedReturnDate(asset.assetId);
-                   const rawDate = updatedReturnDate || asset.expectedReturnDate;
+           {/* ASSETS LIST */}
+           <View style={styles.assetsSection}>
+             <Text style={styles.sectionTitle}>My Assets</Text>
+             {myAssets.length === 0 ? (
+               <Text style={{ color: "#333", marginTop: 10 }}>No assets assigned.</Text>
+             ) : (
+               myAssets.map((asset, index) => {
+                 const updatedReturnDate = getUpdatedReturnDate(asset.assetId);
+                 const rawDate = updatedReturnDate || asset.expectedReturnDate;
 
-                   // 🔥 IST Consistent Formatting
-                   const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString('en-IN', {
-                     day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata'
-                   }) : "No due date";
-                  const isOverdue = rawDate && isAssetOverdue(rawDate);
-                  const isExtended = Boolean(updatedReturnDate);
+                 // 🔥 IST Consistent Formatting
+                 const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString('en-IN', {
+                   day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata'
+                 }) : "No due date";
+                 const isOverdue = rawDate && isAssetOverdue(rawDate);
+                 const isExtended = Boolean(updatedReturnDate);
 
-                  return (
-                    <View style={styles.assetItem} key={index}>
-                      <View style={styles.assetIconBg}>
-                        <Ionicons name="cube-outline" size={20} color="#3B59B8" />
-                      </View>
+                 return (
+                   <View style={styles.assetItem} key={index}>
+                     <View style={styles.assetIconBg}>
+                       <Ionicons name="cube-outline" size={20} color="#3B59B8" />
+                     </View>
 
-                      <View style={styles.assetNameContainer}>
-                        <Text style={styles.assetName}>
-                          {asset.assetName} ({asset.barcode})
-                        </Text>
-                      </View>
+                     <View style={styles.assetNameContainer}>
+                       <Text style={styles.assetName}>
+                         {asset.assetName} ({asset.barcode})
+                       </Text>
+                     </View>
 
-                      <View style={styles.dueDateContainer}>
-                        <Text style={[
-                          styles.assetDueDate,
-                          isOverdue ? { color: "red", fontWeight: "bold" } : (isExtended ? { color: "green", fontWeight: "bold" } : {})
-                        ]}>
-                          {isOverdue ? "OVERDUE" : formattedDate}
-                        </Text>
+                     <View style={styles.dueDateContainer}>
+                       <Text style={[
+                         styles.assetDueDate,
+                         isOverdue ? { color: "red", fontWeight: "bold" } : (isExtended ? { color: "green", fontWeight: "bold" } : {})
+                       ]}>
+                         {isOverdue ? "OVERDUE" : (isExtended ? `Extended: ${formattedDate}` : formattedDate)}
+                       </Text>
 
-                        {isOverdue && (
-                          <TouchableOpacity
-                            style={styles.notifyButton}
-                            onPress={() => {
-                              console.log("Opening modal for:", asset.assetName);
-                              handleOpenModal({
-                                title: "Extension Request",
-                                assetName: asset.assetName, // ✅ FIXED
-                                onSubmit: (reason) => handleOverdueSubmit(reason, asset),
-                              });
-                            }}
-                          >
-                            <Text style={styles.notifyButtonText}>Update</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-            </View>
+                       {/* Only show "Update" if it's overdue AND hasn't been extended yet today */}
+                       {isOverdue && !isExtended && (
+                         <TouchableOpacity
+                           style={styles.notifyButton}
+                           onPress={() => {
+                             handleOpenModal({
+                               title: "Extension Request",
+                               assetName: asset.assetName,
+                               onSubmit: (reason) => handleOverdueSubmit(reason, asset),
+                             });
+                           }}
+                         >
+                           <Text style={styles.notifyButtonText}>Update</Text>
+                         </TouchableOpacity>
+                       )}
+                     </View>
 
-            {/* RETURN BUTTON */}
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("ReturnAsset", {
-                  assets: myAssets,
-                  operatorEmployeeId: employeeId,
-                })
-              }
-            >
-              <LinearGradient
-                colors={["#27B2C3", "#40D69B"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.returnButton}
-              >
-                <Text style={styles.returnButtonText}>RETURN ASSET</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+                   </View>
+                 );
+               })
+             )}
+           </View>
+
+           {/* RETURN BUTTON */}
+           <TouchableOpacity
+             onPress={() =>
+               navigation.navigate("ReturnAsset", {
+                 assets: myAssets,
+                 operatorEmployeeId: employeeId,
+               })
+             }
+           >
+             <LinearGradient
+               colors={["#27B2C3", "#40D69B"]}
+               start={{ x: 0, y: 0 }}
+               end={{ x: 1, y: 1 }}
+               style={styles.returnButton}
+             >
+               <Text style={styles.returnButtonText}>RETURN ASSET</Text>
+             </LinearGradient>
+           </TouchableOpacity>
+         </ScrollView>
+       </View>
 
         <OverdueNotificationModal
           visible={modalVisible}
@@ -579,6 +613,25 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 10,
   },
+  repliedText: {
+  marginTop: 5,
+  fontSize: 13,
+  color: '#0369a1',
+  backgroundColor: '#e0f2fe',
+  padding: 5,
+  borderRadius: 4,
+},
+replyButton: {
+  backgroundColor: '#0284c7',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 6,
+},
+replyButtonText: {
+  color: 'white',
+  fontWeight: 'bold',
+  fontSize: 12,
+},
 
   assetIconBg: {
     width: 40,
@@ -609,16 +662,19 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   notificationItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(230, 235, 255, 0.8)',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
-  },
+  flexDirection: 'row',     // Align icon, text, and button horizontally
+  alignItems: 'center',     // Center items vertically
+  padding: 12,
+  borderRadius: 12,
+  marginBottom: 10,
+  backgroundColor: '#f0f9ff', 
+  borderWidth: 1,
+  borderColor: '#bae6fd',
+},
   notificationContent: {
-    flex: 1,
-    marginLeft: 15,
+    flex: 1,                  // Take up remaining space so button stays on the right
+  marginLeft: 10,
+  marginRight: 10,
   },
   notificationText: {
     fontSize: 14,
@@ -629,17 +685,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1A202C',
     marginTop: 4,
-  },
-  replyButton: {
-    backgroundColor: '#4A55A2',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-  },
-  replyButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 13,
   },
 });
 
