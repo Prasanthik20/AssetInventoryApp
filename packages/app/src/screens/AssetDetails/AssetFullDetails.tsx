@@ -34,7 +34,17 @@ const DisplayField = ({ label, value, icon, children }: { label: string, value?:
         </View>
     </View>
 );
+const formatDate = (dateValue?: string | Date | null) => {
+  if (!dateValue) return "N/A";
 
+  const date = dateValue instanceof Date
+    ? dateValue
+    : new Date(dateValue);
+
+  return isNaN(date.getTime())
+    ? "N/A"
+    : date.toLocaleDateString();
+};
 const AssetFullDetails: React.FC = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<AssetFullDetailsRouteProp>();
@@ -80,11 +90,11 @@ const AssetFullDetails: React.FC = () => {
                             <View style={styles.headerRight}>
                                 <Feather name="user" size={16} color="#333" />
                                 <Text style={styles.userText}>Supervisor</Text>
-                                <Switch
+                                {/* <Switch
                                     trackColor={{ false: "#E9E9EA", true: "#34C759" }}
                                     thumbColor={"#f4f3f4"} value={true}
                                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                />
+                                /> */}
                                 <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
                             </View>
                         </View>
@@ -96,12 +106,8 @@ const AssetFullDetails: React.FC = () => {
                                 <Text style={styles.sectionTitle}>General Details</Text>
                                 <DisplayField label="Asset Name" value={asset.assetName} icon="truck" />
                                 
-                                <DisplayField  label="Category" value={matchedCategory?.category || asset.category} icon="layers">
-                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                                        <Text style={styles.valueText}>{asset.category}</Text>
-                                        <Switch value={true} trackColor={{ false: "#E9E9EA", true: "#81b0ff" }} thumbColor={"#f4f3f4"} style={{ transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }] }} />
-                                    </View>
-                                </DisplayField>
+                                <DisplayField  label="Category" value={matchedCategory?.category || asset.category} icon="layers"/>
+                                    
                                 <DisplayField  label="Status" value={matchedStatus?.status || asset.status} icon="check-circle" />
                                 <DisplayField label="Model Number" value={asset.modelNumber} icon="archive" />
                                 <DisplayField label="Serial Number" value={asset.serialNumber} icon="hash" />
@@ -119,10 +125,19 @@ const AssetFullDetails: React.FC = () => {
                                 </Text>
 
                                 <DisplayField label="Current Location" value={asset.location} icon="map-pin" />
-                                <DisplayField label="Assigned By" value={asset.assignedBy} icon="user-check" />
-                                <DisplayField label="Assigned To" value={asset.assignedTo} icon="user-check" />
-                                <DisplayField label="Warranty Expiry" value={asset.warrantyExpiry instanceof Date ? asset.warrantyExpiry.toLocaleDateString() : String(asset.warrantyExpiry)} icon="calendar" />
-                                <DisplayField label="Purchase Date" value={asset.purchaseDate instanceof Date ? asset.purchaseDate.toLocaleDateString() : String(asset.purchaseDate)} icon="calendar" />
+                                <DisplayField label="Assigned By" value={asset.assignedBy || undefined} icon="user-check" />
+                                <DisplayField label="Assigned To" value={asset.assignedTo || undefined} icon="user-check" />
+                                <DisplayField
+                                    label="Warranty Expiry"
+                                    value={formatDate(asset.warrantyExpiry)}
+                                    icon="calendar"
+                                />
+
+                                <DisplayField
+                                    label="Purchase Date"
+                                    value={formatDate(asset.purchaseDate)}
+                                    icon="calendar"
+                                />
                             </View>
                         </View>
                         

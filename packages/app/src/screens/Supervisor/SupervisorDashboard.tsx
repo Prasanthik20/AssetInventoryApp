@@ -142,12 +142,12 @@ const fetchDashboardData = async () => {
             <View style={styles.headerRight}>
             <Feather name="user" size={16} color="#333" />
             <Text style={styles.userText}>{roleName}</Text>
-            <Switch
+            {/* <Switch
               trackColor={{ false: '#E9E9EA', true: '#34C759' }}
               thumbColor="#f4f3f4"
               value={true}
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-            />
+            /> */}
 
             <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
 

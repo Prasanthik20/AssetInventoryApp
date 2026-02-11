@@ -172,9 +172,9 @@ const fetchUsers = async () => {
                                         <Text style={styles.headerCell}>Status</Text>
                                         <Text style={[styles.headerCell, {textAlign: 'center'}]}>Actions</Text>
                                     </View>
-                                    {users.map(user => (
-                                        <View style={styles.tableRow} key={user.userId}>
-                                        <Text style={[styles.cellText, {flex: 2}]}>{user.fullName}</Text>
+                                   {users.map((user:any) => (
+                                        <View style={styles.tableRow} key={user.userId ? user.userId : Math.random().toString()}>
+                                        <Text style={[styles.cellText, {flex: 2}]}>{user.fullName ? user.fullName : "N/A"}</Text>
                                         <Text style={styles.cellText}>{user.role?.roleName || "—"}</Text>
                                         <Text style={[styles.cellText, { color: '#28A745' }]}>Active</Text>
                                         <View style={styles.actionCell}>

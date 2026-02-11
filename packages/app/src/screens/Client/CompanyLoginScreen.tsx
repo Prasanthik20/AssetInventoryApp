@@ -116,11 +116,11 @@ export default function CompanyLoginScreen() {
             blurRadius={5}
         >
             <SafeAreaView style={styles.safeArea}>
-                <ScrollView
+                {/* <ScrollView
                     contentContainerStyle={{ flexGrow: 1 }}
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
-                >
+                > */}
                     <View style={styles.loginContainer}>
                         {/* Left Decorative Panel */}
                         <View style={styles.leftPanel}>
@@ -195,7 +195,7 @@ export default function CompanyLoginScreen() {
                             </View>
                         {/* </KeyboardAvoidingView> */}
                     </View>
-                </ScrollView>
+                {/* </ScrollView> */}
             </SafeAreaView>
         </ImageBackground>
     );

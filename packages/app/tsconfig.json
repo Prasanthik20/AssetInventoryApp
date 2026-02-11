@@ -1,6 +1,22 @@
-
 {
-  "compilerOptions": {},
   "extends": "expo/tsconfig.base",
-  "include": ["src", "src/navigation/navigationOverride.d.ts"]
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@env": [
+        "./.env"
+      ]
+    },
+    "types": [
+      "node",
+      "jest",
+      "react",
+      "react-native"
+    ]
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
 }

@@ -1,4 +1,17 @@
 {
-  "name": "AssetInventoryApp",
-  "displayName": "AssetInventoryApp"
+  "expo": {
+    "name": "AssetInventoryApp",
+    "slug": "asset-inventory-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "jsEngine": "hermes",
+    "android": {
+      "package": "com.anonymous.assetinventoryapp"
+    }
+  }
 }

@@ -128,11 +128,11 @@ export default function AddCompanyScreen() {
             {/* Switch Row */}
             <View style={styles.switchRow}>
               <Text style={styles.switchLabel}>Auto-Assign Company Admin</Text>
-              <Switch
+              {/* <Switch
                 value={autoAssignAdmin}
                 onValueChange={setAutoAssignAdmin}
                 thumbColor={autoAssignAdmin ? "#00C6FF" : "#ccc"}
-              />
+              /> */}
             </View>
 
             {/* Buttons */}
