@@ -30,6 +30,7 @@ export type RootStackParamList = {
         adminName: string;
         adminImage: string | null;
         roleName: string;
+        employeeId : string;
     };
     SupervisorDashboard: {
         supervisorName: string;
@@ -84,6 +85,7 @@ export default function CompanyLoginScreen() {
                     adminName: response.data.user.fullName,
                     adminImage: response.data.user.photoURL,
                     roleName: response.data.user.roleName,
+                    employeeId: response.data.user.employeeId,
                 });
             } else if (role === 'Supervisor') {
                 navigation.navigate("SupervisorDashboard", {

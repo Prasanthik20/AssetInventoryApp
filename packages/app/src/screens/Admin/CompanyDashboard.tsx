@@ -20,7 +20,7 @@ const CompanyDashboard: React.FC = () => {
     const navigation = useNavigation<DashboardNavigationProp>();
     const route = useRoute<DashboardRoute>();
 
-    const { adminName, adminImage, roleName } = route.params;
+    const { adminName, adminImage, roleName, employeeId } = route.params;
     const [users, setUsers] = useState([]);
   const [totalAssets, setTotalAssets] = useState<number | null>(null);
   const [totalUsers, setTotalUsers] = useState<number | null>(null);
@@ -73,7 +73,7 @@ const fetchUsers = async () => {
   const fetchGlobalNotifications = async () => {
   try {
     const response = await axios.get(
-      `${baseURL}/api/notifications`
+      `${baseURL}/api/notifications/admin?id=${employeeId}`
     );
 
     setNotifications(response.data);
@@ -108,6 +108,7 @@ return (
                             />
                             <Text style={styles.leftPanelName}>{adminName}</Text>
                             <Text style={styles.leftPanelRole}>{roleName}</Text>
+                            
                         </View>
                     )}
 
@@ -141,6 +142,9 @@ return (
                                     <View style={styles.headerRight}>
                                         <Ionicons name="person-outline" size={16} color="#333" />
                                         <Text style={styles.userText}>{roleName}</Text>
+                                        <TouchableOpacity onPress={() => navigation.reset({ index: 0, routes: [{ name: "CompanyLogin" }] })}>
+                                        <Feather name="log-out" size={24} color="#FF4D4D" />
+                                    </TouchableOpacity>
                                     </View>
                                 )}
                             </View>
@@ -272,7 +276,21 @@ const styles = StyleSheet.create({
         padding: 25,
     },
     mobilePadding: { padding: 15 },
-
+    idBadge: {
+        marginTop: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.4)',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.6)',
+    },
+    idBadgeText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#2D3748',
+        letterSpacing: 0.5,
+    },
     mobileHeaderCard: {
         flexDirection: 'row',
         justifyContent: 'space-between',

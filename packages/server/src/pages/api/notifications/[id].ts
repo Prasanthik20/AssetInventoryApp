@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!receiverEmployeeId || typeof receiverEmployeeId !== "string") {
       return res.status(400).json({ message: "Valid numeric receiver ID is required." });
     }
-
+    let sqlQuery = "";
     let extraCondition = "";
 
     // OPERATOR MODE → only show notifications without reply (pending)
@@ -28,8 +28,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // SUPERVISOR MODE → show all notifications
     // no extra condition
+    if(role == "admin") {
+      sqlQuery = `
+        SELECT * FROM "Notifications" ORDER BY created_at DESC`;
+    }
 
-    const sqlQuery = `
+     sqlQuery = `
       SELECT
         n.id AS "notificationId",
         n."assignmentId",

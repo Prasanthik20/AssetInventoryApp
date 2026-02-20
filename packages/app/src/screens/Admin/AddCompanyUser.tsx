@@ -24,42 +24,37 @@ const AddCompanyUser: React.FC = () => {
     const [role, setRole] = useState<'Supervisor' | 'Operator'>('Supervisor');
     const [loading, setLoading] = useState(false);
 
-    const handleAddUser = async () => {
-        // Validation
-        if (!employeeId || !fullName || !email || !password) {
-            isWeb ? alert("Please fill in ID, Name, Email, and Password") : 
-                    Alert.alert("Required Fields", "Please fill in ID, Name, Email, and Password");
-            return;
-        }
-
-        setLoading(true);
-        try {
-            const payload = {
-                employeeId,     // BigInt on backend
-                fullName,
-                email,
-                password,       // Will be hashed as passwordHash on backend
-                phoneNumber,
-                address,
-                photoURL,
-                roleName: role  // Mapped to roleId on backend
-            };
-
-            const response = await axios.post(`${baseURL}/api/auth/add-user`, payload);
-
-            if (response.status === 201) {
-                isWeb ? alert("User Added Successfully") : Alert.alert("Success", "User Added Successfully");
-                navigation.goBack();
-            }
-        } catch (error: any) {
-            console.error(error);
-            const errorMsg = error.response?.data?.message || "Internal Server Error";
-            isWeb ? alert(errorMsg) : Alert.alert("Error", errorMsg);
-        } finally {
-            setLoading(false);
-        }
+  const handleAddUser = async () => {
+  try {
+    const payload = {
+      employeeId,
+      fullName,
+      email,
+      password,
+      phoneNumber,
+      address,
+      photoURL,
+      roleName: role
     };
 
+    // Use kebab-case to match your file name: add-user.ts
+    const response = await axios.post(
+      `${baseURL}/api/auth/addUser`, 
+      payload
+    );
+
+    if (response.status === 201) {
+      alert("User Added Successfully");
+      navigation.goBack();
+    }
+  } catch (error: any) { // ': any' fixes the 'unknown' type error
+    console.error("Axios add-user error:", error.response?.status, error.response?.data);
+    
+    // If it's still 404, the file isn't where we think it is on the server
+    const errorMessage = error.response?.data?.message || "Error: " + error.response?.status;
+    alert(errorMessage);
+  }
+};
     return (
         <ImageBackground
             source={require("../../assets/Company-bg.webp")}

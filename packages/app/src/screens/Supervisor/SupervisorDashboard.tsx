@@ -43,9 +43,9 @@ const CompanyDashboard: React.FC = () => {
 
     const fetchUsers = async () => {
         try {
-            const res = await fetch(`${baseURL}/api/auth/users`);
-            const data = await res.json();
-            if (res.ok && Array.isArray(data.users)) {
+            const res = await axios.get(`${baseURL}/api/auth/users`);
+            const data =  res.data;
+            if (data && Array.isArray(data.users)) {
                 setUsers(data.users);
                 setTotalUsers(data.count);
             }
@@ -56,8 +56,8 @@ const CompanyDashboard: React.FC = () => {
 
     const fetchDashboardData = async () => {
         try {
-            const response = await fetch(`${baseURL}/api/dashboard`);
-            const data = await response.json();
+            const response = await axios.get(`${baseURL}/api/dashboard`);
+            const data = response.data;
             setTotalAssets(data.totalAssets);
             setOfficeAssets(data.officeAssets);
             setFieldAssets(data.fieldAssets);
