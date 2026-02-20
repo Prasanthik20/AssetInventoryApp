@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ImageBackground, FlatList, Toucha
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { baseURL } from 'src/navigation/types';
+import axios from 'axios';
 
 interface Asset {
   id: number;
@@ -27,8 +28,8 @@ const OfficeAssets: React.FC = () => {
 
   const fetchAssets = async () => {
     try {
-      const res = await fetch(`${baseURL}/api/assets`);
-      const data = await res.json();
+      const response = await axios.get(`${baseURL}/api/assets`);
+      const data = response.data;
 
       // Filter for Unassigned assets (Office)
       const officeAssets = data.assets.filter((asset: Asset) => asset.status === 'Unassigned');

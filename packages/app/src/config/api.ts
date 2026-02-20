@@ -15,14 +15,14 @@ const ENV = {
     wsUrl: 'ws://localhost:3000',
     timeout: 30000,
   },
-  staging: {
-    apiUrl: 'https://asset-api-staging.azurewebsites.net',
-    wsUrl: 'wss://asset-api-staging.azurewebsites.net',
+ staging: {
+    apiUrl: 'https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
+    wsUrl: 'wss://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
     timeout: 30000,
   },
   prod: {
-    apiUrl: 'https://asset-api.azurewebsites.net',
-    wsUrl: 'wss://asset-api.azurewebsites.net',
+    apiUrl: 'https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
+    wsUrl: 'wss://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
     timeout: 30000,
   },
 };

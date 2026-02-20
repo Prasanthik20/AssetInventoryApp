@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useEffect, useState } from "react";
 import { baseURL } from "src/navigation/types";
 
@@ -17,14 +18,13 @@ export default function useAssetMeta() {
 
   useEffect(() => {
     // Fetch categories
-    fetch(`${baseURL}/api/categories`)
-      .then(res => res.json())
-      .then(data => setCategories(data.categories || data))
+    axios.get(`${baseURL}/api/categories`)
+      .then(res => setCategories(res.data.categories || res.data))
       .catch(err => console.error("Error fetching categories:", err));
 
     // Fetch statuses
-    fetch(`${baseURL}/api/statuses`)
-      .then(res => res.json())
+    axios.get(`${baseURL}/api/statuses`)
+      .then(res => res.data)
       .then(data => setStatuses(data.statuses || data))
       .catch(err => console.error("Error fetching statuses:", err));
   }, []);

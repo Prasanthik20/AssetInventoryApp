@@ -1,61 +1,125 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import query from '@/lib/db'; // 👈 Import your raw query function
+import query from '@/lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // --- Manual CORS Headers ---
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Handle the preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  // --- End of CORS Handling ---
-
-  // This endpoint should only handle POST requests
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
-    return res.status(405).end(`Method ${req.method} Not Allowed`);
-  }
 
   try {
-    // Get the data from the request body
-    const { assetId, senderId, receiverId, reason } = req.body;
+    // ==========================
+    // ✅ GET → Fetch Notifications
+    // ==========================
+    if (req.method === 'GET') {
 
-    // Validate that all required fields are present
-    if (!assetId || !senderId || !receiverId || !reason) {
-      return res.status(400).json({ message: "Missing required fields: assetId, senderId, receiverId, and reason are required." });
+      const { id: receiverEmployeeId, role: rawRole } = req.query;
+      const role = typeof rawRole === 'string' ? rawRole.toLowerCase() : '';
+
+      let sqlQuery = '';
+      let params: any[] = [];
+
+      // 🔹 ADMIN → Get all
+      if (!receiverEmployeeId && !role) {
+        sqlQuery = `
+          SELECT
+            n.id::text AS "notifId",
+            n.reason,
+            n.reply,
+            n.status,
+            n."created_at" AS "createdAt",
+            a.name AS "assetName",
+            s."fullName" AS "senderName",
+            r."roleName" AS "senderRole"
+          FROM "Notifications" n
+          LEFT JOIN "Asset_Details" a ON n."assetId" = a.id
+          LEFT JOIN "Users" s ON n."senderId" = s."employeeId"
+          LEFT JOIN "Roles" r ON s."roleId" = r."roleId"
+          ORDER BY n."created_at" DESC;
+        `;
+      }
+
+      // 🔹 OPERATOR / SUPERVISOR
+      else {
+        if (!receiverEmployeeId || receiverEmployeeId === '0') {
+          return res.status(200).json([]);
+        }
+
+        const extraCondition =
+          role === "operator" ? `AND n.reply IS NULL` : "";
+
+        sqlQuery = `
+          SELECT
+            n.id::text AS "notifId",
+            n.reason,
+            n.reply,
+            n.status,
+            n."created_at" AS "createdAt",
+            a.name AS "assetName",
+            s."fullName" AS "senderName",
+            r."roleName" AS "senderRole"
+          FROM "Notifications" n
+          LEFT JOIN "Asset_Details" a ON n."assetId" = a.id
+          LEFT JOIN "Users" s ON n."senderId" = s."employeeId"
+          LEFT JOIN "Roles" r ON s."roleId" = r."roleId"
+          WHERE n."receiverId" = $1
+          ${extraCondition}
+          ORDER BY n."created_at" DESC;
+        `;
+
+        params = [parseInt(receiverEmployeeId as string)];
+      }
+
+      const result = await query(sqlQuery, params);
+
+      return res.status(200).json(result.rows);
     }
 
-    // Define the SQL query to insert a new notification
-    const sqlQuery = `
-      INSERT INTO "Notifications" ("assetId", "senderId", "receiverId", "reason")
-      VALUES ($1, $2, $3, $4)
-      RETURNING *;
-    `;
+    // ==========================
+    // ✅ POST → Create Notification
+    // ==========================
+    if (req.method === 'POST') {
 
-    // Define the parameters to be safely inserted into the query
-    const params = [
-      Number(assetId),
-      Number(senderId),
-      Number(receiverId),
-      reason
-    ];
+      const { assetId, senderId, receiverId, reason } = req.body;
 
-    // Execute the query
-    const result = await query(sqlQuery, params);
-    
-    const newNotification = result.rows[0];
+      if (!assetId || !senderId || !receiverId || !reason) {
+        return res.status(400).json({
+          message: "Missing required fields"
+        });
+      }
 
-    // Send a successful response
-    return res.status(201).json({
-      message: "Notification sent successfully",
-      notification: newNotification,
+      const sqlQuery = `
+        INSERT INTO "Notifications"
+        ("assetId", "senderId", "receiverId", "reason")
+        VALUES ($1, $2, $3, $4)
+        RETURNING *;
+      `;
+
+      const params = [
+        Number(assetId),
+        Number(senderId),
+        Number(receiverId),
+        reason
+      ];
+
+      const result = await query(sqlQuery, params);
+
+      return res.status(201).json({
+        message: "Notification sent successfully",
+        notification: result.rows[0],
+      });
+    }
+
+    return res.status(405).json({ message: "Method not allowed" });
+
+  } catch (err: any) {
+    console.error("Notifications API Error:", err);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message
     });
-
-  } catch (err) {
-    console.error("POST /notifications error:", err);
-    return res.status(500).json({ message: "An internal server error occurred." });
   }
 }

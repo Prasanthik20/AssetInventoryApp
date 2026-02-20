@@ -53,8 +53,8 @@ const FieldAssets: React.FC = () => {
   const fetchAssets = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${baseURL}/api/assets`);
-      const data = await res.json();
+      const response = await axios.get(`${baseURL}/api/assets`);
+      const data = response.data;
 
       const processed = (data.assets || [])
         .map((asset: Asset) => {

@@ -70,7 +70,7 @@ export type RootStackParamList = {
   OfficeAssets: undefined;
   FieldAssets: {
     employeeId: string;
-    operatorName: string; };
+    operatorName: string; } | undefined;
   AddEditAsset: undefined;
 
   AssetFullDetails: { asset: Asset };
@@ -84,7 +84,7 @@ export type RootStackParamList = {
   };
 };
 
-export const baseURL = " https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net/"
+export const baseURL = "https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net"
 
 
 // export const baseURL =  Platform.OS === 'web' 

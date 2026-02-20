@@ -10,6 +10,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import useAssetMeta from "../../hooks/useAssetMeta";
 import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
+import axios from 'axios';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, "AddEditAsset">;
 const isMobileDevice = Platform.OS !== 'web';
@@ -105,14 +106,13 @@ const AddEditAsset: React.FC = () => {
 
   const handleCreate = async () => {
     try {
-      const res = await fetch(`${baseURL}/api/assets/create`, {
-        method: "POST",
+      const res = await axios.post(`${baseURL}/api/assets/create`, {
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(assetData),
+        data: assetData,
       });
 
-      const data = await res.json();
-      if (!res.ok) {
+      const data = res.data;
+      if (res.status !== 200) {
         alert(data.message || "Something went wrong");
         return;
       }
