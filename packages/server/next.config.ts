@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
  
 const nextConfig = {
   // ... other configurations ...
-
+ output: 'standalone',
   async headers() {
     return [
       {
