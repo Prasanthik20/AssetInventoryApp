@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ImageBackground, FlatList, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { baseURL } from 'src/navigation/types';
 
 interface Asset {
   id: number;
@@ -26,7 +27,7 @@ const OfficeAssets: React.FC = () => {
 
   const fetchAssets = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/assets');
+      const res = await fetch(`${baseURL}/api/assets`);
       const data = await res.json();
 
       // Filter for Unassigned assets (Office)

@@ -9,9 +9,10 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from "@react-navigation/stack";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import useAssetMeta from "../../hooks/useAssetMeta";
-import { Asset, RootStackParamList } from "../../navigation/types";
+import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
 
 type NavigationProp = StackNavigationProp<RootStackParamList, "AddEditAsset">;
+const isMobileDevice = Platform.OS !== 'web';
 
 /**
  * Reusable Modal for Pickers
@@ -104,7 +105,7 @@ const AddEditAsset: React.FC = () => {
 
   const handleCreate = async () => {
     try {
-      const res = await fetch("http://localhost:3000/api/assets/create", {
+      const res = await fetch(`${baseURL}/api/assets/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(assetData),
@@ -135,6 +136,7 @@ const AddEditAsset: React.FC = () => {
         <View style={styles.container}>
           
           {/* Left Side: Branding */}
+          {!isMobileDevice && (
           <LinearGradient
             colors={['rgba(59, 89, 184, 0.85)', 'rgba(93, 113, 200, 0.8)']}
             style={styles.leftPanel}
@@ -147,9 +149,10 @@ const AddEditAsset: React.FC = () => {
             <Text style={styles.leftPanelSubtitle}>EQUIPMENT RECORD SYSTEM</Text>
             <Text style={styles.brandName}>ASSETFLOW PRO</Text>
           </LinearGradient>
+        )}
 
           {/* Right Side: Form */}
-          <View style={styles.rightPanel}>
+          <View style={[styles.rightPanel, isMobileDevice && { margin: 0, borderRadius: 0, flex: 1 }]}>
             <View style={styles.header}>
               <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backCircle}>
                 <Ionicons name="arrow-back" size={20} color="#333" />
@@ -161,8 +164,12 @@ const AddEditAsset: React.FC = () => {
               </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{flexGrow: 1}}>
-              <View style={styles.formBody}>
+            <ScrollView 
+            scrollEnabled={isMobileDevice} // Disables internal scroll on web if preferred
+            showsVerticalScrollIndicator={false} 
+            contentContainerStyle={{ flexGrow: 1 }}
+          >
+              <View style={[styles.formBody, isMobileDevice && { flexDirection: 'column', gap: 0 }]}>
                 
                 {/* Column 1 */}
                 <View style={styles.formColumn}>
@@ -366,20 +373,17 @@ const styles = StyleSheet.create({
   brandName: { fontSize: 14, color: '#fff', marginTop: 40, fontWeight: 'bold', opacity: 0.6 },
   
   rightPanel: {
-    flex: 1,
+   flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    margin: 20,
+    // Margin is removed on mobile via the inline style in the component
+    margin: 20, 
     borderRadius: 30,
-    padding: 25,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
+    padding: 20,
     elevation: 5,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  backCircle: { backgroundColor: '#fff', padding: 8, borderRadius: 20, elevation: 2 },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1A202C', textAlign: 'center', flex: 1 },
+  backCircle: { backgroundColor: '#fff', padding: 8, borderRadius: 20, elevation: 2 , marginTop:10},
+  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1A202C', textAlign: 'center', flex: 1, marginTop: 10 },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -390,15 +394,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eee'
   },
-  userText: { marginLeft: 8, fontSize: 14, fontWeight: '600', color: '#3B59B8' },
+  userText: { marginLeft: 8, fontSize: 14, fontWeight: '600', color: '#3B59B8', marginTop : 10 },
   dateText: { marginLeft: 10, fontSize: 14, color: '#333' },
-  formBody: { flexDirection: 'row', gap: 20, flex: 1 },
-  formColumn: { flex: 1 },
+  formBody: { flexDirection: 'row', // Default for Web
+    gap: 20, 
+    flex: 1 },
+  formColumn: { flex: 1 , width: '100%',},
   sectionTitle: { 
     fontSize: 14, 
     fontWeight: '800', 
     color: '#3B59B8', 
     marginBottom: 15, 
+    marginTop: isMobileDevice ? 10 : 0, // Add spacing between stacked sections
     textTransform: 'uppercase',
     letterSpacing: 1,
     borderBottomWidth: 1,
@@ -434,11 +441,12 @@ const styles = StyleSheet.create({
   pickerText: { color: '#333', fontSize: 14, fontWeight: '500' },
   
   footer: {
-    paddingTop: 20,
+paddingTop: 20,
+    paddingBottom: isMobileDevice ? 10 : 0,
     borderTopWidth: 1,
     borderTopColor: '#eee',
-    alignItems: 'flex-end',
-  },
+    // Align button to right on web, center on mobile
+    alignItems: isMobileDevice ? 'center' : 'flex-end',  },
   webDatePicker: {
     width: '100%',
     height: 45,
@@ -450,7 +458,10 @@ const styles = StyleSheet.create({
     fontSize: '14px',
     fontFamily: 'inherit'
   } as any,
-  saveButton: { paddingVertical: 14, paddingHorizontal: 40, borderRadius: 15 },
+  saveButton: {paddingVertical: 14, 
+    paddingHorizontal: 40, 
+    borderRadius: 15,
+    alignItems: 'center' },
   buttonText: { color: '#fff', fontSize: 14, fontWeight: 'bold', letterSpacing: 1 },
 
   // Modal Styles

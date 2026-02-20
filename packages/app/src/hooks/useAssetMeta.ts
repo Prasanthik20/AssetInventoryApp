@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { baseURL } from "src/navigation/types";
 
 interface Category {
   id: number;
@@ -16,13 +17,13 @@ export default function useAssetMeta() {
 
   useEffect(() => {
     // Fetch categories
-    fetch("http://localhost:3000/api/categories")
+    fetch(`${baseURL}/api/categories`)
       .then(res => res.json())
       .then(data => setCategories(data.categories || data))
       .catch(err => console.error("Error fetching categories:", err));
 
     // Fetch statuses
-    fetch("http://localhost:3000/api/statuses")
+    fetch(`${baseURL}/api/statuses`)
       .then(res => res.json())
       .then(data => setStatuses(data.statuses || data))
       .catch(err => console.error("Error fetching statuses:", err));

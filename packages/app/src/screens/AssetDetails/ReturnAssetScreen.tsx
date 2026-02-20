@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, Platform,ImageBackground, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import axios from 'axios';
-import { Asset, RootStackParamList } from '../../navigation/types';
+import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
+
+const isMobileDevice = Platform.OS !== 'web';
 
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
@@ -75,7 +77,7 @@ const ReturnAssetScreen: React.FC = () => {
             console.log("RETURN PAYLOAD 👉", payload);
 
             const response = await axios.post(
-                "http://localhost:3000/api/operator/returnAsset",
+                    `${baseURL}/api/operator/returnAsset`,
                 payload
             );
 
@@ -108,12 +110,13 @@ const ReturnAssetScreen: React.FC = () => {
     };
 
 
-    const renderAssetItem = ({ item }: { item: Asset }) => {
+    const renderAssetItem = (item: Asset) => {
         const id = item.assignmentId; // ✅ UNIQUE & SAFE
         const isSelected = selectedAssets.includes(id);
 
         return (
             <TouchableOpacity
+            key={id.toString()} // Required for .map()
                 style={[styles.assetRow, isSelected && styles.assetRowSelected]}
                 onPress={() => toggleAssetSelection(id)}
             >
@@ -166,7 +169,7 @@ const ReturnAssetScreen: React.FC = () => {
             blurRadius={10}
         >
             <SafeAreaView style={styles.safeArea}>
-                <View style={styles.container}>
+                <View style={[styles.container, isMobileDevice && { margin: 10, borderRadius: 15 }]}>
                     {/* Header */}
                     <View style={styles.header}>
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -177,19 +180,29 @@ const ReturnAssetScreen: React.FC = () => {
                     </View>
 
                     {/* Content Body */}
-                    <View style={styles.body}>
-                        <View style={styles.formBody}>
+                    <ScrollView 
+                        style={styles.body} 
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={isMobileDevice ? { paddingBottom: 20 } : { flex: 1 }}
+                    >
+                        <View style={[styles.formBody, isMobileDevice && { flexDirection: 'column', gap: 15 }]}>
                             {/* Left Column - Asset List */}
                             <View style={styles.formColumn}>
                                 <Text style={styles.instructions}>
                                     Select one or more assets you wish to return.
                                 </Text>
-                                <FlatList
-                                    data={assets}
-                                    renderItem={renderAssetItem}
-                                    keyExtractor={(item) => item.assignmentId.toString()}
-                                    showsVerticalScrollIndicator={false}
-                                />
+                                {isMobileDevice ? (
+                                    // 2. MOBILE FIX: Pass item directly to the updated function
+                                    assets.map((item) => renderAssetItem(item))
+                                ) : (
+                                    // 3. WEB FIX: Destructure 'item' from FlatList and pass it to function
+                                    <FlatList
+                                        data={assets}
+                                        renderItem={({ item }) => renderAssetItem(item)}
+                                        keyExtractor={(item) => item.assignmentId.toString()}
+                                        showsVerticalScrollIndicator={false}
+                                    />
+                                )}
                             </View>
 
                             {/* Right Column - Actions */}
@@ -209,17 +222,22 @@ const ReturnAssetScreen: React.FC = () => {
                                 </TouchableOpacity>
                             </View>
                         </View>
-                    </View>
+                    </ScrollView>
 
                     {/* Footer with actions */}
-                    <View style={styles.footer}>
-                        <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
+                    <View style={[styles.footer, isMobileDevice && { justifyContent: 'space-between' }]}>
+                        <TouchableOpacity 
+                            style={[styles.cancelButton, isMobileDevice && { flex: 1, marginRight: 10 }]} 
+                            onPress={() => navigation.goBack()}
+                        >
                             <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={handleReturn}>
+                        <TouchableOpacity 
+                            style={isMobileDevice && { flex: 2 }} 
+                            onPress={handleReturn}>
                             <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.returnButton}>
                                 <Text style={styles.buttonText}>
-                                    Return Selected ({selectedAssets.length})
+                                    Return ({selectedAssets.length})
                                 </Text>
                             </LinearGradient>
                         </TouchableOpacity>
@@ -250,9 +268,7 @@ const styles = StyleSheet.create({
         margin: 20,
         borderRadius: 20,
         overflow: 'hidden',
-        backgroundColor: 'rgba(255, 255, 255, 0.7)',
-        display: 'flex',
-        flexDirection: 'column',
+        backgroundColor: 'rgba(255, 255, 255, 0.85)',
     },
     header: {
         flexDirection: 'row',
@@ -264,9 +280,11 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(0,0,0,0.1)'
     },
-    backButton: { position: 'absolute', left: 20 },
-    headerTitle: { color: '#1A202C', fontSize: 20, fontWeight: 'bold' },
-    body: { flex: 1, padding: 25 },
+    backButton: { position: 'absolute', left: 20, marginTop : 20 },
+    headerTitle: { color: '#1A202C', fontSize: 20, fontWeight: 'bold', marginTop : 20 },
+    body: { flex: 1, 
+        paddingHorizontal: Platform.OS !== 'web' ? 15 : 25,
+        paddingTop: 15},
     formBody: { flexDirection: 'row', gap: 25, flex: 1 },
     formColumn: { flex: 1 },
     instructions: {
@@ -281,10 +299,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
-        padding: 15,
-        marginBottom: 12,
-        borderWidth: 2,
-        borderColor: 'transparent',
+        padding: 12, // Reduced padding for mobile
+        marginBottom: 10,
+        elevation: 2, // Added shadow for better separation
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
     },
     assetRowSelected: {
         borderColor: '#4A55A2',
@@ -292,7 +313,10 @@ const styles = StyleSheet.create({
     },
     checkboxIcon: { marginRight: 15 },
     assetInfo: { flex: 1 },
-    assetName: { fontSize: 16, fontWeight: '600', color: '#1A202C' },
+    assetName: { fontSize: 15, 
+        fontWeight: '600', 
+        color: '#1A202C',
+        flexShrink: 1 },// Prevents pushing content off screen },
     statusActionContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -331,16 +355,23 @@ const styles = StyleSheet.create({
     },
     uploadButtonText: { color: '#4A5568', fontSize: 15, fontWeight: '500', marginLeft: 10 },
     footer: {
-        flexDirection: 'row',
+      flexDirection: 'row',
         justifyContent: 'flex-end',
         alignItems: 'center',
-        padding: 20,
+        padding: 15,
         backgroundColor: '#FFFFFF',
         borderTopWidth: 1,
         borderTopColor: '#E2E8F0',
     },
-    returnButton: { paddingVertical: 12, paddingHorizontal: 25, borderRadius: 10, marginLeft: 15 },
-    cancelButton: { paddingVertical: 12, paddingHorizontal: 25, borderRadius: 10, backgroundColor: '#E2E8F0' },
+    returnButton: { paddingVertical: 14, // Taller for mobile touch
+        paddingHorizontal: 20, 
+        borderRadius: 10, 
+        alignItems: 'center' },
+    cancelButton: { paddingVertical: 14, 
+        paddingHorizontal: 20, 
+        borderRadius: 10, 
+        backgroundColor: '#E2E8F0',
+        alignItems: 'center'},
     buttonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
 });
 

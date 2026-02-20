@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 // --- For Type Safety with React Navigation ---
 import { StackNavigationProp } from '@react-navigation/stack';
+import { baseURL } from 'src/navigation/types';
 
 // 1. Define your navigation routes, including the new asset screens
 export type RootStackParamList = {
@@ -42,7 +43,7 @@ const CompanyDashboard: React.FC = () => {
 
 const fetchUsers = async () => {
   try {
-    const res = await fetch("http://localhost:3000/api/auth/users");
+    const res = await fetch(`${baseURL}/api/auth/users`);
     const data = await res.json();
 
     if (res.ok && Array.isArray(data.users)) {
@@ -63,7 +64,7 @@ const fetchUsers = async () => {
   // ------------------------------------
   const fetchDashboardData = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/dashboard"); // <-- change to your backend IP
+      const response = await fetch(`${baseURL}/api/dashboard`); // <-- change to your backend IP
       const data = await response.json();
       setTotalAssets(data.totalAssets);
       setOfficeAssets(data.officeAssets);   // FIXED

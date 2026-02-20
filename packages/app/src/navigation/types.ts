@@ -1,5 +1,8 @@
 // types.ts
 
+import { Platform } from "react-native";
+
+
 export type Asset = {
   id: number;                 // PRIMARY KEY
   assetId: number;          // Asset_Details.id      
@@ -80,3 +83,10 @@ export type RootStackParamList = {
     supervisorName: string;
   };
 };
+
+export const baseURL = " https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net/"
+
+
+// export const baseURL =  Platform.OS === 'web' 
+//             ? 'http://localhost:3000' 
+//             : 'http://192.168.29.40:3000'; ;

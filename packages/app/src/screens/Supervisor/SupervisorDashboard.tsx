@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView,FlatList, TouchableOpacity, Switch, ImageBackground, Modal, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView,FlatList, TouchableOpacity,Platform, Switch, ImageBackground, Modal, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import axios from 'axios';
 import { Picker } from '@react-native-picker/picker';
-import { RootStackParamList } from '../../navigation/types';
+import { baseURL, RootStackParamList } from '../../navigation/types';
+
+const isMobileDevice = Platform.OS !== 'web';
 
 type DashboardNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -66,8 +68,8 @@ const fetchDashboardData = async () => {
     setLoading(true);
 
     const [metricsRes, repliesRes] = await Promise.all([
-      axios.get(`http://localhost:3000/api/dashboard/metrics`),
-      axios.get(`http://localhost:3000/api/notifications/supervisor?id=${employeeId}`)
+      axios.get(`${baseURL}/api/dashboard/metrics`),
+      axios.get(`${baseURL}/api/notifications/supervisor?id=${employeeId}`)
     ]);
 
     // FIX: repliesRes.data IS the array [{}, {}, {}]
@@ -106,7 +108,7 @@ const fetchDashboardData = async () => {
   
   const handleExtendDate = async (notificationId: number, days: number) => {
   try {
-    const response = await axios.post(`http://localhost:3000/api/assets/extend-return-date`, { 
+    const response = await axios.post(`${baseURL}/api/assets/extend-return-date`, { 
       notificationId,
       daysToExtend : days
     });
@@ -165,6 +167,7 @@ const fetchDashboardData = async () => {
         </View>
 
         {/* --- Main content area is now a separate container --- */}
+       
         <View style={styles.container}>
             {/* Metrics */}
             <View style={styles.metricsGrid}>
@@ -184,45 +187,20 @@ const fetchDashboardData = async () => {
 
             {/* --- Side-by-side content --- */}
             <View style={styles.mainContent}>
-                <View style={styles.activitySection}>
-                    <Text style={styles.sectionTitle}>Recent Activities and Operator Replies</Text>
-                    {operatorReplies.length === 0 ? (
-                        <Text style={styles.noItemsText}>No replies yet.</Text>
-                    ) : (
-                        <FlatList
-                            data={operatorReplies}
-                            keyExtractor={(item) => item.notificationId.toString()}
-                            renderItem={({ item }) => (
-                                <View style={styles.activityItem}>
-                                    <Ionicons name="chatbubbles-outline" size={24} color="#4A55A2" />
-                                    <View style={styles.activityTextContainer}>
-                                        <Text style={styles.activityText}>Reply from <Text style={{fontWeight: 'bold'}}>{item.operatorName}</Text> regarding <Text style={{fontWeight: 'bold'}}>{item.assetName}</Text></Text>
-                                        <Text style={styles.activitySubtext}>“{item.reply ? item.reply : item.reason}”</Text>
-                                    </View>
-                                    <TouchableOpacity onPress={() => openExtendModal(item)} style={styles.extendButton}>
-                                        <Text style={styles.extendButtonText}>Extend</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                        />
-                    )}
-                </View>
-
-                <View style={styles.actionsSection}>
-                    <Text style={styles.sectionTitle}>Quick Actions</Text>
-                    <TouchableOpacity style={[styles.actionButton, styles.blueButton]} onPress={() => navigation.navigate('AddEditAsset')}>
-                        <Text style={styles.actionButtonText}>Add New Asset</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionButton, styles.whiteButton]}>
-                        <Text style={[styles.actionButtonText, styles.whiteButtonText]}>Scan Barcode</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => navigation.navigate('AssignAsset', { supervisor_employeeId: employeeId, supervisorName: supervisorName })}>
-                        <View style={[styles.actionButton, { backgroundColor: '#32C8A4' }]}>
-                            <Text style={styles.actionButtonText}>Assign/Return Asset</Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
-            </View>
+            {isMobileDevice ? (
+              <>
+                {/* On Mobile: Quick Actions comes first */}
+                <QuickActionsSection styles={styles} navigation={navigation} employeeId={employeeId} supervisorName={supervisorName} />
+                <ActivitySection styles={styles} operatorReplies={operatorReplies} openExtendModal={openExtendModal} />
+              </>
+            ) : (
+              <>
+                {/* On Web: Activity comes first (side-by-side) */}
+                <ActivitySection styles={styles} operatorReplies={operatorReplies} openExtendModal={openExtendModal} />
+                <QuickActionsSection styles={styles} navigation={navigation} employeeId={employeeId} supervisorName={supervisorName} />
+              </>
+            )}
+          </View>
         </View>
 
         {/* Bottom Navigation */}
@@ -299,6 +277,61 @@ const fetchDashboardData = async () => {
   );
 };
 
+  // Helper Components for cleaner code
+const QuickActionsSection = ({ styles, navigation, employeeId, supervisorName }: any) => (
+  <View style={styles.actionsSection}>
+    <Text style={styles.sectionTitle}>Quick Actions</Text>
+    <TouchableOpacity style={[styles.actionButton, styles.blueButton]} onPress={() => navigation.navigate('AddEditAsset')}>
+      <Ionicons name="add-circle-outline" size={20} color="#fff" style={styles.actionIcon} />
+      <Text style={styles.actionButtonText}>Add New Asset</Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.actionButton, styles.whiteButton]}>
+      <Ionicons name="barcode-outline" size={20} color="#4A90E2" style={styles.actionIcon} />
+      <Text style={[styles.actionButtonText, styles.whiteButtonText]}>Scan Barcode</Text>
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => navigation.navigate('AssignAsset', { supervisor_employeeId: employeeId, supervisorName: supervisorName })}>
+      <View style={[styles.actionButton, { backgroundColor: '#32C8A4' }]}>
+        <Ionicons name="swap-horizontal-outline" size={20} color="#fff" style={styles.actionIcon} />
+        <Text style={styles.actionButtonText}>Assign Asset</Text>
+      </View>
+    </TouchableOpacity>
+  </View>
+);
+
+const ActivitySection = ({ styles, operatorReplies, openExtendModal }: any) => (
+  <View style={[styles.activitySection, { flex: 1 }]}>
+    <Text style={styles.sectionTitle}>Recent Activities and Operator Replies</Text>
+    
+    {operatorReplies.length === 0 ? (
+      <Text style={styles.noItemsText}>No replies yet.</Text>
+    ) : (
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        // This ensures the scroll area expands correctly
+        contentContainerStyle={{ paddingBottom: 20 }} 
+      >
+        {operatorReplies.map((item: any) => (
+          <View key={item.notificationId} style={styles.activityItem}>
+            <Ionicons name="chatbubbles-outline" size={24} color="#4A55A2" />
+            <View style={styles.activityTextContainer}>
+              <Text style={styles.activityText}>
+                Reply from <Text style={{ fontWeight: 'bold' }}>{item.operatorName}</Text>
+              </Text>
+              <Text style={styles.activitySubtext}>“{item.reply || item.reason}”</Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => openExtendModal(item)} 
+              style={styles.extendButton}
+            >
+              <Text style={styles.extendButtonText}>Extend</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+      </ScrollView>
+    )}
+  </View>
+);
+
 const styles = StyleSheet.create({
   backgroundImage: {
    flex: 1,
@@ -306,8 +339,16 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   safeArea: { flex: 1 ,backgroundColor:"rgba(61, 138, 233, 0.52)",},
-  container: { flex: 1 ,padding: 20,
-    gap: 20,},
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100, // Important to allow scrolling above the fixed bottom nav
+  },
+  container: {flex: 1, // Fill the whole screen under header
+    padding: isMobileDevice ? 15 : 25, 
+    gap: 10
+  },// Reduced general gap}, // Less padding on mobile},
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -344,23 +385,31 @@ const styles = StyleSheet.create({
   metricValue: { fontSize: 32, fontWeight: 'bold', color: '#1A202C', marginTop: 4 },
   
   mainContent: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 20,
+   flex: 1, // Crucial: This pushes the activity section to fill the bottom
+    flexDirection: isMobileDevice ? 'column' : 'row',
+    gap: 5,
   },
   activitySection: {
-    flex: 2.5, // Takes more space
+    flex: isMobileDevice ? 1 : 2.5, // Takes all remaining space on mobile
     backgroundColor: 'rgba(255, 255, 255, 0.4)',
     borderRadius: 15,
-    padding: 20,
+    padding: 15,
+    // Provide a bottom margin so the last item isn't covered by bottom nav
+    marginBottom: isMobileDevice ? 80 : 0,
   },
   actionsSection: {
-    flex: 1, // Takes less space
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-    borderRadius: 15,
-    padding: 20,
+  flex: isMobileDevice ? 0 : 1,
+  backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  borderRadius: 15,
+  padding: 15,
+  marginBottom: 10, // CHANGE THIS from 80 to 0
   },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#000000ff' },
+  sectionTitle: {fontSize: 18, 
+  fontWeight: 'bold', 
+  marginBottom: 10, // Reduced from 15
+  marginTop: 0, // Explicitly set to 0
+  color: '#000000ff'
+ },
   noItemsText: { color: 'rgba(0, 0, 0, 0.8)', fontStyle: 'italic' },
   activityItem: {
     flexDirection: 'row',
@@ -375,11 +424,8 @@ const styles = StyleSheet.create({
   activitySubtext: { fontSize: 15, color: '#1A202C', fontWeight: '600', fontStyle: 'italic', marginTop: 3 },
   extendButton: { backgroundColor: '#4A90E2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   extendButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
-  
-  actionButton: { padding: 15, borderRadius: 10, marginBottom: 12, alignItems: 'center' },
-  blueButton: { backgroundColor: '#4A90E2' },
+   blueButton: { backgroundColor: '#4A90E2' },
   whiteButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd' },
-  actionButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   whiteButtonText: { color: '#4A90E2' },
   
   bottomNav: {
@@ -407,6 +453,25 @@ const styles = StyleSheet.create({
   modalButton: { width: '100%', backgroundColor: '#4A90E2', padding: 15, borderRadius: 10, alignItems: 'center' },
   modalButtonText: { color: '#000000ff', fontSize: 16, fontWeight: 'bold' },
   modalCancel: { marginTop: 15, padding: 10 },
+
+  actionButton: { 
+    flexDirection: 'row',
+  padding: 12, // Reduced from 15
+  borderRadius: 12, 
+  marginBottom: 8, // Reduced from 12 to 8
+  alignItems: 'center',
+  justifyContent: 'center',
+  },
+
+  actionIcon: {
+    marginRight: 10,
+  },
+
+  actionButtonText: { 
+    color: '#fff', 
+    fontSize: 15, 
+    fontWeight: '700',
+  },
 });
 
 export default SupervisorDashboard;

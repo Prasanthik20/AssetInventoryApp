@@ -19,8 +19,10 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import axios from 'axios';
-import { Asset, RootStackParamList } from '../../navigation/types';
+import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
+const isMobileDevice = Platform.OS !== 'web';
 
 type AssignAssetNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -74,7 +76,7 @@ const AssignAssetScreen: React.FC = () => {
         setLoading(true);
 
         // ----- FETCH ASSETS -----
-        const res = await axios.get("http://localhost:3000/api/assets");
+        const res = await axios.get(`${baseURL}/api/assets`);
 
         const rawData = res.data.assets || res.data || [];
         const normalizedAssets = rawData.map((a: any) => ({
@@ -88,12 +90,12 @@ const AssignAssetScreen: React.FC = () => {
 
         // 🔥 REMOVE DUPLICATES BY assetId
         const uniqueAssets = Array.from(
-          new Map(unassignedAssets.map(a => [a.assetId, a])).values()
+          new Map(unassignedAssets.map((a: any) => [a.assetId, a])).values()
         ) as Asset[];
 
         setAssets(uniqueAssets);
         // ----- FETCH OPERATORS -----
-        const response = await axios.get("http://localhost:3000/api/auth/users");
+        const response = await axios.get(`${baseURL}/api/auth/users`);
 
         const rawUsers = response.data.users || response.data.data || response.data || [];
 
@@ -131,7 +133,7 @@ const AssignAssetScreen: React.FC = () => {
 
     try {
       // 🔥 Send the array of IDs to your bulk assignment API
-      await axios.post('http://localhost:3000/api/assets/assign', {
+      await axios.post(`${baseURL}/api/assets/assign`, {
         assetIds: selectedAssets.map(a => a.assetId), // Change asset_id to assetIds
         operator_employeeId: selectedOperator.employeeId,
         supervisor_employeeId: supervisor_employeeId,
@@ -228,7 +230,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       blurRadius={10}
     >
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
+        <View style={[styles.container, isMobileDevice && { margin: 0, borderRadius: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)' }]}>
           {/* HEADER */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -241,8 +243,20 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           </View>
 
           {/* FORM */}
-          <ScrollView contentContainerStyle={styles.formScrollContainer}>
-            <View style={styles.formBody}>
+          <ScrollView 
+          contentContainerStyle={[
+            styles.formScrollContainer,
+            isMobileDevice && { paddingHorizontal: 15 } // Tighter padding for phones
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+            {/* TOGGLE COLUMN FOR MOBILE: 
+             'row' for Web, 'column' for Mobile 
+          */}
+          <View style={[
+            styles.formBody, 
+            { flexDirection: isMobileDevice ? 'column' : 'row', gap: isMobileDevice ? 0 : 25 }
+          ]}>
 
               {/* LEFT COLUMN */}
               <View style={styles.formColumn}>
@@ -305,7 +319,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               </View>
 
               {/* RIGHT COLUMN */}
-              <View style={styles.formColumn}>
+              <View style={[styles.formColumn, isMobileDevice && { marginTop: 10 }]}>
                 <Text style={styles.label}>Scan Barcode</Text>
 
                 <TouchableOpacity style={styles.scanButton} onPress={handleScanBarcode}>
@@ -409,7 +423,10 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           </ScrollView>
 
           {/* FOOTER */}
-          <View style={styles.footer}>
+          <View style={[
+          styles.footer, 
+          isMobileDevice && { justifyContent: 'center', paddingBottom: 30 }
+        ]}>
             <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
               <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
             </TouchableOpacity>
@@ -491,8 +508,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    display: 'flex',
-    flexDirection: 'column',
   },
   header: {
     flexDirection: 'row',
@@ -504,11 +519,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
-  backButton: { position: 'absolute', left: 20 },
-  headerTitle: { color: '#1A202C', fontSize: 20, fontWeight: 'bold' },
+  backButton: { position: 'absolute', left: 20 , marginTop : 25},
+  headerTitle: { color: '#1A202C', fontSize: 20, fontWeight: 'bold' , marginTop : 25},
   formScrollContainer: { padding: 25 },
   formBody: { flexDirection: 'row', gap: 25 },
-  formColumn: { flex: 1 },
+  formColumn: { flex: 1, width: '100%', },
   label: {
     fontSize: 14,
     color: '#2D3748',
@@ -527,7 +542,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CBD5E0',
   },
-  pickerText: { fontSize: 15, color: '#1A202C', fontWeight: '500' },
+  pickerText: { fontSize: 15, color: '#1A202C', fontWeight: '500',flex: 1,}, // Allows text to truncate correctly if too long },
   inputGroup: {
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
@@ -554,8 +569,9 @@ const styles = StyleSheet.create({
     padding: 15,
     fontSize: 15,
     color: '#1A202C',
-    height: 125,
+    height: 100, // Reduced slightly for mobile comfort
     textAlignVertical: 'top',
+    marginBottom: 20, // Add bottom margin for mobile stacking
   },
   scanButton: {
     flexDirection: 'row',

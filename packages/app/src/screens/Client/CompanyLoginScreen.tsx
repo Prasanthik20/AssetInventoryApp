@@ -7,17 +7,22 @@ import {
     Image,
     ImageBackground,
     StyleSheet,
-    SafeAreaView,
     KeyboardAvoidingView,
     Alert,
     ScrollView,
+    Dimensions,
     Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Checkbox from "expo-checkbox";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import axios from 'axios';
+import { baseURL } from "src/navigation/types";
+
+const { width, height } = Dimensions.get('window');
+const isMobileDevice = Platform.OS !== 'web';
 
 export type RootStackParamList = {
     CompanyLogin: undefined;
@@ -57,7 +62,7 @@ export default function CompanyLoginScreen() {
         try {
             // Call your Next.js API endpoint
             // For mobile development, you must use your computer's IP address, not 'localhost'
-            const response: any = await axios.post('http://localhost:3000/api/auth/login', {
+            const response: any = await axios.post(`${baseURL}/api/auth/login`, {
                 // Data Payload
                 email: email,
                 password: password,
@@ -116,11 +121,17 @@ export default function CompanyLoginScreen() {
             blurRadius={5}
         >
             <SafeAreaView style={styles.safeArea}>
-                {/* <ScrollView
-                    contentContainerStyle={{ flexGrow: 1 }}
-                    keyboardShouldPersistTaps="handled"
+              <KeyboardAvoidingView
+                // Use 'padding' for iOS and 'height' for Android to handle the keyboard correctly
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1, width: '100%' }}
+            >
+                <ScrollView
+                    // flexGrow: 1 allows content to center when small, but scroll when keyboard opens
+                    contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
                     showsVerticalScrollIndicator={false}
-                > */}
+                    keyboardShouldPersistTaps="handled"
+                >
                     <View style={styles.loginContainer}>
                         {/* Left Decorative Panel */}
                         <View style={styles.leftPanel}>
@@ -195,7 +206,8 @@ export default function CompanyLoginScreen() {
                             </View>
                         {/* </KeyboardAvoidingView> */}
                     </View>
-                {/* </ScrollView> */}
+               </ScrollView>
+                </KeyboardAvoidingView>
             </SafeAreaView>
         </ImageBackground>
     );
@@ -210,74 +222,66 @@ const styles = StyleSheet.create({
     },
     safeArea: {
         flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "rgba(61, 138, 233, 0.52)"
-
+        backgroundColor: "rgba(61, 138, 233, 0.4)"
     },
     loginContainer: {
-        flexDirection: 'row',
-        width: "80%",
-        maxWidth: 900,
-        height: '70%',
-        maxHeight: 550,
-        // --- MODIFICATION: Increased transparency for "frosted glass" effect ---
-        backgroundColor: "rgba(255, 255, 255, 0.35)",
-        // backgroundColor:"rgba(61, 138, 233, 0.52)",
-
-        borderRadius: 25,
+        flexDirection: isMobileDevice ? 'column' : 'row', 
+        width: isMobileDevice ? "90%" : "75%",
+        // Key Fix: Do not set a fixed height on mobile. Let it grow.
+        minHeight: isMobileDevice ? 650 : 550, 
+        alignSelf: 'center',
+        maxWidth: 1000, 
+        backgroundColor: "rgba(255, 255, 255, 0.8)", 
+        borderRadius: 30,
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.5)',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
+        // Add vertical margin so it doesn't touch screen edges on small phones
+        marginVertical: 40,
         elevation: 10,
     },
     leftPanel: {
-        flex: 1, // Let flexbox decide the size
-        backgroundColor: "transparent",
+        // In mobile view, don't use 'flex: 1' or it will push the form off-screen
+        flex: isMobileDevice ? 0 : 1.2, 
         alignItems: "center",
         justifyContent: "center",
-        padding: 25,
-        // --- MODIFICATION: Removed border for a seamless look ---
+        padding: 20,
     },
     image: {
-        width: 300,
-        height: 150,
-        marginBottom: 20,
+       width: isMobileDevice ? 200 : 300, 
+        height: isMobileDevice ? 80 : 150,
         resizeMode: 'contain',
     },
     leftTitle: {
-        fontSize: 26,
+        fontSize: isMobileDevice ? 20 : 26,
         color: "#1A202C",
         fontWeight: "bold",
+        textAlign: 'center',
+        letterSpacing: 1,
     },
     leftSubtitle: {
-        fontSize: 14,
-        color: "#4A5568",
-        marginTop: 5,
+        fontSize: 16,
+        color: "#64748b",
+        marginTop: 8,
+        fontWeight: "500",
     },
     rightPanel: {
-        flex: 1, // Let flexbox decide the size
-        backgroundColor: "transparent",
-        padding: 40,
+     flex: 1,
+        backgroundColor: "#ffffff",
+        padding: isMobileDevice ? 20 : 50,
         justifyContent: 'center',
     },
     logoContainer: {
         alignItems: "center",
-        marginBottom: 25,
+        marginBottom: isMobileDevice ? 15 : 25,
     },
     logo: {
-        width: 80,
-        height: 70,
+        width: isMobileDevice ? 60 : 80,
+        height: isMobileDevice ? 50 : 70,
         marginBottom: 10,
         borderRadius: 8,
     },
     welcome: {
         color: "#1A202C",
-        fontSize: 24,
+        fontSize: isMobileDevice ? 22 : 24,
         fontWeight: "600",
     },
     signInText: {
@@ -286,24 +290,12 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     input: {
-        backgroundColor: "#FFFFFF",
-        borderRadius: 10,
-        padding: 14,
+        backgroundColor: "#f8fafc",
+        borderRadius: 12,
+        padding: 16,
         marginBottom: 15,
-        fontSize: 15,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        color: "#1A202C",
-    },
-    rememberRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginBottom: 20,
-    },
-    rememberText: {
-        color: "#2D3748",
-        marginLeft: 8,
-        fontWeight: '500',
+        borderColor: '#e2e8f0',
     },
     loginButton: {
         borderRadius: 10,
@@ -322,10 +314,11 @@ const styles = StyleSheet.create({
     linkText: {
         textAlign: "center",
         color: "#4A5568",
+        marginTop: isMobileDevice ? 15 : 0,
     },
     platformIcons: {
         alignItems: "center",
-        marginTop: 'auto',
+        marginTop: isMobileDevice ? 20 : 'auto',
         paddingTop: 20,
     },
     platformText: {

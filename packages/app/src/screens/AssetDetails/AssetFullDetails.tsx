@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground, TouchableOpacity, Switch, Image } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -52,6 +52,7 @@ const AssetFullDetails: React.FC = () => {
     const { asset } = route.params;
     const matchedCategory = categories.find(c => String(c.id) === String(asset.category));
     const matchedStatus = statuses.find(s => String(s.id) === String(asset.status));
+    const isMobileDevice = Platform.OS !== 'web';
     if (!asset) {
         return <Text>Asset not found!</Text>;
     }
@@ -66,6 +67,7 @@ const AssetFullDetails: React.FC = () => {
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.container}>
                     {/* Left Decorative Panel */}
+                    {!isMobileDevice && (
                     <LinearGradient
                         colors={['rgba(93, 113, 200, 0.7)', 'rgba(59, 89, 184, 0.8)']}
                         style={styles.leftPanel}
@@ -78,7 +80,7 @@ const AssetFullDetails: React.FC = () => {
                         <Text style={styles.leftPanelSubtitle}>COMPREHENSIVE EQUIPMENT RECORD</Text>
                         <Text style={styles.brandName}>ASSETFLOW PRO</Text>
                     </LinearGradient>
-
+                    )}
                     {/* Right Details Panel */}
                     <View style={styles.rightPanel}>
                         {/* Header */}
@@ -87,6 +89,7 @@ const AssetFullDetails: React.FC = () => {
                                 <Ionicons name="arrow-back" size={24} color="#000000ff" />
                             </TouchableOpacity>
                             <Text style={styles.headerTitle}>Asset Information</Text>
+                            {!isMobileDevice && (
                             <View style={styles.headerRight}>
                                 <Feather name="user" size={16} color="#333" />
                                 <Text style={styles.userText}>Supervisor</Text>
@@ -97,58 +100,50 @@ const AssetFullDetails: React.FC = () => {
                                 /> */}
                                 <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
                             </View>
+                            )}  
                         </View>
 
                         {/* Details Body */}
-                        <View style={styles.formBody}>
-                            {/* Left Column */}
-                            <View style={styles.formColumn}>
-                                <Text style={styles.sectionTitle}>General Details</Text>
-                                <DisplayField label="Asset Name" value={asset.assetName} icon="truck" />
+                       <ScrollView showsVerticalScrollIndicator={false}>
+                            <View style={[
+                                styles.formBody, 
+                                isMobileDevice && { flexDirection: 'column', gap: 0 } 
+                            ]}>
                                 
-                                <DisplayField  label="Category" value={matchedCategory?.category || asset.category} icon="layers"/>
+                                <View style={styles.formColumn}>
+                                    <Text style={styles.sectionTitle}>General Details</Text>
+                                    <DisplayField label="Asset Name" value={asset.assetName} icon="truck" />
+                                    <DisplayField label="Category" value={asset.category} icon="layers"/>
+                                    <DisplayField label="Status" value={asset.status} icon="check-circle" />
+                                    <DisplayField label="Model Number" value={asset.modelNumber} icon="archive" />
+                                    <DisplayField label="Serial Number" value={asset.serialNumber} icon="hash" />
+                                    <DisplayField label="Price" value={asset.price} icon="dollar" />
+                                </View>
+
+                                <View style={styles.formColumn}>
+                                    {/* On mobile, we place the barcode at the bottom or middle of the list */}
+                                    <Image source={{ uri: 'https://i.imgur.com/gJuQe3h.png' }} style={styles.barcodeImage} />
+                                    <Text style={styles.barcodeText}>Asset ID: {asset.barcode}</Text>
                                     
-                                <DisplayField  label="Status" value={matchedStatus?.status || asset.status} icon="check-circle" />
-                                <DisplayField label="Model Number" value={asset.modelNumber} icon="archive" />
-                                <DisplayField label="Serial Number" value={asset.serialNumber} icon="hash" />
-                                <DisplayField label="Price" value={asset.price} icon="dollar" />
+                                    <DisplayField label="Current Location" value={asset.location} icon="map-pin" />
+                                    <DisplayField label="Assigned To" value={asset.assignedTo || "N/A"} icon="user-check" />
+                                    <DisplayField label="Warranty Expiry" value={formatDate(asset.warrantyExpiry)} icon="calendar" />
+                                    <DisplayField label="Purchase Date" value={formatDate(asset.purchaseDate)} icon="calendar" />
+                                </View>
                             </View>
-
-                            {/* Right Column */}
-                            <View style={styles.formColumn}>
-                                <Image source={{ uri: 'https://i.imgur.com/gJuQe3h.png' }} style={styles.barcodeImage} />
-                                <Text style={styles.barcodeText}>Asset ID: {asset.barcode}</Text>
-                                <Text style={styles.currentUserText}>
-                                    {asset.status === 'Assigned' || asset.status === 'Overdue'
-                                        ? `Currently with ${asset.assignedTo}`
-                                        : 'Currently in storage'}
-                                </Text>
-
-                                <DisplayField label="Current Location" value={asset.location} icon="map-pin" />
-                                <DisplayField label="Assigned By" value={asset.assignedBy || undefined} icon="user-check" />
-                                <DisplayField label="Assigned To" value={asset.assignedTo || undefined} icon="user-check" />
-                                <DisplayField
-                                    label="Warranty Expiry"
-                                    value={formatDate(asset.warrantyExpiry)}
-                                    icon="calendar"
-                                />
-
-                                <DisplayField
-                                    label="Purchase Date"
-                                    value={formatDate(asset.purchaseDate)}
-                                    icon="calendar"
-                                />
-                            </View>
-                        </View>
+                        </ScrollView>
                         
                         {/* Action Buttons */}
-                        <View style={styles.footer}>
-                            <TouchableOpacity>
+                        <View style={[styles.footer, isMobileDevice && { justifyContent: 'space-between' }]}>
+                            <TouchableOpacity style={isMobileDevice && { flex: 1 }}>
                                 <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.saveButton}>
                                     <Text style={styles.buttonText}>EDIT ASSET</Text>
                                 </LinearGradient>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
+                            <TouchableOpacity 
+                                style={[styles.cancelButton, isMobileDevice && { flex: 1 }]} 
+                                onPress={() => navigation.goBack()}
+                            >
                                 <Text style={[styles.buttonText, { color: '#555' }]}>Go Back</Text>
                             </TouchableOpacity>
                         </View>
@@ -183,10 +178,11 @@ const styles = StyleSheet.create({
     brandName: { fontSize: 15, color: '#000000ff', marginTop: 30, opacity: 0.8 },
     rightPanel: {
         flex: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.4)', // Semi-transparent
-        padding: 25,
-        display: 'flex',
-        flexDirection: 'column',
+        // If mobile, make background solid white for better readability
+        backgroundColor: Platform.OS !== 'web' ? '#fff' : 'rgba(255, 255, 255, 0.4)', 
+        padding: 20,
+        borderTopLeftRadius: Platform.OS !== 'web' ? 25 : 0, // Rounded corners for mobile
+        borderTopRightRadius: Platform.OS !== 'web' ? 25 : 0,
     },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#000000ff' }, // White text
@@ -202,7 +198,7 @@ const styles = StyleSheet.create({
     backButton: { padding: 6, marginRight: 10, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 6 },
     userText: { marginLeft: 8, marginRight: 8, fontSize: 14, fontWeight: '500' },
     formBody: { flexDirection: 'row', gap: 25, flex: 1 },
-    formColumn: { flex: 1 },
+    formColumn: { flex: 1, width: '100%' },
     sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#000000ff', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)', paddingBottom: 5},
     fieldContainer: { marginBottom: 12 },
     labelContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: 5 },
@@ -243,8 +239,17 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: 'rgba(255, 255, 255, 0.3)',
     },
-    saveButton: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: 10 },
-    cancelButton: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: 10, backgroundColor: 'rgba(234, 234, 234, 0.8)', marginLeft: 15 },
+    saveButton: { paddingVertical: 12, 
+        paddingHorizontal: 20, 
+        borderRadius: 10,
+        alignItems: 'center' },
+    cancelButton: { paddingVertical: 12, 
+        paddingHorizontal: 20, 
+        borderRadius: 10, 
+        backgroundColor: '#EAEAEA', 
+        marginLeft: 10,
+        alignItems: 'center'
+     },
     buttonText: { color: '#000000ff', fontSize: 14, fontWeight: 'bold' },
 });
 

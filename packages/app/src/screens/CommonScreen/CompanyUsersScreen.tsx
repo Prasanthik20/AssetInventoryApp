@@ -15,7 +15,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { Asset, RootStackParamList } from '../../navigation/types';
+import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 
 interface User {
     id: string;
@@ -41,7 +41,7 @@ const CompanyUsersScreen: React.FC = () => {
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:3000/api/auth/users'); // replace with your API URL
+            const response = await fetch(`${baseURL}/api/auth/users`); // replace with your API URL
             const data = await response.json();
 
             // Map API response to local state structure

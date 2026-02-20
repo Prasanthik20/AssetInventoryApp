@@ -11,6 +11,7 @@ import {
   Switch,
   FlatList,
   ScrollView,
+  Platform,
   Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,7 +20,9 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect  } from "@react-navi
 import axios from "axios";
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../navigation/types';
+import { baseURL, RootStackParamList } from '../../navigation/types';
+
+const isMobileDevice = Platform.OS !== 'web'; 
 
 type DashboardNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -101,8 +104,8 @@ const OperatorDashboard: React.FC = () => {
     if (!employeeId) return;
     try {
       const [assetsRes, notificationsRes] = await Promise.all([
-        axios.get(`http://localhost:3000/api/operator/assets?operatorId=${employeeId}`),
-        axios.get(`http://localhost:3000/api/notifications/operator?id=${employeeId}`)]);
+        axios.get(`${baseURL}/api/operator/assets?operatorId=${employeeId}`),
+        axios.get(`${baseURL}/api/notifications/operator?id=${employeeId}`)]);
       //const data = await res.json();
 
       const rawAssets = assetsRes.data.assets || [];
@@ -115,7 +118,8 @@ const OperatorDashboard: React.FC = () => {
           uniqueAssetsMap.set(id, {
             ...a,
             assignedBy: a.assignedBy || a.assigned_by || a.senderId,
-            assetId: id
+            assetId: id,
+            serialNumber: a.serialNumber || a.s_n || a.serial_number // Add this line
           });
         }
       });
@@ -218,7 +222,7 @@ const OperatorDashboard: React.FC = () => {
       console.log("DEBUG PAYLOAD:", payload);
       console.log("🚀 Sending notification for:", asset.assetName);
 
-      const response = await axios.post("http://localhost:3000/api/notifications/overdue", payload, {
+      const response = await axios.post(`${baseURL}/api/notifications/overdue`, payload, {
         headers: {
           'Content-Type': 'application/json',
         }
@@ -255,7 +259,7 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
       status: 'replied'                  // New status
     };
 
-    await axios.post(`http://localhost:3000/api/notifications/reply`, payload);
+    await axios.post(`${baseURL}/api/notifications/reply`, payload);
 // 🔥 Remove the replied notification from the UI list immediately
     setNotifications(prev => prev.filter(item => item.id !== notification.id));
     Alert.alert("Success", "Reply sent successfully!");
@@ -309,6 +313,7 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
     >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
+          {!isMobileDevice && (
           <LinearGradient
             colors={["rgba(93, 113, 200, 0.7)", "rgba(59, 89, 184, 0.8)"]}
             style={styles.leftPanel}
@@ -317,6 +322,7 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
             <Text style={styles.leftPanelTitle}>YOUR ASSIGNED{"\n"}EQUIPMENT</Text>
             <Text style={styles.leftPanelSubtitle}>ASSETFLOW PRO</Text>
           </LinearGradient>
+        )}
 
          <ScrollView style={styles.rightPanel} contentContainerStyle={{ paddingBottom: 50 }}
            refreshControl={
@@ -349,15 +355,15 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
              </View>
            </View>
 
-            {/* METRICS */}
-            <View style={styles.metricsContainer}>
-              <View style={styles.metricBox}>
-                <View style={styles.metricIconBg}>
-                  <Ionicons name="construct-outline" size={20} color="#3B59B8" />
-                </View>
-                <Text style={styles.metricTitle}>Assigned Assets</Text>
-                <Text style={styles.metricValue}>{assignedCount}</Text>
-              </View>
+           {/* METRICS */}
+           <View style={styles.metricsContainer}>
+             <View style={styles.metricBox}>
+               <View style={styles.metricIconBg}>
+                 <Ionicons name="construct-outline" size={20} color="#3B59B8" />
+               </View>
+               <Text style={styles.metricTitle}>Assigned Assets</Text>
+               <Text style={styles.metricValue}>{assignedCount}</Text>
+             </View>
 
              <View style={styles.metricBox}>
                <View style={styles.metricIconBg}>
@@ -374,70 +380,62 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
              {notifications.length === 0 ? (
                <Text style={styles.noItemsText}>No new notifications.</Text>
              ) : (
-               <FlatList
-                 data={notifications}
-                 keyExtractor={(item) => item.id.toString()}
-                 renderItem={({ item }) => {
-                   // 1. Force both to strings and trim for a clean comparison
-                   const isFromSupervisor = Number(item.sender.employeeId) !== Number(employeeId);
-                   // 2. Be less strict with status checks initially to see if it appears
-                   const isResolved = item.status === 'resolved';
-                   const hasReplied = !!item.reply && item.reply.length > 0;
+               notifications.map((item) => {
+                 const isFromSupervisor = Number(item.sender.employeeId) !== Number(employeeId);
+                 const isResolved = item.status === 'resolved';
+                 const hasReplied = !!item.reply && item.reply.length > 0;
 
-                   return (
-                     <View style={[
-                       styles.notificationItem,
-                       isFromSupervisor ? { backgroundColor: '#f0f9ff', borderColor: '#bae6fd', borderWidth: 1 } : {},
-                       isResolved && { opacity: 0.5, backgroundColor: '#f5f5f5' }
-                     ]}>
-                       <Ionicons
-                         name={isResolved ? "checkmark-done-circle" : (isFromSupervisor ? "checkmark-circle-outline" : "notifications-outline")}
-                         size={24}
-                         color={isResolved ? "#999" : (isFromSupervisor ? "#0284c7" : "#4A55A2")}
-                       />
+                 return (
+                   <View key={item.id.toString()} style={[
+                     styles.notificationItem,
+                     isFromSupervisor ? { backgroundColor: '#f0f9ff', borderColor: '#bae6fd', borderWidth: 1 } : {},
+                     isResolved && { opacity: 0.5, backgroundColor: '#f5f5f5' }
+                   ]}>
+                     <Ionicons
+                       name={isResolved ? "checkmark-done-circle" : (isFromSupervisor ? "checkmark-circle-outline" : "notifications-outline")}
+                       size={24}
+                       color={isResolved ? "#999" : (isFromSupervisor ? "#0284c7" : "#4A55A2")}
+                     />
 
-                       <View style={styles.notificationContent}>
-                         <Text style={[styles.notificationText, isResolved && { color: '#999' }]}>
-                           {isFromSupervisor ? (
-                             <Text style={{ color: '#0369a1', fontWeight: 'bold' }}>Update from Supervisor:</Text>
-                           ) : (
-                             <Text>Your Request for <Text style={{ fontWeight: 'bold' }}>{item.asset.name}</Text>:</Text>
-                           )}
-                         </Text>
-                         <Text style={[styles.notificationReason, isResolved && { color: '#999', fontStyle: 'italic' }]}>
-                           "{item.reason}"
-                         </Text>
-
-                         {hasReplied && (
-                           <Text style={styles.repliedText}>
-                             <Text style={{ fontWeight: 'bold' }}>Message: </Text>"{item.reply}"
-                           </Text>
+                     <View style={styles.notificationContent}>
+                       <Text style={[styles.notificationText, isResolved && { color: '#999' }]}>
+                         {isFromSupervisor ? (
+                           <Text style={{ color: '#0369a1', fontWeight: 'bold' }}>Update from Supervisor:</Text>
+                         ) : (
+                           <Text>Your Request for <Text style={{ fontWeight: 'bold' }}>{item.asset.name}</Text>:</Text>
                          )}
-                       </View>
+                       </Text>
+                       <Text style={[styles.notificationReason, isResolved && { color: '#999', fontStyle: 'italic' }]}>
+                         "{item.reason}"
+                       </Text>
 
-                       {/* --- REVISED BUTTON CONDITION --- */}
-                       {isFromSupervisor && !hasReplied && !isResolved && (
-                         <TouchableOpacity
-                           style={styles.replyButton}
-                           onPress={() =>
-                             handleOpenModal({
-                               title: `Reply to Supervisor`,
-                               assetName: item.asset.name,
-                               onSubmit: (replyMessage) => handleReplySubmit(replyMessage, item),
-                             })
-                           }
-                         >
-                           <Text style={styles.replyButtonText}>Reply</Text>
-                         </TouchableOpacity>
+                       {hasReplied && (
+                         <Text style={styles.repliedText}>
+                           <Text style={{ fontWeight: 'bold' }}>Message: </Text>"{item.reply}"
+                         </Text>
                        )}
                      </View>
-                   );
-                 }}
-               />
+
+                     {/* --- REVISED BUTTON CONDITION --- */}
+                     {isFromSupervisor && !hasReplied && !isResolved && (
+                       <TouchableOpacity
+                         style={styles.replyButton}
+                         onPress={() => handleOpenModal({
+                           title: `Reply to Supervisor`,
+                           assetName: item.asset.name,
+                           onSubmit: (replyMessage) => handleReplySubmit(replyMessage, item),
+                         })}
+                       >
+                         <Text style={styles.replyButtonText}>Reply</Text>
+                       </TouchableOpacity>
+                     )}
+                   </View>
+                 );
+               })
              )}
            </View>
 
-           {/* ASSETS LIST */}
+           { }
            <View style={styles.assetsSection}>
              <Text style={styles.sectionTitle}>My Assets</Text>
              {myAssets.length === 0 ? (
@@ -462,10 +460,19 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
 
                      <View style={styles.assetNameContainer}>
                        <Text style={styles.assetName}>
-                         {asset.assetName} ({asset.barcode})
+                         {asset.assetName}
                        </Text>
-                     </View>
 
+                       {/* 👇 Displaying Serial Number and Barcode */}
+                       <View style={{ flexDirection: 'row', marginTop: 2 }}>
+                         <Text style={{ fontSize: 12, color: "#4A5568", fontWeight: '500' }}>
+                           S/N: <Text style={{ color: "#1A202C" }}>{asset.serialNo || "N/A"}</Text>
+                         </Text>
+                         <Text style={{ fontSize: 12, color: "#4A5568", marginLeft: 10, fontWeight: '500' }}>
+                           Barcode: <Text style={{ color: "#1A202C" }}>{asset.barcode}</Text>
+                         </Text>
+                       </View>
+                     </View>
                      <View style={styles.dueDateContainer}>
                        <Text style={[
                          styles.assetDueDate,
@@ -552,7 +559,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   notifyButtonText: { color: "#fff", fontWeight: "bold", fontSize: 13 },
-  container: { flex: 1, flexDirection: "row" },
+  container: { flex: 1, flexDirection: isMobileDevice ? "column" : "row" },
   leftPanel: { width: "40%", justifyContent: "center", alignItems: "center", padding: 30 },
   leftPanelImage: { width: 200, height: 200, resizeMode: "contain", marginBottom: 30 },
   leftPanelTitle: { fontSize: 32, fontWeight: "bold", color: "#fff", textAlign: "center", lineHeight: 40 },
