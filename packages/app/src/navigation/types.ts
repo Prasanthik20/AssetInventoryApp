@@ -46,6 +46,7 @@ export type RootStackParamList = {
     adminName: string;
     adminImage: string | null;
     roleName: string;
+    employeeId: string;
   };
 
   CompanyUsersScreen: undefined;
