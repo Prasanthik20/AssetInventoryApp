@@ -14,26 +14,25 @@ const AddCompanyUser: React.FC = () => {
     const isWeb = Platform.OS === 'web';
 
     // Prisma Schema States
-    const [employeeId, setEmployeeId] = useState('');
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [address, setAddress] = useState('');
-    const [photoURL, setPhotoURL] = useState('');
+    //const [photoURL, setPhotoURL] = useState('');
     const [role, setRole] = useState<'Supervisor' | 'Operator'>('Supervisor');
     const [loading, setLoading] = useState(false);
 
   const handleAddUser = async () => {
   try {
+    setLoading(true);
     const payload = {
-      employeeId,
       fullName,
       email,
       password,
       phoneNumber,
       address,
-      photoURL,
+     // photoURL,
       roleName: role
     };
 
@@ -53,6 +52,8 @@ const AddCompanyUser: React.FC = () => {
     // If it's still 404, the file isn't where we think it is on the server
     const errorMessage = error.response?.data?.message || "Error: " + error.response?.status;
     alert(errorMessage);
+  } finally {
+    setLoading(false);
   }
 };
     return (
@@ -95,14 +96,6 @@ const AddCompanyUser: React.FC = () => {
                             <View style={styles.formContainer}>
                                 <TextInput 
                                     style={styles.input} 
-                                    placeholder="Employee ID (BigInt)" 
-                                    placeholderTextColor="#999"
-                                    value={employeeId}
-                                    onChangeText={setEmployeeId}
-                                    keyboardType="numeric"
-                                />
-                                <TextInput 
-                                    style={styles.input} 
                                     placeholder="Full Name" 
                                     placeholderTextColor="#999" 
                                     value={fullName}
@@ -132,13 +125,13 @@ const AddCompanyUser: React.FC = () => {
                                     value={phoneNumber}
                                     onChangeText={setPhoneNumber}
                                 />
-                                <TextInput 
+                                {/* <TextInput 
                                     style={styles.input} 
                                     placeholder="Photo URL" 
                                     placeholderTextColor="#999"
                                     value={photoURL}
                                     onChangeText={setPhotoURL}
-                                />
+                                /> */}
                                 <TextInput 
                                     style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
                                     placeholder="Address" 

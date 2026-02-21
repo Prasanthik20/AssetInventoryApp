@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ImageBackground, Platform, Dimensions, ScrollView } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 // --- For Type Safety with React Navigation ---
 import { StackNavigationProp } from '@react-navigation/stack';
 import { baseURL, RootStackParamList } from '../../navigation/types';
@@ -22,75 +22,77 @@ const CompanyDashboard: React.FC = () => {
 
     const { adminName, adminImage, roleName, employeeId } = route.params;
     const [users, setUsers] = useState([]);
-  const [totalAssets, setTotalAssets] = useState<number | null>(null);
-  const [totalUsers, setTotalUsers] = useState<number | null>(null);
-  const [officeAssets, setOfficeAssets] = useState<number | null>(null);
-  const [fieldAssets, setFieldAssets] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notifications, setNotifications] = useState<any[]>([]);
+    const [totalAssets, setTotalAssets] = useState<number | null>(null);
+    const [totalUsers, setTotalUsers] = useState<number | null>(null);
+    const [officeAssets, setOfficeAssets] = useState<number | null>(null);
+    const [fieldAssets, setFieldAssets] = useState<number | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [notifications, setNotifications] = useState<any[]>([]);
 
 
-const fetchUsers = async () => {
-  try {
-    const res = await fetch(`${baseURL}/api/auth/users`);
-    const data = await res.json();
+    const fetchUsers = async () => {
+        try {
+            const res = await fetch(`${baseURL}/api/auth/users`);
+            const data = await res.json();
 
-    if (res.ok && Array.isArray(data.users)) {
-      setUsers(data.users);
-      setTotalUsers(data.count);
-    } else {
-      setUsers([]);
-      console.error("Users API format error:", data);
-    }
-  } catch (error) {
-    console.error("Users API Error:", error);
-    setUsers([]);
-  }
-};
+            if (res.ok && Array.isArray(data.users)) {
+                setUsers(data.users);
+                setTotalUsers(data.count);
+            } else {
+                setUsers([]);
+                console.error("Users API format error:", data);
+            }
+        } catch (error) {
+            console.error("Users API Error:", error);
+            setUsers([]);
+        }
+    };
 
-  // ------------------------------------
-  // 📌 FETCH DASHBOARD METRICS FROM API
-  // ------------------------------------
-  const fetchDashboardData = async () => {
-  try {
-    // Axios returns a response object; the actual data is in .data
-    const response = await axios.get(`${baseURL}/api/dashboard`);
-    
-    const data = response.data;
+    // ------------------------------------
+    // 📌 FETCH DASHBOARD METRICS FROM API
+    // ------------------------------------
+    const fetchDashboardData = async () => {
+        try {
+            // Axios returns a response object; the actual data is in .data
+            const response = await axios.get(`${baseURL}/api/dashboard`);
 
-    setTotalAssets(data.totalAssets);
-    setOfficeAssets(data.officeAssets); 
-    setFieldAssets(data.fieldAssets);
-    
-  } catch (error: any) {
-    // Axios gives you more detail on errors (e.g., error.response.data)
-    console.log("Dashboard API Error:", error.response?.data || error.message);
-  } finally {
-    setLoading(false);
-  }
-};
+            const data = response.data;
 
-  const fetchGlobalNotifications = async () => {
-  try {
-    const response = await axios.get(
-      `${baseURL}/api/notifications/admin?id=${employeeId}`
-    );
+            setTotalAssets(data.totalAssets);
+            setOfficeAssets(data.officeAssets);
+            setFieldAssets(data.fieldAssets);
 
-    setNotifications(response.data);
-  } catch (error) {
-    console.error("Axios notification error:", error);
-  }
-};
- // -------------------------
-  // 📌 RUN ON PAGE OPEN
-  // -------------------------
-  useEffect(() => {
-  fetchUsers();
-  fetchDashboardData();
-  fetchGlobalNotifications();
-}, []);
+        } catch (error: any) {
+            // Axios gives you more detail on errors (e.g., error.response.data)
+            console.log("Dashboard API Error:", error.response?.data || error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-return (
+    const fetchGlobalNotifications = async () => {
+        try {
+            const response = await axios.get(
+                `${baseURL}/api/notifications/admin?id=${employeeId}`
+            );
+
+            setNotifications(response.data.notifications || []);
+        } catch (error) {
+            console.error("Axios notification error:", error);
+        }
+    };
+    // -------------------------
+    // 📌 RUN ON PAGE OPEN
+    // -------------------------
+    useFocusEffect(
+  useCallback(() => {
+    fetchUsers();
+    fetchDashboardData();
+    fetchGlobalNotifications();
+  }, [])
+);
+
+    return (
         <ImageBackground
             source={require("../../assets/Company-bg.webp")}
             style={styles.backgroundImage}
@@ -102,24 +104,24 @@ return (
                     {/* Left Panel (Web Only) */}
                     {Platform.OS === 'web' && (
                         <View style={styles.leftPanel}>
-                            <Image 
+                            <Image
                                 source={{ uri: adminImage || "https://i.imgur.com/6VBx3io.png" }}
-                                style={{ width: 120, height: 120, borderRadius: 40 }} 
+                                style={{ width: 120, height: 120, borderRadius: 40 }}
                             />
                             <Text style={styles.leftPanelName}>{adminName}</Text>
                             <Text style={styles.leftPanelRole}>{roleName}</Text>
-                            
+
                         </View>
                     )}
 
                     {/* Main Content Area */}
-                    <ScrollView 
-                        style={styles.mainScroll} 
+                    <ScrollView
+                        style={styles.mainScroll}
                         contentContainerStyle={styles.scrollContent}
                         showsVerticalScrollIndicator={false}
-                    >                  
+                    >
                         <View style={[styles.rightPanel, isMobile && styles.mobilePadding]}>
-                            
+
                             {/* Mobile Header */}
                             {isMobile && (
                                 <View style={styles.mobileHeaderCard}>
@@ -143,8 +145,8 @@ return (
                                         <Ionicons name="person-outline" size={16} color="#333" />
                                         <Text style={styles.userText}>{roleName}</Text>
                                         <TouchableOpacity onPress={() => navigation.reset({ index: 0, routes: [{ name: "CompanyLogin" }] })}>
-                                        <Feather name="log-out" size={24} color="#FF4D4D" />
-                                    </TouchableOpacity>
+                                            <Feather name="log-out" size={24} color="#FF4D4D" />
+                                        </TouchableOpacity>
                                     </View>
                                 )}
                             </View>
@@ -185,20 +187,55 @@ return (
                                         {notifications.length > 0 ? (
                                             notifications.map((item, index) => (
                                                 <View key={item.id || index} style={styles.notifLine}>
-                                                    <View style={[styles.roleIndicator, { backgroundColor: item.senderRole === 'Supervisor' ? '#4C51BF' : '#38B2AC' }]} />
+
+                                                    <View
+                                                        style={[
+                                                            styles.roleIndicator,
+                                                            {
+                                                                backgroundColor:
+                                                                    item.sender?.name?.toLowerCase().includes("supervisor")
+                                                                        ? "#4C51BF"
+                                                                        : "#38B2AC",
+                                                            },
+                                                        ]}
+                                                    />
+
                                                     <View style={styles.notifMainContent}>
                                                         <View style={styles.notifHeaderRow}>
-                                                            <Text style={styles.senderName}>{item.senderName}</Text>
-                                                            <View style={styles.tagContainer}><Text style={styles.roleTagText}>{item.senderRole}</Text></View>
+                                                            <Text style={styles.senderName}>
+                                                                {item.sender?.name || "Unknown"}
+                                                            </Text>
+
+                                                            <View style={styles.tagContainer}>
+                                                                <Text style={styles.roleTagText}>
+                                                                    {item.status}
+                                                                </Text>
+                                                            </View>
                                                         </View>
-                                                        <Text style={styles.assetContext}>Asset: <Text style={{ fontWeight: 'bold' }}>{item.assetName}</Text></Text>
-                                                        <Text style={styles.notifMessage} numberOfLines={2}>"{item.message}"</Text>
+
+                                                        <Text style={styles.assetContext}>
+                                                            Asset:{" "}
+                                                            <Text style={{ fontWeight: "bold" }}>
+                                                                {item.asset?.name || "N/A"}
+                                                            </Text>
+                                                        </Text>
+
+                                                        <Text style={styles.notifMessage} numberOfLines={2}>
+                                                            "{item.message}"
+                                                        </Text>
                                                     </View>
-                                                    <Text style={styles.notifTime}>{new Date(item.createdAt).toLocaleDateString('en-GB')}</Text>
+
+                                                    <Text style={styles.notifTime}>
+                                                        {item.createdAt
+                                                            ? new Date(item.createdAt).toLocaleDateString("en-GB")
+                                                            : ""}
+                                                    </Text>
                                                 </View>
                                             ))
                                         ) : (
-                                            <View style={styles.emptyContainer}><Text style={styles.emptyText}>No activity recorded</Text></View>
+                                            <View style={styles.emptyContainer}>
+                                                <Text style={styles.emptyText}>No activity recorded</Text>
+                                            </View>
                                         )}
                                     </View>
                                 </View>
@@ -269,7 +306,7 @@ const styles = StyleSheet.create({
         opacity: 0.8,
         marginTop: 10,
     },
-   // Right Panel & Mobile Adapters
+    // Right Panel & Mobile Adapters
     rightPanel: {
         flex: 1,
         backgroundColor: Platform.OS === 'web' ? "rgba(61, 138, 233, 0.4)" : "transparent",
@@ -335,29 +372,29 @@ const styles = StyleSheet.create({
         fontWeight: '600', // Bolder
         color: '#2D3748', // Darker
     },
-   // Metrics Grid
+    // Metrics Grid
     metricsGrid: {
-       flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 20,
-    width: '100%',
+        flexDirection: "row",
+        flexWrap: "wrap",
+        justifyContent: "space-between",
+        marginBottom: 20,
+        width: '100%',
     },
     metricBox: {
-       // 23.5% width allows 4 items + spacing in one row on web
-    width: Platform.OS === 'web' ? "23.5%" : "48%", 
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 15,
-    alignItems: "center",
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+        // 23.5% width allows 4 items + spacing in one row on web
+        width: Platform.OS === 'web' ? "23.5%" : "48%",
+        backgroundColor: "rgba(255, 255, 255, 0.95)",
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 15,
+        alignItems: "center",
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
-   metricValue: { fontSize: 24, fontWeight: "bold", color: "#1A202C" },
+    metricValue: { fontSize: 24, fontWeight: "bold", color: "#1A202C" },
     metricLabel: { fontSize: 13, color: "#718096", fontWeight: '600' },
     metricValueText: {
         fontSize: 16,
@@ -372,17 +409,17 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     bottomRow: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
-    justifyContent: 'space-between',
-    width: '100%',
-    gap: 25,
-},
-feedContainer: {
-    flex: Platform.OS === 'web' ? 3 : 1, // Takes 75% of space on web
-},
-actionsContainer: {
-    flex: Platform.OS === 'web' ? 1 : 1, // Takes 25% of space on web
-},
+        flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+        justifyContent: 'space-between',
+        width: '100%',
+        gap: 25,
+    },
+    feedContainer: {
+        flex: Platform.OS === 'web' ? 3 : 1, // Takes 75% of space on web
+    },
+    actionsContainer: {
+        flex: Platform.OS === 'web' ? 1 : 1, // Takes 25% of space on web
+    },
     bottomContent: {
         flex: 1,
         flexDirection: 'row',
@@ -394,7 +431,7 @@ actionsContainer: {
     quickActionsSection: {
         flex: 1,
     },
-   sectionTitle: { fontSize: 20, fontWeight: "800", color: "#1A202C", marginBottom: 15, marginTop: 10 },
+    sectionTitle: { fontSize: 20, fontWeight: "800", color: "#1A202C", marginBottom: 15, marginTop: 10 },
     userTable: {
         // --- MODIFICATION: Made background semi-transparent ---
         backgroundColor: 'rgba(255, 255, 255, 0.7)',
@@ -457,12 +494,12 @@ actionsContainer: {
         display: 'none',
     },
     notificationFeed: {
- backgroundColor: 'rgba(255, 255, 255, 0.9)', // Solid white or high-opacity glass
+        backgroundColor: 'rgba(255, 255, 255, 0.9)', // Solid white or high-opacity glass
         borderRadius: 20,
         padding: 20,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.8)',
-        
+
         // --- THIS FORCES THE CARD TO BE VISIBLE IRRESPECTIVE OF CONTENT ---
         minHeight: 200, // Adjust this value to match your Quick Actions height
         width: '100%',
@@ -471,8 +508,8 @@ actionsContainer: {
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 8,
-},
-emptyContainer: {
+    },
+    emptyContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
@@ -489,33 +526,33 @@ emptyContainer: {
     roleTag: { fontWeight: 'normal', color: '#A0AEC0', fontSize: 11 },
     notifMessage: { fontSize: 13, color: '#4A5568', marginTop: 2, fontStyle: 'italic' },
     notifTime: { fontSize: 11, color: '#CBD5E0', marginLeft: 10 },
-notifLine: {
-  flexDirection: 'row',
-  paddingVertical: 12,
-  paddingHorizontal: 10,
-  borderBottomWidth: 1,
-  borderBottomColor: 'rgba(0,0,0,0.05)',
-  alignItems: 'center',
-},
-notifHeaderRow: {flexDirection: 'row', alignItems: 'center',},
-tagContainer: {
-  backgroundColor: '#EDF2F7',
-  paddingHorizontal: 6,
-  paddingVertical: 2,
-  borderRadius: 4,
-  marginLeft: 8,
-},
-roleTagText: {
-  fontSize: 10,
-  fontWeight: 'bold',
-  color: '#4A5568',
-  textTransform: 'uppercase',
-},
-assetContext: {
-  fontSize: 12,
-  color: '#718096',
-  marginTop: 2,
-},
+    notifLine: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0,0,0,0.05)',
+        alignItems: 'center',
+    },
+    notifHeaderRow: { flexDirection: 'row', alignItems: 'center', },
+    tagContainer: {
+        backgroundColor: '#EDF2F7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginLeft: 8,
+    },
+    roleTagText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#4A5568',
+        textTransform: 'uppercase',
+    },
+    assetContext: {
+        fontSize: 12,
+        color: '#718096',
+        marginTop: 2,
+    },
 });
 
 export default CompanyDashboard;

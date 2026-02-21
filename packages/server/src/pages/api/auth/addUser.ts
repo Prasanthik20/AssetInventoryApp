@@ -26,11 +26,11 @@ export default async function addUserHandler(req: NextApiRequest, res: NextApiRe
   }
 
   const { 
-    employeeId, fullName, email, password, 
-    phoneNumber, address, photoURL, roleName 
+     fullName, email, password, 
+    phoneNumber, address, roleName 
   } = req.body;
 
-  if (!employeeId || !fullName || !email || !password || !roleName) {
+  if ( !fullName || !email || !password || !roleName) {
     return res.status(400).json({ message: 'Missing required fields.' });
   }
 
@@ -48,20 +48,19 @@ export default async function addUserHandler(req: NextApiRequest, res: NextApiRe
     // 3. Insert into "Users"
     const sql = `
       INSERT INTO "Users" (
-        "employeeId", "fullName", "email", "passwordHash", 
-        "phoneNumber", "address", "photoURL", "roleId"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         "fullName", "email", "passwordHash", 
+        "phoneNumber", "address",  "roleId"
+      ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING "userId";
     `;
 
-    const values = [
-      employeeId, 
+    const values = [ 
       fullName, 
       email, 
       passwordHash, 
       phoneNumber || null, 
       address || null, 
-      photoURL || null, 
+      // photoURL || null, 
       roleId
     ];
 

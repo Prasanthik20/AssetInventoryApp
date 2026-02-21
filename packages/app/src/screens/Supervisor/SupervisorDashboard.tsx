@@ -1,308 +1,467 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ImageBackground, Platform, Dimensions, ScrollView } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { View, Text, StyleSheet, SafeAreaView,FlatList, TouchableOpacity,Platform, Switch, ImageBackground, Modal, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { baseURL } from '../../navigation/types';
 import axios from 'axios';
+import { Picker } from '@react-native-picker/picker';
+import { baseURL, RootStackParamList } from '../../navigation/types';
 
-// 1. UPDATED: Added CompanyLogin to the Param List
-export type RootStackParamList = {
-    CompanyDashboard: {
-        adminName: string;
-        adminImage: string | null;
-        roleName: string;
-    };
-    CompanyLogin: undefined; // <--- Critical fix for the error
-    AddCompanyUser: undefined;
-    TotalAssetDetails: undefined;
-    CompanyUsersScreen: undefined;
-    OfficeAssets: undefined;
-    FieldAssets: undefined;
+const isMobileDevice = Platform.OS !== 'web';
+
+type DashboardNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  'SupervisorDashboard'
+>;
+type DashboardRouteProp = RouteProp<
+  RootStackParamList,
+  'SupervisorDashboard'
+>;
+export type SupervisorStackParamList = {
+  SupervisorDashboard: {
+    supervisorName: string;
+    roleName: string;
+    employeeId: string;
+  };
+  AddEditAsset: undefined;
+  AssignAsset: {
+    supervisor_employeeId: string; // <-- pass this to assign asset
+    supervisorName: string;
+  };
+  TotalAssetDetails: undefined;
+  OfficeAssets: undefined;
+  FieldAssets: undefined;
 };
 
-type DashboardNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyDashboard'>;
-type DashboardRoute = RouteProp<RootStackParamList, "CompanyDashboard">;
+interface OperatorReply {
+  notificationId: number;
+  operatorName: string;
+  assetName: string;
+  reason : string;
+  reply: string;
+}
 
-const { width } = Dimensions.get('window');
-const isMobile = Platform.OS !== 'web';
+const SupervisorDashboard: React.FC = () => {
 
-const CompanyDashboard: React.FC = () => {
-    const navigation = useNavigation<DashboardNavigationProp>();
-    const route = useRoute<DashboardRoute>();
+  const navigation = useNavigation<DashboardNavigationProp>();
+  const route = useRoute<DashboardRouteProp>();
 
-    const { adminName, adminImage, roleName } = route.params;
-    const [users, setUsers] = useState([]);
-    const [totalAssets, setTotalAssets] = useState<number | null>(null);
-    const [totalUsers, setTotalUsers] = useState<number | null>(null);
-    const [officeAssets, setOfficeAssets] = useState<number | null>(null);
-    const [fieldAssets, setFieldAssets] = useState<number | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [notifications, setNotifications] = useState<any[]>([]);
+  const { supervisorName, roleName, employeeId } = route.params;
+   const [metricsData, setMetricsData] = useState({ totalAssets: 0, officeAssets: 0, fieldAssets: 0 });
+  const [operatorReplies, setOperatorReplies] = useState<OperatorReply[]>([]);
+  const [loading, setLoading] = useState(true); // Added loading state
+  const [extendDays, setExtendDays] = useState(3);
 
-    const fetchUsers = async () => {
-        try {
-            const res = await axios.get(`${baseURL}/api/auth/users`);
-            const data =  res.data;
-            if (data && Array.isArray(data.users)) {
-                setUsers(data.users);
-                setTotalUsers(data.count);
+  const [selectedItem, setSelectedItem] = useState<OperatorReply | null>(null);
+  const [extendModalVisible, setExtendModalVisible] = useState(false); // Removed duplicate state
+
+  const metrics = [
+    { title: 'Total Assets', icon: 'albums-outline', value: metricsData.totalAssets, navigateTo: 'TotalAssetDetails' as keyof SupervisorStackParamList },
+    { title: 'Assets in Office', icon: 'business-outline', value: metricsData.officeAssets, navigateTo: 'OfficeAssets' as keyof SupervisorStackParamList },
+    { title: 'Assets in Field', icon: 'walk-outline', value: metricsData.fieldAssets, navigateTo: 'FieldAssets' as keyof SupervisorStackParamList },
+  ];
+
+const fetchDashboardData = async () => {
+  if (!employeeId) return;
+  try {
+    setLoading(true);
+
+    const [metricsRes, repliesRes] = await Promise.all([
+      axios.get(`${baseURL}/api/dashboard/metrics`),
+      axios.get(`${baseURL}/api/notifications/supervisor?id=${employeeId}`)
+    ]);
+     const rawData = Array.isArray(repliesRes.data) 
+      ? repliesRes.data 
+      : (repliesRes.data.notifications || []);
+
+    const formatted = rawData.map((n: any) => ({
+      notificationId: n.notificationId,
+      operatorName: n.operatorName || "Unknown",
+      assetName: n.assetName || "Unknown Asset",
+      reason: n.reason,
+      reply: n.reply
+    }));
+    console.log("Formatted Replies for State:", formatted);
+
+    setMetricsData(metricsRes.data);
+    setOperatorReplies(formatted);
+
+  } catch (error) {
+    console.log('Dashboard Data Fetch Error:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+ useEffect(() => {
+    fetchDashboardData();
+  }, [employeeId]);
+
+
+  const openExtendModal = (item: OperatorReply) => {
+    setSelectedItem(item);
+    setExtendModalVisible(true);
+  };
+
+  const handleExtendDate = async (notificationId: number, days: number) => {
+  try {
+    const response = await axios.post(`${baseURL}/api/assets/extend-return-date`, { 
+      notificationId,
+      daysToExtend : days
+    });
+
+    Alert.alert("Success", response.data.extensionMessage);
+    setExtendModalVisible(false);
+
+    // Remove from UI immediately
+    setOperatorReplies(prev => prev.filter(n => n.notificationId !== notificationId));
+
+  } catch (err: any) {
+    console.error("Extend Return Date Error:", err);
+    Alert.alert("Error", err.response?.data?.message || "Failed to extend return date.");
+  }
+};
+
+  return (
+    <ImageBackground
+      source={require('../../assets/Company-bg.webp')}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+      blurRadius={5}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        {/* --- Header is now separate from the main content container --- */}
+        <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <View style={styles.logoBg}>
+                <Feather name="box" size={24} color="#fff" />
+              </View>
+              <Text style={styles.headerTitle}>{supervisorName}</Text>
+            </View>
+            <View style={styles.headerRight}>
+            <Feather name="user" size={16} color="#333" />
+            <Text style={styles.userText}>{roleName}</Text>
+            {/* <Switch
+              trackColor={{ false: '#E9E9EA', true: '#34C759' }}
+              thumbColor="#f4f3f4"
+              value={true}
+              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+            /> */}
+
+            <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
+
+            {/* 🔴 ADD LOGOUT BUTTON HERE */}
+            <TouchableOpacity onPress={() =>
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "CompanyLogin" }],
+              })
             }
-        } catch (error) {
-            console.error("Users API Error:", error);
-        }
-    };
+            >
+              <Feather name="log-out" size={22} color="red" style={{ marginLeft: 10 }} />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-    const fetchDashboardData = async () => {
-        try {
-            const response = await axios.get(`${baseURL}/api/dashboard`);
-            const data = response.data;
-            setTotalAssets(data.totalAssets);
-            setOfficeAssets(data.officeAssets);
-            setFieldAssets(data.fieldAssets);
-        } catch (error) {
-            console.log("Dashboard API Error:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+        {/* --- Main content area is now a separate container --- */}
+       
+        <View style={styles.container}>
+            {/* Metrics */}
+            <View style={styles.metricsGrid}>
+                {metrics.map((m, index) => (
+                    <TouchableOpacity
+                        key={index}
+                        style={styles.metricBox}
+                        disabled={!m.navigateTo}
+                        onPress={() => m.navigateTo && navigation.navigate(m.navigateTo as any)}
+                    >
+                        <Ionicons name={m.icon as any} size={24} color="#1A202C" />
+                        <Text style={styles.metricTitle}>{m.title}</Text>
+                        <Text style={styles.metricValue}>{m.value}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
 
-    const fetchGlobalNotifications = async () => {
-        try {
-            const response = await axios.get(`${baseURL}/api/notifications`);
-            setNotifications(response.data);
-        } catch (error) {
-            console.error("Axios notification error:", error);
-        }
-    };
+            {/* --- Side-by-side content --- */}
+            <View style={styles.mainContent}>
+            {isMobileDevice ? (
+              <>
+                {/* On Mobile: Quick Actions comes first */}
+                <QuickActionsSection styles={styles} navigation={navigation} employeeId={employeeId} supervisorName={supervisorName} />
+                <ActivitySection styles={styles} operatorReplies={operatorReplies} openExtendModal={openExtendModal} />
+              </>
+            ) : (
+              <>
+                {/* On Web: Activity comes first (side-by-side) */}
+                <ActivitySection styles={styles} operatorReplies={operatorReplies} openExtendModal={openExtendModal} />
+                <QuickActionsSection styles={styles} navigation={navigation} employeeId={employeeId} supervisorName={supervisorName} />
+              </>
+            )}
+          </View>
+        </View>
 
-    useEffect(() => {
-        fetchUsers();
-        fetchDashboardData();
-        fetchGlobalNotifications();
-    }, []);
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <View style={styles.bottomNavLeft}>
+            <TouchableOpacity style={styles.navItem}>
+              <Ionicons name="grid-outline" size={20} color="#333" />
+              <Text style={styles.navText}>Dashboard</Text>
+            </TouchableOpacity>
 
-    return (
-        <ImageBackground
-            source={require("../../assets/Company-bg.webp")}
-            style={styles.backgroundImage}
-            resizeMode="cover"
-            blurRadius={isMobile ? 10 : 5}
-        >
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.container}>
-                    {/* LEFT PANEL: WEB ONLY */}
-                    {Platform.OS === 'web' && (
-                        <View style={styles.leftPanel}>
-                            <Image 
-                                source={{ uri: adminImage || "https://i.imgur.com/6VBx3io.png" }}
-                                style={{ width: 120, height: 120, borderRadius: 40 }} 
-                            />
-                            <Text style={styles.leftPanelName}>{adminName}</Text>
-                            <Text style={styles.leftPanelRole}>{roleName}</Text>
-                        </View>
-                    )}
+            <TouchableOpacity style={styles.navItem}>
+              <Ionicons name="people-outline" size={20} color="#333" />
+              <Text style={styles.navText}>Operators</Text>
+            </TouchableOpacity>
 
-                    {/* MAIN CONTENT */}
-                    <ScrollView 
-                        style={styles.mainScroll} 
-                        contentContainerStyle={styles.scrollContent}
-                        showsVerticalScrollIndicator={false}
-                    >                  
-                        <View style={[styles.rightPanel, isMobile && styles.mobilePadding]}>
-                            
-                            {/* MOBILE HEADER */}
-                            {isMobile && (
-                                <View style={styles.mobileHeaderCard}>
-                                    <View style={styles.mobileUserRow}>
-                                        <Image source={{ uri: adminImage || "https://i.imgur.com/6VBx3io.png" }} style={styles.mobileAvatar} />
-                                        <View>
-                                            <Text style={styles.mobileWelcome}>Welcome back,</Text>
-                                            <Text style={styles.mobileAdminName}>{adminName}</Text>
-                                        </View>
-                                    </View>
-                                    <TouchableOpacity onPress={() => navigation.reset({ index: 0, routes: [{ name: "CompanyLogin" }] })}>
-                                        <Feather name="log-out" size={24} color="#FF4D4D" />
-                                    </TouchableOpacity>
-                                </View>
-                            )}
+            <TouchableOpacity style={styles.navItem}>
+              <Ionicons name="document-text-outline" size={20} color="#333" />
+              <Text style={styles.navText}>Reports</Text>
+            </TouchableOpacity>
+          </View>
 
-                            <View style={styles.header}>
-                                <Text style={styles.headerTitle}>System Overview</Text>
-                                {!isMobile && (
-                                    <View style={styles.headerRight}>
-                                        <Ionicons name="person-outline" size={16} color="#333" />
-                                        <Text style={styles.userText}>{roleName}</Text>
-                                    </View>
-                                )}
-                            </View>
+          <View style={styles.bottomNavRight}>
+            <TouchableOpacity style={styles.navItem}>
+              <MaterialCommunityIcons name="web" size={20} color="#333" />
+              <Text style={styles.navText}>Web</Text>
+            </TouchableOpacity>
 
-                            {/* Metrics Grid */}
-                            <View style={styles.metricsGrid}>
-                                <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('TotalAssetDetails')}>
-                                    <Ionicons name="settings-outline" size={24} color="#6B46C1" />
-                                    <Text style={styles.metricValue}>{totalAssets ?? 0}</Text>
-                                    <Text style={styles.metricLabel}>Total Assets</Text>
-                                </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem}>
+              <MaterialCommunityIcons name="cellphone" size={20} color="#333" />
+              <Text style={styles.navText}>iOS</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
-                                <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('CompanyUsersScreen')}>
-                                    <Ionicons name="people-outline" size={24} color="#6B46C1" />
-                                    <Text style={styles.metricValue}>{totalUsers ?? 0}</Text>
-                                    <Text style={styles.metricLabel}>Total Users</Text>
-                                </TouchableOpacity>
+        <Modal
+              animationType="fade"
+              transparent={true}
+              visible={extendModalVisible}
+              onRequestClose={() => setExtendModalVisible(false)}>
+          <View style={styles.modalContainer}>
+          <View style={styles.modalBox}>
 
-                                <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('OfficeAssets')}>
-                                    <Ionicons name="business-outline" size={24} color="#6B46C1" />
-                                    <Text style={styles.metricValue}>{officeAssets ?? 0}</Text>
-                                    <Text style={styles.metricLabel}>Office Assets</Text>
-                                </TouchableOpacity>
+              <Text style={styles.modalTitle}>Extend Return Date</Text>
+              <Text style={styles.modalSubtitle}>
+                  Asset: {selectedItem?.assetName}{"\n"}
+                  Reason: "{selectedItem?.reply ?? selectedItem?.reason}"
+              </Text>
 
-                                <TouchableOpacity style={styles.metricBox} onPress={() => navigation.navigate('FieldAssets')}>
-                                    <Ionicons name="map-outline" size={24} color="#6B46C1" />
-                                    <Text style={styles.metricValue}>{fieldAssets ?? 0}</Text>
-                                    <Text style={styles.metricLabel}>Field Assets</Text>
-                                </TouchableOpacity>
+      {/* Dropdown for selecting days (1-10) */}
+          <Picker
+              selectedValue={extendDays}
+              onValueChange={(value) => setExtendDays(value)}
+              style={{ width: "100%", height: 50 }}>
+              {[...Array(10)].map((_, i) => (
+                <Picker.Item key={i} label={`${i + 1} Days`} value={i + 1} />
+            ))}
+          </Picker>
 
-                                <View style={styles.metricBoxFull}>
-                                    <Ionicons name="checkmark-circle-outline" size={20} color="#28A745" />
-                                    <Text style={styles.metricValueText}>AssetFlow Pro Plan Active</Text>
-                                </View>
-                            </View>
+      {/* Submit Button */}
+          <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => selectedItem && handleExtendDate(selectedItem.notificationId, extendDays)}>
+              <Text style={styles.modalButtonText}>Extend by {extendDays} Days</Text>
+          </TouchableOpacity>
 
-                            {/* Global Activity Feed */}
-                            <View style={styles.userSection}>
-                                <Text style={styles.sectionTitle}>Global Activity Feed</Text>
-                                <View style={styles.notificationFeed}>
-                                    {notifications.map((item, index) => (
-                                        <View key={item.id || index} style={styles.notifLine}>
-                                            <View style={[
-                                                styles.roleIndicator,
-                                                { backgroundColor: item.senderRole === 'Supervisor' ? '#4C51BF' : '#38B2AC' }
-                                            ]} />
-                                            <View style={styles.notifMainContent}>
-                                                <View style={styles.notifHeaderRow}>
-                                                    <Text style={styles.senderName}>{item.senderName}</Text>
-                                                    <View style={styles.tagContainer}>
-                                                        <Text style={styles.roleTagText}>{item.senderRole}</Text>
-                                                    </View>
-                                                </View>
-                                                <Text style={styles.assetContext}>
-                                                    Asset: <Text style={{ fontWeight: 'bold' }}>{item.assetName}</Text>
-                                                </Text>
-                                                <Text style={styles.notifMessage} numberOfLines={2}>"{item.message}"</Text>
-                                            </View>
-                                            <Text style={styles.notifTime}>
-                                                {new Date(item.createdAt).toLocaleDateString('en-GB')}
-                                            </Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            </View>
-
-                            {/* Quick Actions */}
-                            <View style={styles.quickActionsSection}>
-                                <TouchableOpacity onPress={() => navigation.navigate("AddCompanyUser")}>
-                                    <LinearGradient
-                                        colors={['#27B2C3', '#40D69B']}
-                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                                        style={styles.addUserButton}
-                                    >
-                                        <Ionicons name="add-circle-outline" size={20} color="#fff" />
-                                        <Text style={styles.addUserButtonText}>Add New User</Text>
-                                    </LinearGradient>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </ScrollView>
-                </View>
-            </SafeAreaView>
-        </ImageBackground >
+          <TouchableOpacity style={styles.modalCancel} onPress={() => setExtendModalVisible(false)}>
+              <Text style={{ color: '#555' }}>Cancel</Text>
+          </TouchableOpacity>
+       </View>
+      </View>
+    </Modal>
+  </SafeAreaView>
+</ImageBackground>
     );
 };
 
-// --- STYLES ---
+  // Helper Components for cleaner code
+const QuickActionsSection = ({ styles, navigation, employeeId, supervisorName }: any) => (
+  <View style={styles.actionsSection}>
+    <Text style={styles.sectionTitle}>Quick Actions</Text>
+    <TouchableOpacity style={[styles.actionButton, styles.blueButton]} onPress={() => navigation.navigate('AddEditAsset')}>
+      <Ionicons name="add-circle-outline" size={20} color="#fff" style={styles.actionIcon} />
+      <Text style={styles.actionButtonText}>Add New Asset</Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.actionButton, styles.whiteButton]}>
+      <Ionicons name="barcode-outline" size={20} color="#4A90E2" style={styles.actionIcon} />
+      <Text style={[styles.actionButtonText, styles.whiteButtonText]}>Scan Barcode</Text>
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => navigation.navigate('AssignAsset', { supervisor_employeeId: employeeId, supervisorName: supervisorName })}>
+      <View style={[styles.actionButton, { backgroundColor: '#32C8A4' }]}>
+        <Ionicons name="swap-horizontal-outline" size={20} color="#fff" style={styles.actionIcon} />
+        <Text style={styles.actionButtonText}>Assign Asset</Text>
+      </View>
+    </TouchableOpacity>
+  </View>
+);
+
+const ActivitySection = ({ styles, operatorReplies, openExtendModal }: any) => (
+  <View style={[styles.activitySection, { flex: 1 }]}>
+    <Text style={styles.sectionTitle}>Recent Activities and Operator Replies</Text>
+    
+    {operatorReplies.length === 0 ? (
+      <Text style={styles.noItemsText}>No replies yet.</Text>
+    ) : (
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        // This ensures the scroll area expands correctly
+        contentContainerStyle={{ paddingBottom: 20 }} 
+      >
+        {operatorReplies.map((item: any) => (
+          <View key={item.notificationId} style={styles.activityItem}>
+            <Ionicons name="chatbubbles-outline" size={24} color="#4A55A2" />
+            <View style={styles.activityTextContainer}>
+              <Text style={styles.activityText}>
+                Reply from <Text style={{ fontWeight: 'bold' }}>{item.operatorName}</Text>
+              </Text>
+              <Text style={styles.activitySubtext}>“{item.reply || item.reason}”</Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => openExtendModal(item)} 
+              style={styles.extendButton}
+            >
+              <Text style={styles.extendButtonText}>Extend</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+      </ScrollView>
+    )}
+  </View>
+);
+
 const styles = StyleSheet.create({
-    backgroundImage: { flex: 1, width: "100%", height: "100%" },
-    safeArea: { flex: 1 },
-    container: { flex: 1, flexDirection: "row" },
-    mainScroll: { flex: 1 },
-    scrollContent: { flexGrow: 1, paddingBottom: 20 },
-    leftPanel: {
-        width: "25%",
-        justifyContent: "center",
-        backgroundColor: "rgba(192, 215, 243, 0.7)",
-        alignItems: "center",
-        padding: 20,
-    },
-    leftPanelName: { fontSize: 32, fontWeight: "bold", marginTop: 10 },
-    leftPanelRole: { fontSize: 24, color: "gray" },
-    rightPanel: {
-        flex: 1,
-        backgroundColor: Platform.OS === 'web' ? "rgba(61, 138, 233, 0.4)" : "transparent",
-        padding: 25,
-    },
-    mobilePadding: { padding: 15 },
-    mobileHeaderCard: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        padding: 15,
-        borderRadius: 20,
-        marginBottom: 20,
-        elevation: 4,
-    },
-    mobileUserRow: { flexDirection: 'row', alignItems: 'center' },
-    mobileAvatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 },
-    mobileWelcome: { fontSize: 12, color: '#718096' },
-    mobileAdminName: { fontSize: 18, fontWeight: 'bold', color: '#2D3748' },
-    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-    headerTitle: { fontSize: 22, fontWeight: "bold", color: "#1A202C" },
-    headerRight: { flexDirection: "row", alignItems: "center", backgroundColor: 'rgba(255, 255, 255, 0.6)', padding: 8, borderRadius: 20 },
-    userText: { marginLeft: 8, fontSize: 14, fontWeight: '600', color: '#2D3748' },
-    metricsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-    metricBox: {
-        width: Platform.OS === 'web' ? "31%" : "48%",
-        backgroundColor: "rgba(255, 255, 255, 0.95)",
-        borderRadius: 24,
-        padding: 18,
-        marginBottom: 15,
-        alignItems: "center",
-    },
-    metricBoxFull: {
-        width: '100%',
-        backgroundColor: "rgba(255, 255, 255, 0.8)",
-        borderRadius: 15,
-        padding: 12,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 15,
-    },
-    metricValue: { fontSize: 24, fontWeight: "bold", color: "#1A202C" },
-    metricLabel: { fontSize: 13, color: "#718096", fontWeight: '600' },
-    metricValueText: { fontSize: 14, fontWeight: "bold", color: "#2D3748", marginLeft: 8 },
-    userSection: { marginTop: 10 },
-    sectionTitle: { fontSize: 20, fontWeight: "800", color: "#1A202C", marginBottom: 15 },
-    notificationFeed: {
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        borderRadius: 16,
-        padding: 10,
-    },
-    notifHeaderRow: {flexDirection: 'row', alignItems: 'center',},
-    notifLine: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', alignItems: 'center' },
-    roleIndicator: { width: 4, height: 40, borderRadius: 2, marginRight: 12 },
-    notifMainContent: { flex: 1 },
-    senderName: { fontSize: 15, fontWeight: 'bold', color: '#2D3748' },
-    tagContainer: { backgroundColor: '#EDF2F7', paddingHorizontal: 6, borderRadius: 4, marginLeft: 8 },
-    roleTagText: { fontSize: 10, fontWeight: 'bold', color: '#4A5568' },
-    assetContext: { fontSize: 12, color: '#718096', marginTop: 2 },
-    notifMessage: { fontSize: 13, color: '#4A5568', marginTop: 2, fontStyle: 'italic' },
-    notifTime: { fontSize: 10, color: '#CBD5E0', marginLeft: 10 },
-    quickActionsSection: { marginTop: 20 },
-    addUserButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 20 },
-    addUserButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold", marginLeft: 8 },
+  backgroundImage: {
+   flex: 1,
+    width: "100%",
+    height: "100%",
+  },
+  safeArea: { flex: 1 ,backgroundColor:"rgba(61, 138, 233, 0.52)",},
+  container: { flex: 1 ,padding: 20,
+    gap: 20,},
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100, // Important to allow scrolling above the fixed bottom nav
+  },
+  
+  header: {
+    flexDirection: 'row',
+    marginTop :30,
+    justifyContent: 'space-between',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20,
+  },
+  userText: { marginLeft: 8, marginRight: 8, fontSize: 14, fontWeight: '500', color: '#333' },
+  metricsGrid: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  metricBox: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: 15,
+    padding: 15,
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  metricTitle: { fontSize: 14, color: '#1A202C', fontWeight: '500', marginTop: 8 },
+  metricValue: { fontSize: 32, fontWeight: 'bold', color: '#1A202C', marginTop: 4 },
+
+  mainContent: {
+   flex: 1, // Crucial: This pushes the activity section to fill the bottom
+    flexDirection: isMobileDevice ? 'column' : 'row',
+    gap: 5,
+  },
+  activitySection: {
+    flex: isMobileDevice ? 1 : 2.5, // Takes all remaining space on mobile
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: 15,
+    padding: 15,
+    // Provide a bottom margin so the last item isn't covered by bottom nav
+    marginBottom: isMobileDevice ? 80 : 0,
+  },
+  actionsSection: {
+  flex: isMobileDevice ? 0 : 1,
+  backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  borderRadius: 15,
+  padding: 15,
+  marginBottom: 10, // CHANGE THIS from 80 to 0
+  },
+  sectionTitle: {fontSize: 18, 
+  fontWeight: 'bold', 
+  marginBottom: 10, // Reduced from 15
+  marginTop: 0, // Explicitly set to 0
+  color: '#000000ff'
+ },
+  noItemsText: { color: 'rgba(0, 0, 0, 0.8)', fontStyle: 'italic' },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    backgroundColor: 'rgba(230, 235, 255, 0.8)',
+    padding: 12,
+    borderRadius: 10,
+  },
+  activityTextContainer: { flex: 1, marginLeft: 15 },
+  activityText: { fontSize: 14, fontWeight: '500', color: '#2D3748' },
+  activitySubtext: { fontSize: 15, color: '#1A202C', fontWeight: '600', fontStyle: 'italic', marginTop: 3 },
+  extendButton: { backgroundColor: '#4A90E2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  extendButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+   blueButton: { backgroundColor: '#4A90E2' },
+  whiteButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd' },
+  whiteButtonText: { color: '#4A90E2' },
+
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    marginHorizontal: 20,
+    marginBottom: 10, // Added margin at the bottom
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.7)',
+  },
+   headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#000000ff' },
+  bottomNavLeft: { flexDirection: 'row', alignItems: 'center' },
+  bottomNavRight: { flexDirection: 'row', alignItems: 'center' },
+  navItem: { flexDirection: 'row', alignItems: 'center', padding: 10 },
+  navText: { marginLeft: 8, fontSize: 14, fontWeight: '500', color: '#1A202C' },
+
+  centeredView: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
+  modalBox: { width: '90%', maxWidth: 400, backgroundColor: '#fff', borderRadius: 15, padding: 25, alignItems: 'center' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'center' },
+  modalSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginTop: 10, marginBottom: 20 },
+  modalButton: { width: '100%', backgroundColor: '#4A90E2', padding: 15, borderRadius: 10, alignItems: 'center' },
+  modalButtonText: { color: '#000000ff', fontSize: 16, fontWeight: 'bold' },
+  modalCancel: { marginTop: 15, padding: 10 },
+
+  actionButton: { 
+    flexDirection: 'row',
+  padding: 12, // Reduced from 15
+  borderRadius: 12, 
+  marginBottom: 8, // Reduced from 12 to 8
+  alignItems: 'center',
+  justifyContent: 'center',
+  },
+headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  logoBg: { backgroundColor: 'rgba(0, 0, 0, 0.3)', padding: 8, borderRadius: 10, marginRight: 15 },
+  actionIcon: {
+    marginRight: 10,
+  },
+
+  actionButtonText: { 
+    color: '#fff', 
+    fontSize: 15, 
+    fontWeight: '700',
+  },
 });
 
-export default CompanyDashboard;
+export default SupervisorDashboard;
