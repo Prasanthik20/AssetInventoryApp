@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState,useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
 import { Asset,baseURL, RootStackParamList } from '../../navigation/types';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type FieldAssetsNavProp = StackNavigationProp<RootStackParamList, 'FieldAssets'>;
 
@@ -26,8 +27,9 @@ const FieldAssets: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [filteredAssets, setFilteredAssets] = useState<Asset[]>([]); // 🔥 For search filtering
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [adminId, setAdminId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [isModalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // 1. 🔥 Corrected Overdue Logic (Moved outside or kept once)
@@ -48,7 +50,17 @@ const FieldAssets: React.FC = () => {
   // If the return date is strictly before today's date in IST, it is overdue
   return istReturnDate < istToday;
 };
-
+ /* 🔹 Load logged-in supervisor */
+    useEffect(() => {
+        const loadUser = async () => {
+            const user = await AsyncStorage.getItem("user");
+            if (user) {
+                const parsed = JSON.parse(user);
+                setAdminId(Number(parsed.employeeId));
+            }
+        };
+        loadUser();
+    }, []);
   // 2. 🔥 Fetch assets
   const fetchAssets = async () => {
     try {
@@ -101,29 +113,48 @@ const FieldAssets: React.FC = () => {
     setFilteredAssets(filtered);
   };
 
-  const openOverdueModal = (asset: Asset) => {
-    setSelectedAsset(asset);
-    setModalVisible(true);
-  };
+  const handleOpenModal = (asset: Asset) => {
+          setSelectedAsset(asset);
+          setModalVisible(true);
+      };
+      const handleCloseModal = () => {
+        setModalVisible(false);
+        setSelectedAsset(null);
+    };
+ /* 🔹 Send notification */
+    const handleSubmitNotification = async (reason: string) => {
+        if (!selectedAsset) return;
 
-  const sendNotification = async (assetId: string, reason: string) => {
-    try {
-      await axios.post(`${baseURL}/api/notifications/overdue-assets`, {
-        assetId: assetId,
-        assignmentId: selectedAsset?.assignmentId ?? null,
-        senderId: selectedAsset?.senderId ?? null,
-        receiverId: selectedAsset?.operatorId ?? null,
-        reason,
-      });
-      Alert.alert("Success", "Operator notified successfully!");
-    } catch (err) {
-      console.error(err);
-      Alert.alert("Error", "Could not send notification");
-    }
-  };
+        try {
+            const payload = {
+                // ✅ MATCHING YOUR BACKEND supervisor.ts NAMES:
+                assetId: Number(selectedAsset.id),
+                assignmentId: selectedAsset.assignmentId ? Number(selectedAsset.assignmentId) : null,
+                operatorId: Number(selectedAsset.senderId || adminId), // The Supervisor sending it
+                receiverId: Number(selectedAsset.receiverId || selectedAsset.operatorId), // The Operator receiving it
+                reason: reason,
+            };
 
+            console.log("SENDING CORRECTED PAYLOAD:", payload);
+
+            const response = await axios.post(
+                `${baseURL}/api/notifications/supervisor`,
+                payload
+            );
+
+            if (response.status === 200 || response.status === 201) {
+                Alert.alert("Success", "Notification sent successfully!");
+                handleCloseModal();
+                fetchAssets();
+            }
+        } catch (error: any) {
+            console.error("API Error:", error.response?.data || error.message);
+            Alert.alert("Error", error.response?.data?.message || "Failed to send notification");
+        }
+    };
+  
   const renderAsset = ({ item }: { item: Asset }) => {
-    const showOverdueUI = item.status === "Overdue";
+    const isOverdue = item.status?.toLowerCase() === 'overdue';
 
     return (
       <View style={styles.assetRow}>
@@ -141,17 +172,21 @@ const FieldAssets: React.FC = () => {
               })}
             </Text>
           )}
-          {showOverdueUI && (
+          {isOverdue && (
             <View style={styles.overdueBadge}>
               <Text style={styles.overdueText}>OVERDUE</Text>
             </View>
           )}
         </View>
 
-        {showOverdueUI && (
-          <TouchableOpacity onPress={() => openOverdueModal(item)} style={styles.notifyBtn}>
-            <Text style={styles.notifyText}>Notify</Text>
-          </TouchableOpacity>
+        {isOverdue && (
+            <TouchableOpacity
+                                                          style={[styles.actionButton, styles.notifyButton]}
+                                                          onPress={() => handleOpenModal(item)}
+                                                      >
+                                                          <Ionicons name="notifications" size={16} color="#fff" />
+                                                          <Text style={styles.actionButtonText}>Notify</Text>
+                                                      </TouchableOpacity>
         )}
       </View>
     );
@@ -196,21 +231,15 @@ const FieldAssets: React.FC = () => {
           />
         
 
-        <OverdueNotificationModal
-          visible={modalVisible}
-          onClose={() => {
-            setModalVisible(false);
-            setSelectedAsset(null);
-          }}
-          onSubmit={(reason) => {
-            if (selectedAsset) sendNotification(selectedAsset.id.toString(), reason);
-            setModalVisible(false);
-            setSelectedAsset(null);
-          }}
-          assetName={selectedAsset?.assetName ?? ''}
-          title="Notify Operator" // Changed title to reflect Supervisor -> Operator flow
-        />
-        </View>
+         {selectedAsset && (
+                    <OverdueNotificationModal
+                        visible={isModalVisible}
+                        onClose={handleCloseModal}
+                        onSubmit={handleSubmitNotification}
+                        assetName={selectedAsset.assetName}
+                    />
+                )}
+                 </View> 
       </SafeAreaView>
     </ImageBackground>
   );
@@ -292,6 +321,31 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 2,
+    },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 8,
+        paddingVertical: 6, // Smaller padding
+        paddingHorizontal: 10, // Smaller padding
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    notifyButton: {
+        backgroundColor: '#FF4D4D',
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+    },
+    actionButtonText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: 'bold',
+        marginLeft: 5,
     },
     assetIcon: {
         marginRight: 15,

@@ -7,9 +7,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
            SELECT
     COUNT(a.id) AS "totalAssets",
 
-    COUNT(a.id) FILTER (WHERE s.status = 'Unassigned') AS "assetsInOffice",
+    COUNT(a.id) FILTER (WHERE s.status = 'Unassigned') AS "officeAssets",
 
-    COUNT(a.id) FILTER (WHERE s.status IN ('Assigned', 'Overdue')) AS "assetsInField",
+    COUNT(a.id) FILTER (WHERE s.status IN ('Assigned', 'Overdue')) AS "fieldAssets",
 
     COUNT(a.id) FILTER (WHERE s.status = 'Assigned') AS "assignedToOperators",
 

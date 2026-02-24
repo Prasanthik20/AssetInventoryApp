@@ -53,6 +53,7 @@ export default function CompanyLoginScreen() {
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -171,7 +172,7 @@ export default function CompanyLoginScreen() {
                                 />
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, { color: "#000" }]}
                                     placeholder="Password"
                                     placeholderTextColor="#888"
                                     secureTextEntry
@@ -179,10 +180,12 @@ export default function CompanyLoginScreen() {
                                     onChangeText={setPassword}
                                 />
 
-                                {/* <View style={styles.rememberRow}>
-                    <Checkbox value={remember} onValueChange={setRemember} color="#0072ff" />
-                    <Text style={styles.rememberText}>Remember me</Text>
-                </View> */}
+                                <TouchableOpacity
+                                    style={{ position: "absolute", right: 15, top: 18 }}
+                                    onPress={() => setShowPassword(!showPassword)}
+                                >
+                                    <Text>{showPassword ? "Hide" : "Show"}</Text>
+                                </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
                                     <LinearGradient
