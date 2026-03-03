@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%'
   },
-  container: { flex: 1 },
+  container: { flex: 1,backgroundColor: "rgba(61, 138, 233, 0.4)" },
   scrollContainer: { padding: 20, alignItems: "center" },
   formCard: {
     width: "95%",

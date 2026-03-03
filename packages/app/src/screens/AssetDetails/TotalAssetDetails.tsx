@@ -14,10 +14,12 @@ import {
 } from "react-native";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { Picker } from "@react-native-picker/picker";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
 import axios from "axios";
+import { useAssetFilter } from "src/hooks/useAssetFilter";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const isMobileDevice = Platform.OS !== 'web';
@@ -95,6 +97,23 @@ const TotalAssetsDetails: React.FC = () => {
     const [supervisorId, setSupervisorId] = useState<number | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [isModalVisible, setModalVisible] = useState(false);
+    const assetCategories = ["Battery", "Antenna", "Rover", "Controller"];
+
+    const {
+    searchText,
+    setSearchText,
+    selectedName,
+    setSelectedName,
+    selectedSerial,
+    setSelectedSerial,
+    selectedStatus,
+    setSelectedStatus,
+    filteredAssets,
+    uniqueNames,
+    uniqueSerialNumbers,
+    uniqueStatuses,
+    clearFilters,
+} = useAssetFilter(assets);
 
     /* 🔹 Load logged-in supervisor */
     useEffect(() => {
@@ -178,161 +197,106 @@ const TotalAssetsDetails: React.FC = () => {
             Alert.alert("Error", error.response?.data?.message || "Failed to send notification");
         }
     };
+
+    // Replace filteredAssets in your FlatList with this:
+    const finalDisplayAssets = filteredAssets.filter((asset) => {
+        if (!selectedName) return true;
+        // This ensures "Antenna" matches "Antenna 01", "Antenna 02", etc.
+        return asset.assetName?.toLowerCase().includes(selectedName.toLowerCase());
+    });
     // --- RENDER FUNCTION IS NOW SEPARATE AND CLEAN ---
     const renderAsset = ({ item, index }: { item: Asset, index: number }) => {
 
         const isOverdue = item.status?.toLowerCase() === 'overdue';
-        return (
-            <View style={isMobileDevice ? styles.mobileCard : styles.assetRow}>
-                {/* SERIAL NUMBER & ASSET INFO */}
-                {/* <View style={[
-                  styles.cardHeader,
-                  !isMobileDevice && { borderBottomWidth: 0, marginBottom: 0, flex: 2.5, paddingLeft: 0 }
-              ]}> */}
-                {/* Wrap S.No in a fixed-width container for Web */}
-                {isMobileDevice ?
-                    <View style={{display: 'flex', flexDirection: 'column', justifyContent: "flex-start", gap: 10 }}>
-                        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center',justifyContent: 'space-between', gap: 10,  }}>
-                            <View style={!isMobileDevice ? { alignItems: 'center' } : {flexDirection: 'row', alignItems: 'center', gap: 10}}>
-                                <View style={styles.indexBadge}>
-                                    <Text style={styles.indexText}>{index + 1}</Text>
-                                </View>
-                            {/* </View>
-                            <View style={styles.cellAssetName}> */}
-                                <Text style={styles.assetName}>{item.assetName}</Text>
+        if (isMobileDevice) {
+            return (
+                <View style={styles.mobileCard}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={styles.indexBadge}>
+                                <Text style={styles.indexText}>{index + 1}</Text>
                             </View>
-                            <View style={styles.mobileBarcodeContainer}>
-                                <MaterialCommunityIcons name="barcode" size={32} color="#666" />
-                                <Text style={styles.mobileBarcodeText}> S/N: {item.serialNumber}</Text>
-                            </View>
+                            <Text style={styles.assetName}>{item.assetName}</Text>
                         </View>
-                        <View style={{ display: 'flex',flexDirection:"row", alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                            <View style={styles.cellStatus}>
-                                <StatusBadge
-                                    status={item.status ? item.status : null}
-                                    assignedTo={item.assignedTo}
-                                    location={item.location} />
-                            </View>
+                        <View style={styles.mobileBarcodeContainer}>
+                            <MaterialCommunityIcons name="barcode" size={32} color="#666" />
+                            <Text style={styles.mobileBarcodeText}> S/N: {item.serialNumber}</Text>
+                        </View>
+                    </View>
+                    
+                    <View style={{ flexDirection: "row", alignItems: 'center', justifyContent: 'space-between', marginTop: 15 }}>
+                        <StatusBadge
+                            status={item.status || null}
+                            assignedTo={item.assignedTo}
+                            location={item.location} 
+                        />
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
                             {isOverdue && (
-                                <TouchableOpacity
-                                    style={[styles.actionButton, styles.notifyButton]}
-                                    onPress={() => handleOpenModal(item)}
-                                >
+                                <TouchableOpacity style={styles.notifyButton} onPress={() => handleOpenModal(item)}>
                                     <Ionicons name="notifications" size={16} color="#fff" />
                                     <Text style={styles.actionButtonText}>Notify</Text>
                                 </TouchableOpacity>
                             )}
-
-                            <TouchableOpacity
-                                style={[styles.actionButton, styles.knowMoreButton]}
+                            <TouchableOpacity 
+                                style={styles.knowMoreButton} 
                                 onPress={() => navigation.navigate('AssetFullDetails', { asset: item })}
                             >
                                 <Ionicons name="information-circle-outline" size={18} color="#fff" />
                                 <Text style={styles.actionButtonText}>Know More</Text>
                             </TouchableOpacity>
                         </View>
-                    </View> :
-                // WEB LAYOUT (ORIGINAL) 
-                            <View>
-                           
-                        
-                                <View style={{ display: 'flex', flexDirection: 'row', justifyContent:"space-between", alignItems: 'center', gap: 10 }}>
-                                    <View style={!isMobileDevice ? { alignItems: 'center' } : null}>
-                                        <View style={styles.indexBadge}>
-                                            <Text style={styles.indexText}>{index + 1}</Text>
-                                        </View>
-                                    </View>
-                                    <View style={[ !isMobileDevice ? { alignItems: 'center' } : null]}>
-                                        <Text style={styles.assetName}>{item.assetName}</Text>
+                    </View>
+                </View>
+            );
+        }
 
-                                    </View>
-                                    <View style={[styles.mobileBarcodeContainer, !isMobileDevice ? { alignItems: 'center' } : null]}>
-                                        <MaterialCommunityIcons name="barcode" size={80} color="#666" />
-                                        <Text style={styles.mobileBarcodeText}> S/N: {item.serialNumber}</Text>
-                                    </View>
+        // WEB LAYOUT - Columns now align with Header Cells
+        return (
+            <View style={styles.assetRow}>
+                <View style={[styles.cellSNo, { width: 50, alignItems: 'center' }]}>
+                    <View style={styles.indexBadge}>
+                        <Text style={styles.indexText}>{index + 1}</Text>
+                    </View>
+                </View>
 
-                                    <View style={{ display:"flex", flexDirection: "row", alignItems: 'center', gap: 10 }}>
-                                        <View style={styles.cellStatus}>
-                                            <StatusBadge
-                                                status={item.status ? item.status : null}
-                                                assignedTo={item.assignedTo}
-                                                location={item.location} />
-                                        </View>
-                                        {isOverdue && (
-                                            <TouchableOpacity
-                                                style={[styles.actionButton, styles.notifyButton]}
-                                                onPress={() => handleOpenModal(item)}
-                                            >
-                                                <Ionicons name="notifications" size={16} color="#fff" />
-                                                <Text style={styles.actionButtonText}>Notify</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
+                <View style={[styles.cellAssetName, { flex: 2 }]}>
+                    <Text style={styles.assetName}>{item.assetName}</Text>
+                </View>
 
-                                    <TouchableOpacity
-                                        style={[styles.actionButton, styles.knowMoreButton]}
-                                        onPress={() => navigation.navigate('AssetFullDetails', { asset: item })}
-                                    >
-                                        <Ionicons name="information-circle-outline" size={18} color="#fff" />
-                                        <Text style={styles.actionButtonText}>Know More</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                }
+                <View style={[styles.cellBarcode, { flex: 2, alignItems: 'center' }]}>
+                    <MaterialCommunityIcons name="barcode" size={40} color="#666" />
+                    <Text style={styles.mobileBarcodeText}>S/N: {item.serialNumber}</Text>
+                </View>
 
-
-                {/* BARCODE (Moved to top right on mobile) */}
-                {/* {isMobileDevice && ( */}
-
-                {/* )} */}
-                {/* </View> */}
-
-                {/* <View style={isMobileDevice ? styles.mobileCardBody : {display: 'flex', flexDirection: 'row', alignItems: 'center', flex: 1}}> */}
-                {/* STATUS BADGE */}
-                {/* {!isMobileDevice && <Text style={styles.cellBarcode}>{item.barcode}</Text>} */}
-
-                {/* <View style={isMobileDevice ? {display:"flex", flexDirection: "row", alignItems: "center"} : {display: 'flex', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', flex: 1}}> */}
-
-                {/* <View style={styles.cellStatus}>
+                <View style={[styles.cellStatus, { flex: 2, alignItems: 'center' }]}>
                     <StatusBadge
-                        status={item.status ? item.status : null}
+                        status={item.status || null}
                         assignedTo={item.assignedTo}
-                        location={item.location}
+                        location={item.location} 
                     />
-                </View> */}
+                </View>
 
-                {/* ACTIONS */}
-                {/* <View style={isMobileDevice ? styles.mobileActionRow : styles.cellAction}> */}
-
-
-                {/* </View> */}
-                {/* </View> */}
-                {/* </View> */}
+                <View style={[styles.cellAction, { flex: 1.5, flexDirection: 'row', gap: 10, justifyContent: 'center' }]}>
+                    {isOverdue && (
+                        <TouchableOpacity style={styles.notifyButton} onPress={() => handleOpenModal(item)}>
+                            <Ionicons name="notifications" size={16} color="#fff" />
+                            <Text style={styles.actionButtonText}>Notify</Text>
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity 
+                        style={styles.knowMoreButton} 
+                        onPress={() => navigation.navigate('AssetFullDetails', { asset: item })}
+                    >
+                        <Ionicons name="information-circle-outline" size={18} color="#fff" />
+                        <Text style={styles.actionButtonText}>Know More</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         );
     };
 
-    // --- LOADING AND ERROR CHECKS MOVED HERE (THE CORRECT LOCATION) ---
-    if (loading) {
-        return (
-            <View style={styles.centeredView}>
-                <ActivityIndicator size="large" color="#FFFFFF" />
-                <Text style={styles.loadingText}>Loading Assets...</Text>
-            </View>
-        );
-    }
-
-    if (error) {
-        return (
-            <View style={styles.centeredView}>
-                <Text style={styles.errorText}>{error}</Text>
-            </View>
-        );
-    }
-
-    // --- MAIN RETURN STATEMENT FOR THE COMPONENT ---
     return (
-        <ImageBackground source={require("../../assets/Company-bg.webp")} style={styles.backgroundImage} resizeMode="cover" blurRadius={5}>
+        <ImageBackground source={require("../../assets/Company-bg.webp")} style={styles.backgroundImage}>
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.container}>
                     <View style={styles.header}>
@@ -341,30 +305,68 @@ const TotalAssetsDetails: React.FC = () => {
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>All Company Assets</Text>
                     </View>
+                    
+                    {/* BODY MUST BE flex: 1 */}
                     <View style={styles.body}>
-                        <View style={styles.searchContainer}>
-                            <Feather name="search" size={20} color="#999" style={styles.searchIcon} />
-                            <TextInput placeholder="Search by name, barcode, or serial number..." placeholderTextColor="#999" style={styles.searchInput} />
-                        </View>
-
-                        { !isMobileDevice && (
-                            <View style={{ display: 'flex', flexDirection: 'row', justifyContent:"space-between", alignItems: 'center',
-                                
-        paddingBottom: 10,
-        borderBottomWidth: 2,
-        borderBottomColor: 'rgba(0, 0, 0, 0.1)', }}>
-                                <Text style={[styles.headerCell, styles.cellSNo]}>S.No</Text>
-                                <Text style={[styles.headerCell, styles.cellAssetName]}>Asset Name</Text>
-                                <Text style={[styles.headerCell, styles.cellBarcode]}>Barcode</Text>
-                                <Text style={[styles.headerCell, styles.cellStatus]}>Status</Text>
-                                <Text style={[styles.headerCell, styles.cellAction, { textAlign: 'center' }]}>Action</Text>
+                        <View style={styles.topActionRow}>
+                            <View style={styles.searchContainer}>
+                                <Feather name="search" size={18} color="#666" style={styles.searchIcon} />
+                                <TextInput 
+                                    placeholder="Search by name, barcode..." 
+                                    placeholderTextColor="#888" 
+                                    style={styles.searchInput}
+                                    value={searchText}
+                                    onChangeText={setSearchText}
+                                />  
                             </View>
-                        )} 
-                        {/* --- DATA SOURCE CORRECTED --- */}
+
+                           <View style={isMobileDevice ? styles.mobileFilterContainer : styles.filterGroup}>
+                               <View style={styles.pickerWrapper}>
+                                    <Picker
+                                        selectedValue={selectedName}
+                                        onValueChange={setSelectedName}
+                                        style={styles.pickerInternal}
+                                    >
+                                        <Picker.Item label="All Categories" value="" />
+                                        {assetCategories.map((cat) => (
+                                            <Picker.Item key={cat} label={cat} value={cat} />
+                                        ))}
+                                    </Picker>
+                                </View>
+                                <View style={isMobileDevice ? styles.mobileFilterSubRow : styles.desktopFilterSubRow}>
+                                <View style={styles.pickerWrapper}>
+                                    <Picker selectedValue={selectedSerial} onValueChange={setSelectedSerial} style={styles.pickerInternal}>
+                                        <Picker.Item label="All Serials" value="" />
+                                        {uniqueSerialNumbers.map((s) => <Picker.Item key={s} label={s!} value={s!} />)}
+                                    </Picker>
+                                </View>
+                                <View style={styles.pickerWrapper}>
+                                    <Picker selectedValue={selectedStatus} onValueChange={setSelectedStatus} style={styles.pickerInternal}>
+                                        <Picker.Item label="All Status" value="" />
+                                        {uniqueStatuses.map((st) => <Picker.Item key={st} label={st!} value={st!} />)}
+                                    </Picker>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+
+                        {!isMobileDevice && (
+                            <View style={styles.tableHeader}>
+                                <Text style={[styles.headerCell, { width: 50, textAlign: 'center' }]}>S.No</Text>
+                                <Text style={[styles.headerCell, { flex: 2 }]}>Asset Name</Text>
+                                <Text style={[styles.headerCell, { flex: 2, textAlign: 'center' }]}>Barcode</Text>
+                                <Text style={[styles.headerCell, { flex: 2, textAlign: 'center' }]}>Status</Text>
+                                <Text style={[styles.headerCell, { flex: 1.5, textAlign: 'center' }]}>Action</Text>
+                            </View>
+                        )}
+
                         <FlatList
-                            data={assets}
-                            keyExtractor={(item) => (item.id || item.assetId || Math.random()).toString()}
+                            data={finalDisplayAssets}
+                            keyExtractor={(item) => (item.id || item.assetId).toString()}
                             renderItem={renderAsset}
+                            contentContainerStyle={{ paddingBottom: 20 }}
+                            // This ensures the FlatList fills the remaining body space
+                            style={{ flex: 1 }}
                         />
                     </View>
                 </View>
@@ -389,7 +391,7 @@ const styles = StyleSheet.create({
         width: "100%",
         height: "100%",
     },
-    safeArea: { flex: 1 },
+    safeArea: { flex: 1, backgroundColor: "rgba(61, 138, 233, 0.4)" },
     // Container is now the full screen
     container: {
         flex: 1,
@@ -405,22 +407,21 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         // No border radius needed for a full-width header
     },
+    searchInput: {
+        flex: 1,
+        fontSize: 14,
+        color: '#333',
+        ...Platform.select({
+        web: {
+            outlineStyle: 'none',
+            cursor: 'pointer',
+        } as any,
+    }),
+    },
     backButton: { marginRight: 20, marginTop: 25 },
     headerTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: 'bold', marginTop: 25 },
-    body: { padding: 20 },
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        // Semi-transparent background for the search bar
-        backgroundColor: 'rgba(255, 255, 255, 0.7)',
-        borderRadius: 12,
-        paddingHorizontal: 15,
-        marginBottom: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.8)',
-    },
+    body: { flex :1 ,paddingHorizontal: 15, padding: 20 },
     searchIcon: { marginRight: 10 },
-    searchInput: { flex: 1, height: 48, fontSize: 15, color: '#1A202C', fontWeight: '500' },
     tableHeader: {
         display: 'flex',
         justifyContent: 'space-between',
@@ -430,29 +431,99 @@ const styles = StyleSheet.create({
         borderBottomWidth: 2,
         borderBottomColor: 'rgba(0, 0, 0, 0.1)',
     },
+    
+    filterRow: {
+  flexDirection: isMobileDevice ? "column" : "row",
+  gap: 10,
+  marginBottom: 15,
+},
+
+topActionRow: {
+        flexDirection : isMobileDevice ? "column" : "row",
+        gap: 12,
+        marginBottom: 20,
+        width: '100%',
+    },
+    searchContainer: {
+        flex: 1.5,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        height: 48, // Fixed height for all top elements
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.1)',
+    },
+    mobileFilterContainer: {
+      flexDirection: 'column',
+        gap: 8,
+    },
+    mobileFilterSubRow: {
+       flexDirection: 'row',
+        gap: 8,
+    },
+    desktopFilterSubRow: {
+        flexDirection: 'row',
+        flex: 2,
+        gap: 10,
+    },
+    filterGroup: {
+        flex: 3,
+        flexDirection: 'row',
+        gap: 10,
+    },
+    pickerWrapper: {
+        flex: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.1)',
+        height: 42,
+        justifyContent: 'center',
+        overflow: 'hidden', // Clips the default picker border
+    },
+    pickerInternal: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        fontSize: 13,
+        color: '#444',
+        paddingHorizontal: 8,
+        cursor: 'pointer',
+        ...Platform.select({
+        web: {
+            outlineStyle: 'none',
+            cursor: 'pointer',
+        } as any,
+    }),
+    },
     headerCell: {
         fontSize: 14,
         fontWeight: 'bold',
         color: '#1A202C', // Darker text for better contrast
     },
     assetRow: {
-        // display: 'flex',
-        // flexDirection: 'row',
-        // alignItems: 'center',
-        // Semi-transparent background for each row
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.85)',
         borderRadius: 10,
-        paddingHorizontal: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 15,
         marginBottom: 10,
-        minHeight: 70,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.9)',
     },
-    cellSNo: { fontSize: 14, color: '#2D3748', fontWeight: '600' },
+    cellSNo: { width: 50, 
+    alignItems: 'center', 
+    justifyContent: 'center' },
     cellAssetName: {  marginRight: 10 },
     assetName: { fontSize: 15, fontWeight: 'bold', color: '#1A202C' },
     assetSubtext: { fontSize: 12, color: '#4A5568', marginTop: 2 },
-    cellBarcode: {  fontSize: 14, color: '#2D3748', fontWeight: '500' },
+    cellBarcode: {  flex: 2, 
+        alignItems: 'center',
+        justifyContent: 'center', },
     cellStatus: {  },
     statusContainer: {
         borderRadius: 8,
@@ -502,11 +573,15 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     mobileCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderRadius: 15,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
         padding: 15,
         marginBottom: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+        // Shadow for Android
         elevation: 3,
+        // Shadow for iOS
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,

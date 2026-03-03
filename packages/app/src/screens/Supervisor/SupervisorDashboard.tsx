@@ -1,22 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView,FlatList, TouchableOpacity,Platform, Switch, ImageBackground, Modal, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation,Route, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import axios from 'axios';
 import { Picker } from '@react-native-picker/picker';
 import { baseURL, RootStackParamList } from '../../navigation/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const isMobileDevice = Platform.OS !== 'web';
+type SupervisorDashboardNavigationProp = StackNavigationProp<RootStackParamList, 'SupervisorDashboard'>;
 
 type DashboardNavigationProp = StackNavigationProp<
   RootStackParamList,
   'SupervisorDashboard'
 >;
-type DashboardRouteProp = RouteProp<
-  RootStackParamList,
-  'SupervisorDashboard'
->;
+type Props = {
+  user: any;
+  setUser: React.Dispatch<React.SetStateAction<any>>;
+  navigation: SupervisorDashboardNavigationProp;
+};
+type MetricScreens = "TotalAssetDetails" | "OfficeAssets" | "FieldAssets" | "AddEditAsset";
+
 export type SupervisorStackParamList = {
   SupervisorDashboard: {
     supervisorName: string;
@@ -33,6 +38,13 @@ export type SupervisorStackParamList = {
   FieldAssets: undefined;
 };
 
+interface Metric {
+  title: string;
+  icon: string;
+  value: number;
+  navigateTo?: MetricScreens;
+}
+
 interface OperatorReply {
   notificationId: number;
   operatorName: string;
@@ -41,12 +53,10 @@ interface OperatorReply {
   reply: string;
 }
 
-const SupervisorDashboard: React.FC = () => {
+const SupervisorDashboard: React.FC<Props> = ({
+  user, setUser, navigation
+}) => {
 
-  const navigation = useNavigation<DashboardNavigationProp>();
-  const route = useRoute<DashboardRouteProp>();
-
-  const { supervisorName, roleName, employeeId } = route.params;
    const [metricsData, setMetricsData] = useState({ totalAssets: 0, officeAssets: 0, fieldAssets: 0 });
   const [operatorReplies, setOperatorReplies] = useState<OperatorReply[]>([]);
   const [loading, setLoading] = useState(true); // Added loading state
@@ -62,13 +72,13 @@ const SupervisorDashboard: React.FC = () => {
   ];
 
 const fetchDashboardData = async () => {
-  if (!employeeId) return;
+  if (!user?.employeeId) return;
   try {
     setLoading(true);
 
     const [metricsRes, repliesRes] = await Promise.all([
       axios.get(`${baseURL}/api/dashboard/metrics`),
-      axios.get(`${baseURL}/api/notifications/supervisor?id=${employeeId}`)
+      axios.get(`${baseURL}/api/notifications/supervisor?id=${user?.employeeId}`)
     ]);
      const rawData = Array.isArray(repliesRes.data) 
       ? repliesRes.data 
@@ -94,8 +104,13 @@ const fetchDashboardData = async () => {
 };
  useEffect(() => {
     fetchDashboardData();
-  }, [employeeId]);
+  }, [user?.employeeId]);
 
+
+   const handleLogout = async () => {
+    await AsyncStorage.removeItem('user');
+    setUser(null); // parent will show AuthStack or login screen
+  };
 
   const openExtendModal = (item: OperatorReply) => {
     setSelectedItem(item);
@@ -135,11 +150,11 @@ const fetchDashboardData = async () => {
               <View style={styles.logoBg}>
                 <Feather name="box" size={24} color="#fff" />
               </View>
-              <Text style={styles.headerTitle}>{supervisorName}</Text>
+              <Text style={styles.headerTitle}>{user?.supervisorName}</Text>
             </View>
             <View style={styles.headerRight}>
             <Feather name="user" size={16} color="#333" />
-            <Text style={styles.userText}>{roleName}</Text>
+            <Text style={styles.userText}>{user?.roleName}</Text>
             {/* <Switch
               trackColor={{ false: '#E9E9EA', true: '#34C759' }}
               thumbColor="#f4f3f4"
@@ -150,13 +165,7 @@ const fetchDashboardData = async () => {
             <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
 
             {/* 🔴 ADD LOGOUT BUTTON HERE */}
-            <TouchableOpacity onPress={() =>
-              navigation.reset({
-                index: 0,
-                routes: [{ name: "CompanyLogin" }],
-              })
-            }
-            >
+            <TouchableOpacity onPress={handleLogout}>
               <Feather name="log-out" size={22} color="red" style={{ marginLeft: 10 }} />
             </TouchableOpacity>
           </View>
@@ -181,22 +190,47 @@ const fetchDashboardData = async () => {
                 ))}
             </View>
 
-            {/* --- Side-by-side content --- */}
+          {/* --- Side-by-side content --- */}
+          {/* Loading OR Content */}
+          {loading ? (
+            <ActivityIndicator
+              size="large"
+              color="#4A55A2"
+              style={{ marginTop: 20 }}
+            />
+          ) : (
             <View style={styles.mainContent}>
-            {isMobileDevice ? (
-              <>
-                {/* On Mobile: Quick Actions comes first */}
-                <QuickActionsSection styles={styles} navigation={navigation} employeeId={employeeId} supervisorName={supervisorName} />
-                <ActivitySection styles={styles} operatorReplies={operatorReplies} openExtendModal={openExtendModal} />
-              </>
-            ) : (
-              <>
-                {/* On Web: Activity comes first (side-by-side) */}
-                <ActivitySection styles={styles} operatorReplies={operatorReplies} openExtendModal={openExtendModal} />
-                <QuickActionsSection styles={styles} navigation={navigation} employeeId={employeeId} supervisorName={supervisorName} />
-              </>
-            )}
-          </View>
+              {isMobileDevice ? (
+                <>
+                  <QuickActionsSection
+                    styles={styles}
+                    navigation={navigation}
+                    employeeId={user?.employeeId}
+                    supervisorName={user?.supervisorName}
+                  />
+                  <ActivitySection
+                    styles={styles}
+                    operatorReplies={operatorReplies}
+                    openExtendModal={openExtendModal}
+                  />
+                </>
+              ) : (
+                <>
+                  <ActivitySection
+                    styles={styles}
+                    operatorReplies={operatorReplies}
+                    openExtendModal={openExtendModal}
+                  />
+                  <QuickActionsSection
+                    styles={styles}
+                    navigation={navigation}
+                    employeeId={user?.employeeId}
+                    supervisorName={user?.supervisorName}
+                  />
+                </>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Bottom Navigation */}
@@ -232,17 +266,17 @@ const fetchDashboardData = async () => {
         </View>
 
         <Modal
-              animationType="fade"
-              transparent={true}
-              visible={extendModalVisible}
-              onRequestClose={() => setExtendModalVisible(false)}>
+          animationType="fade"
+          transparent={true}
+          visible={extendModalVisible}
+          onRequestClose={() => setExtendModalVisible(false)}>
           <View style={styles.modalContainer}>
-          <View style={styles.modalBox}>
+            <View style={styles.modalBox}>
 
               <Text style={styles.modalTitle}>Extend Return Date</Text>
               <Text style={styles.modalSubtitle}>
-                  Asset: {selectedItem?.assetName}{"\n"}
-                  Reason: "{selectedItem?.reply ?? selectedItem?.reason}"
+                Asset: {selectedItem?.assetName}{"\n"}
+                Reason: "{selectedItem?.reply ?? selectedItem?.reason}"
               </Text>
 
       {/* Dropdown for selecting days (1-10) */}

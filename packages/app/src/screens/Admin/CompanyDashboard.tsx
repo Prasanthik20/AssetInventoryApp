@@ -2,25 +2,31 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ImageBackground, Platform, Dimensions, ScrollView } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 // --- For Type Safety with React Navigation ---
 import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { baseURL, RootStackParamList } from '../../navigation/types';
 import axios from 'axios';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // 2. Create a specific type for this screen's navigation prop
-type DashboardNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyDashboard'>;
-type DashboardRoute = RouteProp<RootStackParamList, "CompanyDashboard">;
+type Props = NativeStackScreenProps<
+  RootStackParamList,
+  "CompanyDashboard"
+> & {
+  setUser: React.Dispatch<React.SetStateAction<any>>;
+};
 const { width } = Dimensions.get('window');
 const isMobile = Platform.OS !== 'web';
 
-const CompanyDashboard: React.FC = () => {
+const CompanyDashboard: React.FC<Props> = ({
+  navigation,
+  route,
+  setUser : setAppUser,
+}) => {
 
     // 3. Use the strongly-typed navigation hook
-    const navigation = useNavigation<DashboardNavigationProp>();
-    const route = useRoute<DashboardRoute>();
-
-    const { adminName, adminImage, roleName, employeeId } = route.params;
     const [users, setUsers] = useState([]);
     const [totalAssets, setTotalAssets] = useState<number | null>(null);
     const [totalUsers, setTotalUsers] = useState<number | null>(null);
@@ -28,6 +34,7 @@ const CompanyDashboard: React.FC = () => {
     const [fieldAssets, setFieldAssets] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [notifications, setNotifications] = useState<any[]>([]);
+    const [user, setUser] = useState<any>(null);
 
 
     const fetchUsers = async () => {
@@ -47,6 +54,28 @@ const CompanyDashboard: React.FC = () => {
             setUsers([]);
         }
     };
+
+    useEffect(() => {
+    const loadUser = async () => {
+        const storedUser = await AsyncStorage.getItem("user");
+        if (storedUser) {
+            setUser(JSON.parse(storedUser));
+        }
+    };
+
+    loadUser();
+}, []);
+
+useEffect(() => {
+    if (!user?.employeeId) return;
+
+    const fetchData = async () => {
+        await fetchGlobalNotifications();
+    };
+
+    fetchData();
+}, [user?.employeeId]);
+
 
     // ------------------------------------
     // 📌 FETCH DASHBOARD METRICS FROM API
@@ -70,17 +99,36 @@ const CompanyDashboard: React.FC = () => {
         }
     };
 
+    const handleLogout = async () => {
+  await AsyncStorage.removeItem("user");
+  setAppUser(null);
+};
+
     const fetchGlobalNotifications = async () => {
+        if (!user?.employeeId) return;
         try {
             const response = await axios.get(
-                `${baseURL}/api/notifications/admin?id=${employeeId}`
-            );
+               `${baseURL}/api/notifications/admin`);
+            console.log("Employee ID:", user?.employeeId);
+            console.log("Fetching:", `${baseURL}/api/notifications/admin?id=${user?.employeeId}`);
 
             setNotifications(response.data.notifications || []);
         } catch (error) {
             console.error("Axios notification error:", error);
         }
     };
+
+    const hideNotification = async (id: number) => {
+  try {
+    await axios.put(`${baseURL}/api/notifications/hide`, { id });
+
+    setNotifications((prev) =>
+      prev.filter((item) => item.id !== id)
+    );
+  } catch (error) {
+    console.error(error);
+  }
+};
     // -------------------------
     // 📌 RUN ON PAGE OPEN
     // -------------------------
@@ -88,7 +136,6 @@ const CompanyDashboard: React.FC = () => {
   useCallback(() => {
     fetchUsers();
     fetchDashboardData();
-    fetchGlobalNotifications();
   }, [])
 );
 
@@ -105,12 +152,11 @@ const CompanyDashboard: React.FC = () => {
                     {Platform.OS === 'web' && (
                         <View style={styles.leftPanel}>
                             <Image
-                                source={{ uri: adminImage || "https://i.imgur.com/6VBx3io.png" }}
+                                source={{ uri: user?.photoURL || "https://i.imgur.com/6VBx3io.png" }}
                                 style={{ width: 120, height: 120, borderRadius: 40 }}
                             />
-                            <Text style={styles.leftPanelName}>{adminName}</Text>
-                            <Text style={styles.leftPanelRole}>{roleName}</Text>
-
+                            <Text style={styles.leftPanelName}>{user?.fullName }</Text>
+                            <Text style={styles.leftPanelRole}>{user?.roleName }</Text>
                         </View>
                     )}
 
@@ -126,12 +172,12 @@ const CompanyDashboard: React.FC = () => {
                             {isMobile && (
                                 <View style={styles.mobileHeaderCard}>
                                     <View style={styles.mobileUserRow}>
-                                        <Image source={{ uri: adminImage || "https://i.imgur.com/6VBx3io.png" }} style={styles.mobileAvatar} />
+                                        <Image source={{ uri: user?.photoURL || "https://i.imgur.com/6VBx3io.png" }} style={styles.mobileAvatar} />
                                         <View>
-                                            <Text style={styles.mobileAdminName}>{adminName}</Text>
+                                            <Text style={styles.mobileAdminName}>{user?.fullName}</Text>
                                         </View>
                                     </View>
-                                    <TouchableOpacity onPress={() => navigation.reset({ index: 0, routes: [{ name: "CompanyLogin" }] })}>
+                                    <TouchableOpacity onPress={handleLogout}>
                                         <Feather name="log-out" size={24} color="#FF4D4D" />
                                     </TouchableOpacity>
                                 </View>
@@ -143,8 +189,8 @@ const CompanyDashboard: React.FC = () => {
                                 {!isMobile && (
                                     <View style={styles.headerRight}>
                                         <Ionicons name="person-outline" size={16} color="#333" />
-                                        <Text style={styles.userText}>{roleName}</Text>
-                                        <TouchableOpacity onPress={() => navigation.reset({ index: 0, routes: [{ name: "CompanyLogin" }] })}>
+                                        <Text style={styles.userText}>{user?.roleName}</Text>
+                                        <TouchableOpacity onPress={handleLogout}>
                                             <Feather name="log-out" size={24} color="#FF4D4D" />
                                         </TouchableOpacity>
                                     </View>
@@ -185,8 +231,13 @@ const CompanyDashboard: React.FC = () => {
                                     <Text style={styles.sectionTitle}>Global Activity Feed</Text>
                                     <View style={styles.notificationFeed}>
                                         {notifications.length > 0 ? (
-                                            notifications.map((item, index) => (
-                                                <View key={item.id || index} style={styles.notifLine}>
+                                           notifications.map((item, index) => (
+                                               <TouchableOpacity
+                                                   key={item.id || index}
+                                                   style={styles.notifLine}
+                                                   onPress={() => hideNotification(item.id)}
+                                                   activeOpacity={0.7}
+                                               >
 
                                                     <View
                                                         style={[
@@ -201,6 +252,9 @@ const CompanyDashboard: React.FC = () => {
                                                     />
 
                                                     <View style={styles.notifMainContent}>
+                                                       <Text style={{ fontSize: 12, color: "gray" }}>
+                                                           Tap to mark as seen
+                                                       </Text>
                                                         <View style={styles.notifHeaderRow}>
                                                             <Text style={styles.senderName}>
                                                                 {item.sender?.name || "Unknown"}
@@ -230,7 +284,7 @@ const CompanyDashboard: React.FC = () => {
                                                             ? new Date(item.createdAt).toLocaleDateString("en-GB")
                                                             : ""}
                                                     </Text>
-                                                </View>
+                                                </TouchableOpacity>
                                             ))
                                         ) : (
                                             <View style={styles.emptyContainer}>

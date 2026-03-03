@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
+import bcrypt from "bcryptjs";
 
 export default async function loginCoreHandler(
   req: NextApiRequest,
@@ -58,7 +59,10 @@ export default async function loginCoreHandler(
 
     const user = result.rows[0];
 
-    if (password !== user.passwordHash) {
+     // 🔐 SECURE PASSWORD CHECK
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+
+    if (!isMatch) {
       res.status(401).json({ message: 'Invalid credentials.' });
       return;
     }

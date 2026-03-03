@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     },
-    safeArea: { flex: 1 },
+    safeArea: { flex: 1,backgroundColor: "rgba(61, 138, 233, 0.4)" },
     container: { // Renamed from 'modalCard'
         flex: 1,
         flexDirection: 'row',

@@ -10,7 +10,7 @@ import {
   TextInput,
   Alert
 } from 'react-native';
-
+import { Picker } from '@react-native-picker/picker';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import axios from 'axios';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -32,6 +32,10 @@ const FieldAssets: React.FC = () => {
   const [isModalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // 1. New state for Category Filter
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const assetCategories = ["Battery", "Antenna", "Rover", "Controller"];
+
   // 1. 🔥 Corrected Overdue Logic (Moved outside or kept once)
  const isAssetOverdue = (expectedReturnDate?: string | null) => {
   if (!expectedReturnDate) return false;
@@ -50,6 +54,26 @@ const FieldAssets: React.FC = () => {
   // If the return date is strictly before today's date in IST, it is overdue
   return istReturnDate < istToday;
 };
+
+// 2. Updated Filtering Logic
+  // This effect runs whenever assets, searchQuery, or selectedCategory changes
+  useEffect(() => {
+    const filtered = assets.filter((asset) => {
+      const categoryMatch = selectedCategory
+        ? asset.assetName?.toLowerCase().includes(selectedCategory.toLowerCase())
+        : true;
+
+      const searchMatch = searchQuery
+        ? asset.assetName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          asset.barcode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          asset.assignedTo?.toLowerCase().includes(searchQuery.toLowerCase())
+        : true;
+
+      return categoryMatch && searchMatch;
+    });
+    setFilteredAssets(filtered);
+  }, [searchQuery, selectedCategory, assets]);
+
  /* 🔹 Load logged-in supervisor */
     useEffect(() => {
         const loadUser = async () => {
@@ -208,15 +232,31 @@ const FieldAssets: React.FC = () => {
                                <Text style={styles.headerTitle}>Field Assets</Text>
                                <View style={{width: 40}} />
                            </View>
-          <View style={styles.searchContainer}>
-            <Feather name="search" size={20} color="#888" style={styles.searchIcon} />
-            <TextInput
-              placeholder="Search by name, user, or barcode..."
-              placeholderTextColor="#888"
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={handleSearch}
-            />
+         {/* 3. Side-by-Side Search and Filter Row */}
+          <View style={styles.controlsRow}>
+            <View style={styles.searchContainerInRow}>
+              <Feather name="search" size={18} color="#888" />
+              <TextInput
+                placeholder="Search..."
+                placeholderTextColor="#888"
+                style={styles.searchInputInRow}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+
+            <View style={styles.dropdownContainer}>
+              <Picker
+                selectedValue={selectedCategory}
+                onValueChange={(itemValue) => setSelectedCategory(itemValue)}
+                style={styles.picker}
+              >
+                <Picker.Item label="All Assets" value="" />
+                {assetCategories.map((cat) => (
+                  <Picker.Item key={cat} label={cat} value={cat} />
+                ))}
+              </Picker>
+            </View>
           </View>
 
           <FlatList
@@ -224,12 +264,10 @@ const FieldAssets: React.FC = () => {
             renderItem={renderAsset}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.listContainer}
-            showsVerticalScrollIndicator={false}
             refreshing={loading}
             onRefresh={fetchAssets}
             ListEmptyComponent={<Text style={styles.emptyText}>No assets found in the field.</Text>}
           />
-        
 
          {selectedAsset && (
                     <OverdueNotificationModal
@@ -259,6 +297,7 @@ const styles = StyleSheet.create({
         // Redundant but safe, ensures content is centered
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: "rgba(61, 138, 233, 0.4)"
     },
   container: {
         width: '90%',
@@ -301,7 +340,43 @@ const styles = StyleSheet.create({
   searchIcon: {
         marginRight: 10,
     },
-
+controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  searchContainerInRow: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 45,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  searchInputInRow: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  dropdownContainer: {
+    flex: 1.2,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    height: 45,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    overflow: 'hidden',
+  },
+  picker: {
+    width: '100%',
+    height: 45,
+  },
    searchInput: {
         flex: 1,
         height: 45,

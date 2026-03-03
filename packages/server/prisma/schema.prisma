@@ -25,6 +25,8 @@ model Users {
   address               String?
   photoURL              String?             @map("photoURL")
   roleId                BigInt?             @map("roleId")
+  resetToken            String?
+  resetTokenExpiry      DateTime?           @db.Timestamp(6)
   operatorAssignments   Asset_Assignments[] @relation("OperatorAssignments")
   supervisorAssignments Asset_Assignments[] @relation("SupervisorAssignments")
   AssetsAssignedBy      Asset_Details[]     @relation("AssetsAssignedBy")

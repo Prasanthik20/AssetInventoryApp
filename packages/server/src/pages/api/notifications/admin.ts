@@ -1,10 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import query from "@/lib/db";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
@@ -18,6 +15,7 @@ export default async function handler(
         n.reply,
         n.status,
         n.created_at            AS "createdAt",
+        COALESCE(n."isSeenByAdmin", false) AS "isSeenByAdmin",
 
         ad.id                   AS "assetId",
         ad.name                 AS "assetName",
@@ -33,6 +31,7 @@ export default async function handler(
       LEFT JOIN "Users" s ON s."employeeId" = n."senderId"
       LEFT JOIN "Users" r ON r."employeeId" = n."receiverId"
 
+      WHERE COALESCE(n."isSeenByAdmin", false) = false
       ORDER BY n.created_at DESC;
     `;
 
@@ -40,40 +39,19 @@ export default async function handler(
 
     const notifications = rows.map((n) => ({
       id: n.notificationId,
-      notificationId: n.notificationId,
-
       message: n.reply ?? n.reason,
       reason: n.reason,
       reply: n.reply,
-
       status: n.status,
       createdAt: n.createdAt,
-
-      asset: n.assetId
-        ? {
-            id: n.assetId,
-            name: n.assetName,
-          }
-        : null,
-
-      sender: {
-        employeeId: n.senderId,
-        name: n.senderName,
-      },
-
-      receiver: {
-        employeeId: n.receiverId,
-        name: n.receiverName,
-      },
+      asset: n.assetId ? { id: n.assetId, name: n.assetName } : null,
+      sender: { employeeId: n.senderId, name: n.senderName },
+      receiver: { employeeId: n.receiverId, name: n.receiverName },
     }));
 
     return res.status(200).json({ notifications });
-
   } catch (error) {
     console.error("❌ Admin Notifications Error:", error);
-    return res.status(500).json({
-      message: "Internal server error",
-      error: error instanceof Error ? error.message : error,
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 }

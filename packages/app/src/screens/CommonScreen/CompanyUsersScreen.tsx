@@ -189,7 +189,7 @@ const CompanyUsersScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
     backgroundImage: { flex: 1, width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
-    safeArea: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' },
+    safeArea: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' ,backgroundColor: "rgba(61, 138, 233, 0.4)"},
     container: {
         width: '90%',
         maxWidth: 1100,

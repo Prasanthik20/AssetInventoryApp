@@ -15,106 +15,55 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Checkbox from "expo-checkbox";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import axios from 'axios';
-import { baseURL } from "src/navigation/types";
+import { baseURL,RootStackParamList } from "../../navigation/types";
 
 const { width, height } = Dimensions.get('window');
 const isMobileDevice = Platform.OS !== 'web';
 
-export type RootStackParamList = {
-    CompanyLogin: undefined;
-    CompanyDashboard: {
-        adminName: string;
-        adminImage: string | null;
-        roleName: string;
-        employeeId : string;
-    };
-    SupervisorDashboard: {
-        supervisorName: string;
-        roleName: string;
-        employeeId: string;
-    }
-    OperatorDashboard: {
-        operatorName: string;
-        roleName: string;
-        employeeId: string;
-    }
-    SuperAdminLogin: undefined;
+type CompanyLoginNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyLogin'>;
+type CompanyLoginProps = {
+  setUser: React.Dispatch<React.SetStateAction<any>>;
 };
 
-type CompanyLoginNavigationProp = StackNavigationProp<RootStackParamList, 'CompanyLogin'>;
 
-
-export default function CompanyLoginScreen() {
+export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
     const navigation = useNavigation<CompanyLoginNavigationProp>();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
 
-    const handleLogin = async () => {
-        if (!email || !password) {
-            Alert.alert("Error", "Please enter both email and password.");
-            return;
+   const handleLogin = async () => {
+    if (!email || !password) {
+        Alert.alert("Error", "Please enter both email and password.");
+        return;
+    }
+
+    try {
+        const response: any = await axios.post(`${baseURL}/api/auth/login`, {
+            email,
+            password,
+        });
+
+        await AsyncStorage.setItem("user", JSON.stringify(response.data.user));
+
+        Alert.alert("Login Successful", `Welcome!`);
+
+       setUser(response.data.user);  // 🔥 This switches stack automatically
+
+    } catch (error) {
+        if (axios.isAxiosError(error) && error.response) {
+            Alert.alert("Login Failed", error.response.data.message);
+        } else {
+            Alert.alert("Connection Error", "Could not connect to server.");
         }
-
-        try {
-            // Call your Next.js API endpoint
-            // For mobile development, you must use your computer's IP address, not 'localhost'
-            const response: any = await axios.post(`${baseURL}/api/auth/login`, {
-                // Data Payload
-                email: email,
-                password: password,
-            },
-                { // Configuration Object (for headers, etc.)
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                }
-            );
-
-            // The request was successful (status 200)
-            const role = response.data.user.roleName;
-            Alert.alert("Login Successful", `Welcome, ${role}!`);
-
-            // Navigate based on the role received from the backend
-            if (role === 'Admin') {
-                navigation.navigate("CompanyDashboard", {
-                    adminName: response.data.user.fullName,
-                    adminImage: response.data.user.photoURL,
-                    roleName: response.data.user.roleName,
-                    employeeId: response.data.user.employeeId,
-                });
-            } else if (role === 'Supervisor') {
-                navigation.navigate("SupervisorDashboard", {
-                    supervisorName: response.data.user.fullName,
-                    roleName: response.data.user.roleName,
-                    employeeId: response.data.user.employeeId,
-                });
-            } else if (role === 'Operator') {
-                navigation.navigate("OperatorDashboard", {
-                    operatorName: response.data.user.fullName,
-                    roleName: response.data.user.roleName,
-                    employeeId: response.data.user.employeeId,
-                });
-            } else {
-                // Handle other roles or default case
-                navigation.navigate("CompanyLogin");
-            }
-
-        } catch (error) {
-            // Handle errors from the API (e.g., status 401 for bad credentials)
-            if (axios.isAxiosError(error) && error.response) {
-                Alert.alert("Login Failed", error.response.data.message || "An error occurred.");
-            } else {
-                Alert.alert("Connection Error", "Could not connect to the server.");
-            }
-            console.error("Login failed:", error);
-        }
-    };
+    }
+};
 
     return (
         <ImageBackground
@@ -175,7 +124,7 @@ export default function CompanyLoginScreen() {
                                     style={[styles.input, { color: "#000" }]}
                                     placeholder="Password"
                                     placeholderTextColor="#888"
-                                    secureTextEntry
+                                    secureTextEntry={!showPassword}
                                     value={password}
                                     onChangeText={setPassword}
                                 />
@@ -186,7 +135,13 @@ export default function CompanyLoginScreen() {
                                 >
                                     <Text>{showPassword ? "Hide" : "Show"}</Text>
                                 </TouchableOpacity>
-
+                                <TouchableOpacity
+                                    onPress={() => navigation.navigate("ForgotPassword")}
+                                    style={styles.forgotPasswordContainer}
+                                >
+                                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                                </TouchableOpacity>
+                            
                                 <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
                                     <LinearGradient
                                         colors={["#00c6ff", "#0072ff"]}
@@ -328,6 +283,15 @@ const styles = StyleSheet.create({
     },
     platformText: {
         color: "#4A5568",
+        fontSize: 14,
+    },
+    forgotPasswordContainer: {
+        alignSelf: "flex-end",
+        marginBottom: 15,
+    },
+    forgotPasswordText: {
+        color: "#0072ff",
+        fontWeight: "500",
         fontSize: 14,
     },
 });

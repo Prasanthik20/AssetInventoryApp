@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
+import bcrypt from "bcryptjs";
 
 export default async function registerCoreHandler(
   req: NextApiRequest,
@@ -34,6 +35,7 @@ export default async function registerCoreHandler(
       return;
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
     // ✅ Check if user already exists
     const checkUser = await query(
       `SELECT * FROM "Users"
@@ -54,7 +56,7 @@ export default async function registerCoreHandler(
       `INSERT INTO "Users"
        ("employeeId", "fullName", "email", "passwordHash", "roleId")
        VALUES ($1, $2, $3, $4, $5)`,
-      [employeeId, fullName, email.toLowerCase(), password, roleId]
+      [employeeId, fullName, email.toLowerCase(), hashedPassword, roleId]
     );
 
     res.status(201).json({

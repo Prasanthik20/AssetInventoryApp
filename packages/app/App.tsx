@@ -1,33 +1,34 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { View, ActivityIndicator } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Import the shared navigation types
 import { RootStackParamList } from "./src/navigation/types";
 
-// Create navigator with imported type
 const Stack = createNativeStackNavigator<RootStackParamList>();
+// ================= SCREENS =================
 
-// Client Screens
+// Client
 import CompanyLoginScreen from "./src/screens/Client/CompanyLoginScreen";
 import AddCompanyScreen from "./src/screens/Client/AddCompanyScreen";
 
-// Admin Screens
+// Admin
 import CompanyDashboard from "./src/screens/Admin/CompanyDashboard";
 import CompanyUsersScreen from "./src/screens/CommonScreen/CompanyUsersScreen";
 import AddCompanyUser from "./src/screens/Admin/AddCompanyUser";
 
-// Supervisor Screens
+// Supervisor
 import SupervisorDashboard from "./src/screens/Supervisor/SupervisorDashboard";
 
-// Operator Screens
+// Operator
 import OperatorDashboard from "./src/screens/Operator/OperatorDashboard";
 
-// Super Admin Screens
+// Super Admin
 import SuperAdminLoginScreen from "./src/screens/SuperAdmin/SuperAdminLoginScreen";
 import SuperAdminDashboard from "./src/screens/SuperAdmin/SuperAdminDashboard";
 
-// Asset Management Screens
+// Assets
 import TotalAssetDetails from "./src/screens/AssetDetails/TotalAssetDetails";
 import OfficeAssets from "./src/screens/AssetDetails/OfficeAssets";
 import FieldAssets from "./src/screens/AssetDetails/FieldAssets";
@@ -36,34 +37,177 @@ import AssignAssetScreen from "./src/screens/AssetDetails/AssignAssetScreen";
 import AssetFullDetails from "./src/screens/AssetDetails/AssetFullDetails";
 import ReturnAssetScreen from "./src/screens/AssetDetails/ReturnAssetScreen";
 
+// Password
+import ForgotPasswordScreen from "./src/screens/Password/ForgotPassword";
+import ResetPasswordScreen from "./src/screens/Password/ResetPassword";
+
 function App(): React.JSX.Element {
+  const [user, setUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // ✅ Check user on app start
+  useEffect(() => {
+    const checkLogin = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("user");
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (error) {
+        console.log("Error checking login:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkLogin();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="CompanyLogin">
-
-        <Stack.Screen name="CompanyLogin" component={CompanyLoginScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AddCompany" component={AddCompanyScreen} options={{ headerShown: false }} />
-
-        <Stack.Screen name="CompanyDashboard" component={CompanyDashboard} options={{ headerShown: false }} />
-        <Stack.Screen name="CompanyUsersScreen" component={CompanyUsersScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AddCompanyUser" component={AddCompanyUser} options={{ headerShown: false }} />
-
-        <Stack.Screen name="SupervisorDashboard" component={SupervisorDashboard} options={{ headerShown: false }} />
-
-        <Stack.Screen name="OperatorDashboard" component={OperatorDashboard} options={{ headerShown: false }} />
-
-        <Stack.Screen name="SuperAdminLogin" component={SuperAdminLoginScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="SuperAdminDashboard" component={SuperAdminDashboard} options={{ headerShown: false }} />
-
-        <Stack.Screen name="TotalAssetDetails" component={TotalAssetDetails} options={{ headerShown: false }} />
-        <Stack.Screen name="OfficeAssets" component={OfficeAssets} options={{ headerShown: false }} />
-        <Stack.Screen name="FieldAssets" component={FieldAssets} options={{ headerShown: false }} />
-        <Stack.Screen name="AddEditAsset" component={AddEditAsset} options={{ headerShown: false }} />
-        <Stack.Screen name="AssignAsset" component={AssignAssetScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AssetFullDetails" component={AssetFullDetails} options={{ headerShown: false }} />
-        <Stack.Screen name="ReturnAsset" component={ReturnAssetScreen} options={{ headerShown: false }} />
-
-      </Stack.Navigator>
+      {user ? (
+        <AppStack user={user} setUser={setUser} />
+      ) : (
+        <AuthStack setUser={setUser} />
+      )}
     </NavigationContainer>
   );
-}export default App;
+}
+
+/* ================= AUTH STACK ================= */
+
+function AuthStack({ setUser }: any) {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="CompanyLogin">
+        {(props) => (
+          <CompanyLoginScreen
+            {...props}
+            setUser={setUser}
+          />
+        )}
+      </Stack.Screen>
+
+      <Stack.Screen name="AddCompany" component={AddCompanyScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+      <Stack.Screen name="SuperAdminLogin" component={SuperAdminLoginScreen} />
+    </Stack.Navigator>
+  );
+}
+
+/* ================= APP STACK ================= */
+
+function AppStack({ user, setUser }: any) {
+  const getInitialRoute = () => {
+    switch (user.roleName) {
+      case "Admin":
+        return "CompanyDashboard";
+      case "Supervisor":
+        return "SupervisorDashboard";
+      case "Operator":
+        return "OperatorDashboard";
+      case "SuperAdmin":
+        return "SuperAdminDashboard";
+      default:
+        return "CompanyDashboard";
+    }
+  };
+
+  return (
+    <Stack.Navigator
+      initialRouteName={getInitialRoute()}
+      screenOptions={{ headerShown: false }}
+    >
+      <Stack.Screen name="CompanyDashboard">
+        {(props) => (
+          <CompanyDashboard
+            {...props}
+            setUser={setUser}
+          />
+        )}
+      </Stack.Screen>
+
+      <Stack.Screen
+        name="SupervisorDashboard"
+        // Use children to pass props
+        children={(props) => (
+          <SupervisorDashboard
+            {...props}      // pass navigation & route props
+            user={user}     // your state from App.tsx
+            setUser={setUser}  />
+  )}
+      />
+
+      <Stack.Screen name="OperatorDashboard"
+      children={(props) => (
+          <OperatorDashboard
+            {...props}      // pass navigation & route props
+            user={user}     // your state from App.tsx
+            setUser={setUser}  /> // optional: if you need logout functionality
+      )}
+      />
+
+      <Stack.Screen
+        name="SuperAdminDashboard"
+        component={SuperAdminDashboard}
+      />
+
+      <Stack.Screen
+        name="AddCompanyUser"
+        component={AddCompanyUser}
+      />
+
+      <Stack.Screen
+        name="CompanyUsersScreen"
+        component={CompanyUsersScreen}
+      />
+
+     {/* ===== ASSET SCREENS ===== */}
+      <Stack.Screen
+        name="TotalAssetDetails"
+        component={TotalAssetDetails}
+      />
+
+      <Stack.Screen
+        name="OfficeAssets"
+        component={OfficeAssets}
+      />
+
+      <Stack.Screen
+        name="FieldAssets"
+        component={FieldAssets}
+      />
+
+      <Stack.Screen
+        name="AddEditAsset"
+        component={AddEditAsset}
+      />
+
+      <Stack.Screen
+        name="AssignAsset"
+        component={AssignAssetScreen}
+      />
+
+      <Stack.Screen
+        name="AssetFullDetails"
+        component={AssetFullDetails}
+      />
+
+      <Stack.Screen
+        name="ReturnAsset"
+        component={ReturnAssetScreen}
+      />
+    </Stack.Navigator>
+  );
+}
+
+export default App;

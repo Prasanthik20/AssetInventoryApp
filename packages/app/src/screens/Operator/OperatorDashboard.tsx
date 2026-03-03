@@ -21,6 +21,7 @@ import axios from "axios";
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
 import { StackNavigationProp } from '@react-navigation/stack';
 import { baseURL, RootStackParamList } from '../../navigation/types';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const isMobileDevice = Platform.OS !== 'web'; 
 
@@ -28,11 +29,13 @@ type DashboardNavigationProp = StackNavigationProp<
   RootStackParamList,
   'OperatorDashboard'
 >;
+type OperatorDashboardNavigationProp = StackNavigationProp<RootStackParamList, 'OperatorDashboard'>;
 
-type DashboardRouteProp = RouteProp<
-  RootStackParamList,
-  'OperatorDashboard'
->;
+type Props = {
+  user: any;
+  setUser: React.Dispatch<React.SetStateAction<any>>;
+  navigation: OperatorDashboardNavigationProp;
+};
 
 // Define the structure of a Notification from the API
 interface Notification {
@@ -56,14 +59,13 @@ interface Notification {
   }
 }
 
-const OperatorDashboard: React.FC = () => {
-  const navigation = useNavigation<DashboardNavigationProp>();
-  const route = useRoute<DashboardRouteProp>();
-
+const OperatorDashboard: React.FC <Props> = ({
+  user, setUser, navigation
+}) => {
+    const route = useRoute<RouteProp<RootStackParamList, 'OperatorDashboard'>>();
   // ----------------------------
   // 🔹 Get operator data
   // ----------------------------
-  const { operatorName, roleName, employeeId } = route.params;
   const [overdueCount, setOverdueCount] = useState(0);
 
   // ----------------------------
@@ -97,15 +99,24 @@ const OperatorDashboard: React.FC = () => {
   }
 };
 
+const handleLogout = () => {
+  // Clear local data
+  setNotifications([]);
+  setMyAssets([]);
+  
+  // Clear user → App.tsx will show AuthStack automatically
+  setUser?.(null);
+};
+  
   // ----------------------------
   // 🔹 Fetch operator assets
   // ----------------------------
   const fetchOperatorData = async () => {
-    if (!employeeId) return;
+    if (!user?.employeeId) return;
     try {
       const [assetsRes, notificationsRes] = await Promise.all([
-        axios.get(`${baseURL}/api/operator/assets?operatorId=${employeeId}`),
-        axios.get(`${baseURL}/api/notifications/operator?id=${employeeId}`)]);
+        axios.get(`${baseURL}/api/operator/assets?operatorId=${user.employeeId}`),
+        axios.get(`${baseURL}/api/notifications/operator?id=${user.employeeId}`)]);
       //const data = await res.json();
 
       const rawAssets = assetsRes.data.assets || [];
@@ -175,7 +186,7 @@ const OperatorDashboard: React.FC = () => {
       let isActive = true;
 
       const refreshData = async () => {
-        if (employeeId && isActive) {
+        if (user?.employeeId && isActive) {
           await fetchOperatorData();
         }
       };
@@ -185,7 +196,7 @@ const OperatorDashboard: React.FC = () => {
       return () => {
         isActive = false;
       };
-    }, [employeeId]) // This is correct, but ensure fetchOperatorData is fresh
+    }, [user?.employeeId]) // This is correct, but ensure fetchOperatorData is fresh
   );
 
   // ----------------------------
@@ -215,7 +226,7 @@ const OperatorDashboard: React.FC = () => {
       const payload = {
         assetId: asset.assetId,
         assignmentId: asset.assignmentId || null,
-        operatorId: Number(employeeId),
+        operatorId: Number(user?.employeeId),
         supervisorId: asset.assignedBy || asset.assigned_by,
         reason: reason
       };
@@ -242,7 +253,7 @@ const OperatorDashboard: React.FC = () => {
 const handleReplySubmit = async (replyMessage: string, notification: Notification) => {
   // The 'sender' of the original alert is the 'receiver' of this reply
   const supervisorId = notification.sender?.employeeId; 
-  const operatorId = employeeId; // Current logged-in user
+  const operatorId = user?.employeeId; // Current logged-in user
 
   if (!supervisorId || !operatorId) {
     Alert.alert("Error", "Required user information is missing. Please refresh.");
@@ -335,20 +346,13 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
            }>
             {/* HEADER */}
            <View style={styles.header}>
-             <Text style={styles.headerTitle}>{operatorName}</Text>
+             <Text style={styles.headerTitle}>{user?.operatorName}</Text>
 
              <View style={styles.headerRight}>
                <Feather name="user" size={16} color="#333" />
-               <Text style={styles.userText}>{roleName}</Text>
-
-               <TouchableOpacity onPress={() => {
-                 setNotifications([]); // 🔥 Clear local notifications state
-                 setMyAssets([]);      // 🔥 Clear assets state
-                 navigation.reset({
-                   index: 0,
-                   routes: [{ name: "CompanyLogin" }],
-                 })
-               }}
+               <Text style={styles.userText}>{user?.roleName}</Text>
+               <TouchableOpacity onPress={ handleLogout}
+                 
                >
                  <Feather name="log-out" size={22} color="red" style={{ marginLeft: 10 }} />
                </TouchableOpacity>
@@ -381,7 +385,7 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
                <Text style={styles.noItemsText}>No new notifications.</Text>
              ) : (
                notifications.map((item) => {
-                 const isFromSupervisor = Number(item.sender.employeeId) !== Number(employeeId);
+                 const isFromSupervisor = Number(item.sender.employeeId) !== Number(user?.employeeId);
                  const isResolved = item.status === 'resolved';
                  const hasReplied = !!item.reply && item.reply.length > 0;
 
@@ -509,7 +513,7 @@ const handleReplySubmit = async (replyMessage: string, notification: Notificatio
              onPress={() =>
                navigation.navigate("ReturnAsset", {
                  assets: myAssets,
-                 operatorEmployeeId: employeeId,
+                 operatorEmployeeId: user?.employeeId,
                })
              }
            >

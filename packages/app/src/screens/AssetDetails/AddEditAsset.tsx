@@ -359,7 +359,7 @@ const AddEditAsset: React.FC = () => {
 
 const styles = StyleSheet.create({
   backgroundImage: { flex: 1, width: "100%", height: "100%" },
-  safeArea: { flex: 1 },
+  safeArea: { flex: 1,backgroundColor: "rgba(61, 138, 233, 0.4)" },
   container: { flex: 1, flexDirection: 'row' },
   leftPanel: {
     width: '30%',
