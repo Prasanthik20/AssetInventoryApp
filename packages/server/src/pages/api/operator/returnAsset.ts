@@ -3,15 +3,6 @@ import query from '@/lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 
-    if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8081');
-        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        return res.status(200).end();
-    }
-
-    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8081');
-
     if (req.method !== 'POST') {
         return res.status(405).end();
     }

@@ -2,14 +2,6 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import query from "@/lib/db";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  // ✅ Handle preflight OPTIONS request
-  if (req.method === "OPTIONS") {
-    return res.status(200).end(); // very important for CORS
-  }
-
   try {
     if (req.method === "GET") return getSupervisorNotifications(req, res);
     if (req.method === "POST") return sendOverdueNotification(req, res);

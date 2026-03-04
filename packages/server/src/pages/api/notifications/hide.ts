@@ -2,15 +2,6 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import query from "@/lib/db";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // ✅ CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "http://localhost:8081");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  // ✅ Handle preflight (VERY IMPORTANT)
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
 
   if (req.method !== "PUT") {
     res.setHeader("Allow", ["PUT", "OPTIONS"]);

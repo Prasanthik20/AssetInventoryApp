@@ -7,17 +7,6 @@ export default async function registerCoreHandler(
   res: NextApiResponse
 ): Promise<void> {
 
-  // ✅ CORS HEADERS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  // ✅ Handle Preflight Request
-  if (req.method === "OPTIONS") {
-    res.status(200).end();
-    return;
-  }
-
   // ❌ Allow only POST
   if (req.method !== 'POST') {
     res.setHeader("Allow", ['POST']);

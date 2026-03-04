@@ -87,9 +87,10 @@ ResetPassword: { token: string };
   };
 };
 
+// Azure production URL (currently has old CORS config)
 export const baseURL = "https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net"
 
-
+// Local development URL with updated CORS
 // export const baseURL =  Platform.OS === 'web' 
 //             ? 'http://localhost:3000' 
-//             : 'http://192.168.0.9:3000'; ;
+//             : 'http://localhost:3000';
