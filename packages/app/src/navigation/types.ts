@@ -16,6 +16,7 @@ export type Asset = {
   price?: string;
   purchaseDate?: string;
   warrantyExpiry?: string;
+  photoURL?: string | null;
   assignedTo?: string | null; // Add this
   assignedBy?: string | null; // Add this
   expectedReturnDate?: string | null;
@@ -88,9 +89,9 @@ ResetPassword: { token: string };
 };
 
 // Azure production URL (currently has old CORS config)
-export const baseURL = "https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net"
+// export const baseURL = "https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net"
 
 // Local development URL with updated CORS
-// export const baseURL =  Platform.OS === 'web' 
-//             ? 'http://localhost:3000' 
-//             : 'http://localhost:3000';
+export const baseURL =  Platform.OS === 'web' 
+            ? 'http://localhost:3000' 
+            : 'http://localhost:3000';

@@ -24,6 +24,7 @@
     "bcryptjs": "^3.0.3",
     "expo": "~54.0.0",
     "expo-checkbox": "~5.0.8",
+    "expo-image-picker": "^55.0.10",
     "expo-linear-gradient": "~15.0.8",
     "react": "19.1.0",
     "react-dom": "19.1.0",

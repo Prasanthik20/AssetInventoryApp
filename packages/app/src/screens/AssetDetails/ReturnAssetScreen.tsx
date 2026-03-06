@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, Platform,ImageBackground, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, Platform,ImageBackground, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { useRoute, RouteProp } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 
@@ -21,6 +22,7 @@ const ReturnAssetScreen: React.FC = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedOverdueAsset, setSelectedOverdueAsset] = useState('');
     const [photo, setPhoto] = useState<string | null>(null);
+    const [photoLoading, setPhotoLoading] = useState(false);
 
     // --- Modal Handler Functions ---
     const handleOpenModal = (assetName: string) => {
@@ -36,7 +38,47 @@ const ReturnAssetScreen: React.FC = () => {
 
     // --- Button Action Handlers ---
     const handleScanBarcode = () => Alert.alert("Scan Barcode", "Camera functionality for scanning returns would be implemented here.");
-    const handleUploadPhoto = () => Alert.alert("Upload Photo", "Image library to upload proof of asset condition would be implemented here.");
+    
+    const handleUploadPhoto = async () => {
+        try {
+            setPhotoLoading(true);
+
+            // Request permission
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission Denied', 'Camera roll permission is required to upload photos.');
+                setPhotoLoading(false);
+                return;
+            }
+
+            // Launch image picker
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+                base64: true,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                const asset = result.assets[0];
+                const base64 = asset.base64;
+
+                if (base64) {
+                    const photoURL = `data:image/jpeg;base64,${base64}`;
+                    setPhoto(photoURL);
+                    Alert.alert('✅ Photo Selected', 'Photo will be attached to the return.');
+                } else {
+                    Alert.alert('Error', 'Failed to process image. Please try again.');
+                }
+            }
+        } catch (error) {
+            console.error('Photo picker error:', error);
+            Alert.alert('Error', 'Failed to open image library.');
+        } finally {
+            setPhotoLoading(false);
+        }
+    };
 
     const toggleAssetSelection = (id: number) => {
         setSelectedAssets(current =>
@@ -72,6 +114,7 @@ const ReturnAssetScreen: React.FC = () => {
                     .filter(a => selectedAssets.includes(a.assignmentId))
                     .map(a => a.assetId),
                 operatorEmployeeId: employeeId,
+                ...(photo && { photoURL: photo }), // Include photo if available
             };
 
             console.log("RETURN PAYLOAD 👉", payload);
@@ -214,12 +257,42 @@ const ReturnAssetScreen: React.FC = () => {
                                 </TouchableOpacity>
 
                                 <Text style={styles.label}>Proof of Condition</Text>
-                                <TouchableOpacity style={styles.uploadButton} onPress={handleUploadPhoto}>
-                                    <Feather name="camera" size={20} color="#4A5568" />
-                                    <Text style={styles.uploadButtonText}>
-                                        {photo ? 'Photo Uploaded' : 'Tap to upload a photo'}
-                                    </Text>
+                                <TouchableOpacity 
+                                    style={styles.uploadButton} 
+                                    onPress={handleUploadPhoto}
+                                    disabled={photoLoading}
+                                >
+                                    {photoLoading ? (
+                                        <ActivityIndicator color="#4A5568" size="small" />
+                                    ) : (
+                                        <>
+                                            <Feather name="camera" size={20} color="#4A5568" />
+                                            <Text style={styles.uploadButtonText}>
+                                                {photo ? '✓ Photo Uploaded' : 'Tap to upload a photo'}
+                                            </Text>
+                                        </>
+                                    )}
                                 </TouchableOpacity>
+
+                                {/* Photo Preview */}
+                                {photo && (
+                                    <View style={styles.photoPreviewContainer}>
+                                        <Image 
+                                            source={{ uri: photo }} 
+                                            style={styles.photoPreview}
+                                            resizeMode="cover"
+                                        />
+                                        <TouchableOpacity 
+                                            style={styles.removePhotoButton}
+                                            onPress={() => {
+                                                setPhoto(null);
+                                                Alert.alert('Removed', 'Photo has been removed.');
+                                            }}
+                                        >
+                                            <Ionicons name="close" size={20} color="#fff" />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
                             </View>
                         </View>
                     </ScrollView>
@@ -354,6 +427,28 @@ const styles = StyleSheet.create({
         borderColor: '#CBD5E0',
     },
     uploadButtonText: { color: '#4A5568', fontSize: 15, fontWeight: '500', marginLeft: 10 },
+    photoPreviewContainer: {
+        position: 'relative',
+        marginTop: 15,
+        borderRadius: 10,
+        overflow: 'hidden',
+        backgroundColor: '#F0F0F0',
+    },
+    photoPreview: {
+        width: '100%',
+        height: 200,
+        borderRadius: 10,
+    },
+    removePhotoButton: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 20,
+        padding: 5,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     footer: {
       flexDirection: 'row',
         justifyContent: 'flex-end',

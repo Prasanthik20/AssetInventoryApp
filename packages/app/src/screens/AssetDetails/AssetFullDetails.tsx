@@ -1,10 +1,13 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, Alert, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../../navigation/types';
+import { RootStackParamList, baseURL } from '../../navigation/types';
 import useAssetMeta from "../../hooks/useAssetMeta";
+import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
+import * as FileSystem from 'expo-file-system';
 
 
 type AssetFullDetailsRouteProp = RouteProp<
@@ -22,15 +25,32 @@ const iconMap: any = {
     "user-check": <Feather name="user-check" size={16} color="#222" />,
     calendar: <Feather name="calendar" size={16} color="#222" />,
 };
-const DisplayField = ({ label, value, icon, children }: { label: string, value?: string, icon?: any, children?: React.ReactNode }) => (
+const DisplayField = ({ label, value, icon, children, editable, onChangeText }: { 
+    label: string, 
+    value?: string, 
+    icon?: any, 
+    children?: React.ReactNode,
+    editable?: boolean,
+    onChangeText?: (text: string) => void 
+}) => (
      <View style={styles.fieldContainer}>
         <View style={styles.labelContainer}>
             {icon && iconMap[icon]}
             <Text style={styles.label}>{label}</Text>
         </View>
 
-        <View style={styles.valueBox}>
-            {children || <Text style={styles.valueText}>{value}</Text>}
+        <View style={[styles.valueBox, editable && styles.editableBox]}>
+            {editable ? (
+                <TextInput
+                    style={styles.editableText}
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={label}
+                    placeholderTextColor="#999"
+                />
+            ) : (
+                children || <Text style={styles.valueText}>{value}</Text>
+            )}
         </View>
     </View>
 );
@@ -45,14 +65,230 @@ const formatDate = (dateValue?: string | Date | null) => {
     ? "N/A"
     : date.toLocaleDateString();
 };
+
+const inferMimeType = (uri: string, explicitMimeType?: string): string => {
+    if (explicitMimeType) return explicitMimeType;
+
+    const cleanUri = uri.split('?')[0].toLowerCase();
+    if (cleanUri.endsWith('.png')) return 'image/png';
+    if (cleanUri.endsWith('.webp')) return 'image/webp';
+    if (cleanUri.endsWith('.heic')) return 'image/heic';
+    if (cleanUri.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
+};
+
+const toPersistentDataUrl = async (uri: string, mimeType?: string): Promise<string> => {
+    if (!uri) return '';
+    if (uri.startsWith('data:')) return uri;
+
+    const resolvedMimeType = inferMimeType(uri, mimeType);
+
+    if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        if (blob.type) {
+            return await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(String(reader.result || ''));
+                reader.onerror = () => reject(new Error('Failed to convert blob to data URL'));
+                reader.readAsDataURL(blob);
+            });
+        }
+        return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result || ''));
+            reader.onerror = () => reject(new Error('Failed to convert blob to data URL'));
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: 'base64' as any,
+    });
+    return `data:${resolvedMimeType};base64,${base64}`;
+};
+
 const AssetFullDetails: React.FC = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<AssetFullDetailsRouteProp>();
     const { categories, statuses } = useAssetMeta();
     const { asset } = route.params;
+    
+    // Edit mode state
+    const [isEditMode, setIsEditMode] = useState(false);
+    
+    // Editable fields state
+    const [assetName, setAssetName] = useState(asset?.assetName || '');
+    const [modelNumber, setModelNumber] = useState(asset?.modelNumber || '');
+    const [serialNumber, setSerialNumber] = useState(asset?.serialNumber || '');
+    const [price, setPrice] = useState(asset?.price || '');
+    const [location, setLocation] = useState(asset?.location || '');
+    const [photoURL, setPhotoURL] = useState(asset?.photoURL || '');
+    const [initialPhotoURL] = useState(asset?.photoURL || '');
+    const [barcodeURL, setBarcodeURL] = useState(asset?.barcodeURL || '');
+    const [initialBarcodeURL] = useState(asset?.barcodeURL || '');
+    
     const matchedCategory = categories.find(c => String(c.id) === String(asset.category));
     const matchedStatus = statuses.find(s => String(s.id) === String(asset.status));
     const isMobileDevice = Platform.OS !== 'web';
+    
+    const handleImageUpload = async () => {
+        try {
+            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            
+            if (!permissionResult.granted) {
+                Alert.alert("Permission Required", "Please allow access to your photo library.");
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                try {
+                    // Convert to persistent data URL so it still works after reload.
+                    const dataURL = await toPersistentDataUrl(
+                        result.assets[0].uri,
+                        result.assets[0].mimeType || undefined
+                    );
+                    setPhotoURL(dataURL);
+                } catch (readError) {
+                    // Fallback to URI if file system read fails
+                    console.warn("Could not read file, using URI:", readError);
+                    setPhotoURL(result.assets[0].uri);
+                }
+            }
+        } catch (error) {
+            console.error("Error picking image:", error);
+            Alert.alert("Error", "Failed to select image");
+        }
+    };
+    
+    const handleBarcodeUpload = async () => {
+        try {
+            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            
+            if (!permissionResult.granted) {
+                Alert.alert("Permission Required", "Please allow access to your photo library.");
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 1],
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                try {
+                    // Convert to persistent data URL so it still works after reload.
+                    const dataURL = await toPersistentDataUrl(
+                        result.assets[0].uri,
+                        result.assets[0].mimeType || undefined
+                    );
+                    setBarcodeURL(dataURL);
+                } catch (readError) {
+                    // Fallback to URI if file system read fails
+                    console.warn("Could not read barcode file, using URI:", readError);
+                    setBarcodeURL(result.assets[0].uri);
+                }
+            }
+        } catch (error) {
+            console.error("Error picking barcode image:", error);
+            Alert.alert("Error", "Failed to select barcode image");
+        }
+    };
+    
+    const handleSaveAsset = async () => {
+        try {
+            if (!asset.id) {
+                Alert.alert("Error", "Asset ID is missing");
+                return;
+            }
+
+            const updateData: any = {};
+            
+            // Check each field for changes
+            if (assetName !== asset.assetName) {
+                updateData.assetName = assetName;
+            }
+            if (modelNumber !== asset.modelNumber) {
+                updateData.modelNumber = modelNumber;
+            }
+            if (serialNumber !== asset.serialNumber) {
+                updateData.serialNumber = serialNumber;
+            }
+            if (price !== asset.price) {
+                updateData.price = price;
+            }
+            if (location !== asset.location) {
+                updateData.location = location;
+            }
+            
+            // Include photoURL if it changed and is not empty
+            if (photoURL && photoURL !== initialPhotoURL) {
+                updateData.photoURL = photoURL;
+            }
+            
+            // Include barcodeURL if it changed and is not empty
+            if (barcodeURL && barcodeURL !== initialBarcodeURL) {
+                updateData.barcodeURL = barcodeURL;
+            }
+
+            // Only send update if there are changes
+            if (Object.keys(updateData).length === 0) {
+                Alert.alert("No Changes", "No updates to save");
+                setIsEditMode(false);
+                return;
+            }
+
+            const response = await axios.put(
+                `${baseURL}/api/assets/assetId?assetId=${asset.id}`,
+                updateData
+            );
+
+            if (response.status === 200) {
+                Alert.alert("Success", "Asset updated successfully");
+                setIsEditMode(false);
+                // Update the asset object with new values
+                asset.assetName = assetName;
+                asset.modelNumber = modelNumber;
+                asset.serialNumber = serialNumber;
+                asset.price = price;
+                asset.location = location;
+                if (photoURL) {
+                    asset.photoURL = photoURL;
+                }
+                if (barcodeURL) {
+                    asset.barcodeURL = barcodeURL;
+                }
+            }
+        } catch (error: any) {
+            console.error("Save Asset Error:", error);
+            const errorMsg = error.response?.data?.message || "Failed to update asset";
+            Alert.alert("Error", errorMsg);
+        }
+    };
+    
+    const handleEditToggle = () => {
+        if (isEditMode) {
+            // Cancel edit mode - reset fields
+            setAssetName(asset?.assetName || '');
+            setModelNumber(asset?.modelNumber || '');
+            setSerialNumber(asset?.serialNumber || '');
+            setPrice(asset?.price || '');
+            setLocation(asset?.location || '');
+            setPhotoURL(asset?.photoURL || '');
+            setBarcodeURL(asset?.barcodeURL || '');
+        }
+        setIsEditMode(!isEditMode);
+    };
+    
     if (!asset) {
         return <Text>Asset not found!</Text>;
     }
@@ -72,10 +308,30 @@ const AssetFullDetails: React.FC = () => {
                         colors={['rgba(93, 113, 200, 0.7)', 'rgba(59, 89, 184, 0.8)']}
                         style={styles.leftPanel}
                     >
-                        <Image
-                            source={{ uri: 'https://i.imgur.com/gYf2xmm.png' }}
-                            style={styles.leftPanelImage}
-                        />
+                         <TouchableOpacity 
+                            onPress={handleImageUpload}
+                            style={styles.imageUploadContainer}
+                            disabled={!isEditMode}
+                        >
+                            {photoURL ? (
+                                <View style={styles.imageWrapper}>
+                                    <Image
+                                        source={{ uri: photoURL }}
+                                        style={styles.leftPanelImage}
+                                    />
+                                    {isEditMode && (
+                                        <View style={styles.editOverlay}>
+                                            <Feather name="edit-2" size={24} color="#fff" />
+                                        </View>
+                                    )}
+                                </View>
+                            ) : (
+                                <View style={styles.uploadPlaceholder}>
+                                    <Feather name="upload" size={48} color="#fff" />
+                                    <Text style={styles.uploadText}>Upload Image</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity> 
                         <Text style={styles.leftPanelTitle}>ASSET DETAILS</Text>
                         <Text style={styles.leftPanelSubtitle}>COMPREHENSIVE EQUIPMENT RECORD</Text>
                         <Text style={styles.brandName}>ASSETFLOW PRO</Text>
@@ -88,7 +344,14 @@ const AssetFullDetails: React.FC = () => {
                             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                                 <Ionicons name="arrow-back" size={24} color="#000000ff" />
                             </TouchableOpacity>
-                            <Text style={styles.headerTitle}>Asset Information</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <Text style={styles.headerTitle}>Asset Information</Text>
+                                {isEditMode && (
+                                    <View style={styles.editBadge}>
+                                        <Text style={styles.editBadgeText}>Editing</Text>
+                                    </View>
+                                )}
+                            </View>
                             {!isMobileDevice && (
                             <View style={styles.headerRight}>
                                 <Feather name="user" size={16} color="#333" />
@@ -112,20 +375,83 @@ const AssetFullDetails: React.FC = () => {
                                 
                                 <View style={styles.formColumn}>
                                     <Text style={styles.sectionTitle}>General Details</Text>
-                                    <DisplayField label="Asset Name" value={asset.assetName} icon="truck" />
+                                    <DisplayField 
+                                        label="Asset Name" 
+                                        value={assetName} 
+                                        icon="truck" 
+                                        editable={isEditMode}
+                                        onChangeText={setAssetName}
+                                    />
                                     <DisplayField label="Category" value={asset.category} icon="layers"/>
                                     <DisplayField label="Status" value={asset.status} icon="check-circle" />
-                                    <DisplayField label="Model Number" value={asset.modelNumber} icon="archive" />
-                                    <DisplayField label="Serial Number" value={asset.serialNumber} icon="hash" />
-                                    <DisplayField label="Price" value={asset.price} icon="dollar" />
+                                    <DisplayField 
+                                        label="Model Number" 
+                                        value={modelNumber} 
+                                        icon="archive" 
+                                        editable={isEditMode}
+                                        onChangeText={setModelNumber}
+                                    />
+                                    <DisplayField 
+                                        label="Serial Number" 
+                                        value={serialNumber} 
+                                        icon="hash" 
+                                        editable={isEditMode}
+                                        onChangeText={setSerialNumber}
+                                    />
+                                    <DisplayField 
+                                        label="Price" 
+                                        value={price} 
+                                        icon="dollar" 
+                                        editable={isEditMode}
+                                        onChangeText={setPrice}
+                                    />
                                 </View>
 
                                 <View style={styles.formColumn}>
-                                    {/* On mobile, we place the barcode at the bottom or middle of the list */}
-                                    <Image source={{ uri: 'https://i.imgur.com/gJuQe3h.png' }} style={styles.barcodeImage} />
-                                    <Text style={styles.barcodeText}>Asset ID: {asset.barcode}</Text>
-                                    
-                                    <DisplayField label="Current Location" value={asset.location} icon="map-pin" />
+                                    {/* Mobile Image Upload */}
+                                    {isMobileDevice && (
+                                        <TouchableOpacity 
+                                            onPress={handleImageUpload}
+                                            style={styles.mobileImageContainer}
+                                            disabled={!isEditMode}
+                                        >
+                                            {photoURL ? (
+                                                <Image
+                                                    source={{ uri: photoURL }}
+                                                    style={styles.mobileImage}
+                                                />
+                                            ) : (
+                                                <View style={styles.mobileUploadPlaceholder}>
+                                                    <Feather name="camera" size={32} color="#666" />
+                                                    <Text style={styles.mobileUploadText}>Add Photo</Text>
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    )}
+                                     <Text style={styles.barcodeText}>Asset ID: {asset.barcode || 'N/A'}</Text>
+                                    {/* Barcode Image with Upload */}
+                                    <TouchableOpacity 
+                                        onPress={handleBarcodeUpload}
+                                        style={styles.barcodeContainer}
+                                        disabled={!isEditMode}
+                                    >
+                                        {barcodeURL ? (
+                                     <Image source={{ uri: barcodeURL }} style={styles.barcodeImage} />
+                                        ) : (
+                                            <View style={styles.barcodeUploadPlaceholder}>
+                                                <Feather name="maximize" size={24} color="#666" />
+                                                <Text style={styles.barcodeUploadText}>Upload Barcode</Text>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                   
+                                    <DisplayField 
+                                        label="Current Location" 
+                                        value={location} 
+                                        icon="map-pin" 
+                                        editable={isEditMode}
+                                        onChangeText={setLocation}
+                                    />
                                     <DisplayField label="Assigned To" value={asset.assignedTo || "N/A"} icon="user-check" />
                                     <DisplayField label="Warranty Expiry" value={formatDate(asset.warrantyExpiry)} icon="calendar" />
                                     <DisplayField label="Purchase Date" value={formatDate(asset.purchaseDate)} icon="calendar" />
@@ -135,17 +461,24 @@ const AssetFullDetails: React.FC = () => {
                         
                         {/* Action Buttons */}
                         <View style={[styles.footer, isMobileDevice && { justifyContent: 'space-between' }]}>
-                            <TouchableOpacity style={isMobileDevice && { flex: 1 }}>
+                            <TouchableOpacity 
+                                style={isMobileDevice && { flex: 1 }}
+                                onPress={isEditMode ? handleSaveAsset : handleEditToggle}
+                            >
                                 <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.saveButton}>
-                                    <Text style={styles.buttonText}>EDIT ASSET</Text>
+                                    <Text style={styles.buttonText}>
+                                        {isEditMode ? 'SAVE CHANGES' : 'EDIT ASSET'}
+                                    </Text>
                                 </LinearGradient>
                             </TouchableOpacity>
                             <TouchableOpacity 
                                 style={[styles.cancelButton, isMobileDevice && { flex: 1 }]} 
-                                onPress={() => navigation.goBack()}
+                                onPress={isEditMode ? handleEditToggle : () => navigation.goBack()}
                             >
-                                <Text style={[styles.buttonText, { color: '#555' }]}>Go Back</Text>
-                            </TouchableOpacity>
+                                <Text style={[styles.buttonText, { color: '#555' }]}>
+                                    {isEditMode ? 'Cancel' : 'Go Back'}
+                                </Text>
+                        </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -172,7 +505,70 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 30,
     },
-    leftPanelImage: { width: 180, height: 180, resizeMode: 'contain', marginBottom: 20 },
+    imageUploadContainer: {
+        marginBottom: 20,
+    },
+    imageWrapper: {
+        position: 'relative',
+    },
+    editOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    uploadPlaceholder: {
+        width: 180,
+        height: 180,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        borderRadius: 10,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        borderColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    uploadText: {
+        color: '#fff',
+        marginTop: 10,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    leftPanelImage: { width: 180, height: 180, resizeMode: 'contain', borderRadius: 10 },
+    mobileImageContainer: {
+        width: '100%',
+        marginBottom: 20,
+        alignItems: 'center',
+    },
+    mobileImage: {
+        width: 150,
+        height: 150,
+        resizeMode: 'cover',
+        borderRadius: 10,
+        backgroundColor: '#f5f5f5',
+    },
+    mobileUploadPlaceholder: {
+        width: 150,
+        height: 150,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 10,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        borderColor: '#ccc',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    mobileUploadText: {
+        color: '#666',
+        marginTop: 8,
+        fontSize: 13,
+        fontWeight: '500',
+    },
     leftPanelTitle: { fontSize: 30, fontWeight: 'bold', color: '#000000ff', textAlign: 'center' },
     leftPanelSubtitle: { fontSize: 13, color: '#000000ff', marginTop: 10, opacity: 0.8, letterSpacing: 1 },
     brandName: { fontSize: 15, color: '#000000ff', marginTop: 30, opacity: 0.8 },
@@ -186,10 +582,21 @@ const styles = StyleSheet.create({
     },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#000000ff' }, // White text
+    editBadge: {
+        backgroundColor: '#27B2C3',
+        paddingVertical: 4,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+    },
+    editBadgeText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '600',
+    },
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(20, 2, 2, 0.7)', // Semi-transparent
+        // backgroundColor: 'rgba(20, 2, 2, 0.7)', // Semi-transparent
         paddingVertical: 6,
         paddingHorizontal: 12,
         borderRadius: 20,
@@ -212,10 +619,25 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(14, 1, 1, 0.8)',
     },
+    editableBox: {
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderColor: '#27B2C3',
+        borderWidth: 2,
+    },
     valueText: {
         fontSize: 14,
         color: '#1A202C', // Dark text inside light boxes for contrast
         fontWeight: '500',
+    },
+    editableText: {
+        fontSize: 14,
+        color: '#1A202C',
+        fontWeight: '500',
+        padding: 0,
+        margin: 0,
+    },
+    barcodeContainer: {
+        marginBottom: 5,
     },
     barcodeImage: {
         width: '100%',
@@ -224,9 +646,26 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.9)', // Almost solid white
         padding: 5,
         borderRadius: 8,
-        marginBottom: 10,
         borderWidth: 1,
         borderColor: '#0f0101ff',
+    },
+    barcodeUploadPlaceholder: {
+        width: '100%',
+        height: 70,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderRadius: 8,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        borderColor: '#ccc',
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexDirection: 'row',
+    },
+    barcodeUploadText: {
+        color: '#666',
+        fontSize: 13,
+        fontWeight: '500',
+        marginLeft: 8,
     },
     barcodeText: { textAlign: 'center', fontSize: 14, fontWeight: '600', color: '#000000ff' },
     currentUserText: { textAlign: 'center', fontSize: 13, color: '#000000ff', marginTop: 5, marginBottom: 20 },

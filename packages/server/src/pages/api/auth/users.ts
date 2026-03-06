@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
+import { setCorsHeaders } from '@/lib/corsHeaders';
 // import { withCors } from '@/lib/cors'; // Removed import: CORS is now handled by middleware.ts
 
 /**
@@ -8,8 +9,18 @@ import query from '@/lib/db';
  */
 export default async function usersCoreHandler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
 
+  // Set CORS headers
+  const origin = req.headers.origin as string;
+  setCorsHeaders(res, origin);
+
+  // Handle OPTIONS requests for CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'GET') {
-    res.setHeader('Allow', ['GET']);
+    res.setHeader('Allow', ['GET', 'OPTIONS']);
     res.status(405).end(`Method ${req.method} Not Allowed`);
     return; // <-- Exit (return void)
   }

@@ -35,6 +35,7 @@ const CompanyDashboard: React.FC<Props> = ({
     const [loading, setLoading] = useState(true);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [user, setUser] = useState<any>(null);
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
 
     const fetchUsers = async () => {
@@ -129,6 +130,19 @@ useEffect(() => {
     console.error(error);
   }
 };
+
+    const toggleGroup = (senderName: string) => {
+        setExpandedGroups((prev) => {
+            const newSet = new Set(prev);
+            if (newSet.has(senderName)) {
+                newSet.delete(senderName);
+            } else {
+                newSet.add(senderName);
+            }
+            return newSet;
+        });
+    };
+
     // -------------------------
     // 📌 RUN ON PAGE OPEN
     // -------------------------
@@ -231,61 +245,97 @@ useEffect(() => {
                                     <Text style={styles.sectionTitle}>Global Activity Feed</Text>
                                     <View style={styles.notificationFeed}>
                                         {notifications.length > 0 ? (
-                                           notifications.map((item, index) => (
-                                               <TouchableOpacity
-                                                   key={item.id || index}
-                                                   style={styles.notifLine}
-                                                   onPress={() => hideNotification(item.id)}
-                                                   activeOpacity={0.7}
-                                               >
+                                            (() => {
+                                                // Group notifications by sender
+                                                const groupedNotifications = notifications.reduce((acc, item) => {
+                                                    const senderName = item.sender?.name || "Unknown";
+                                                    if (!acc[senderName]) {
+                                                        acc[senderName] = [];
+                                                    }
+                                                    acc[senderName].push(item);
+                                                    return acc;
+                                                }, {} as Record<string, any[]>);
 
-                                                    <View
-                                                        style={[
-                                                            styles.roleIndicator,
-                                                            {
-                                                                backgroundColor:
-                                                                    item.sender?.name?.toLowerCase().includes("supervisor")
-                                                                        ? "#4C51BF"
-                                                                        : "#38B2AC",
-                                                            },
-                                                        ]}
-                                                    />
+                                                return Object.keys(groupedNotifications).map((senderName, groupIndex) => {
+                                                    const userNotifications = groupedNotifications[senderName];
+                                                    const firstNotif = userNotifications[0];
+                                                    const isSupervisor = senderName.toLowerCase().includes("supervisor");
+                                                    const isExpanded = expandedGroups.has(senderName);
 
-                                                    <View style={styles.notifMainContent}>
-                                                       <Text style={{ fontSize: 12, color: "gray" }}>
-                                                           Tap to mark as seen
-                                                       </Text>
-                                                        <View style={styles.notifHeaderRow}>
-                                                            <Text style={styles.senderName}>
-                                                                {item.sender?.name || "Unknown"}
-                                                            </Text>
+                                                    return (
+                                                        <View key={`group-${groupIndex}`} style={styles.notifGroup}>
+                                                            {/* Group Header */}
+                                                            <TouchableOpacity 
+                                                                style={styles.groupHeader}
+                                                                onPress={() => toggleGroup(senderName)}
+                                                                activeOpacity={0.7}
+                                                            >
+                                                                <View style={styles.groupHeaderLeft}>
+                                                                    <View
+                                                                        style={[
+                                                                            styles.groupIndicator,
+                                                                            {
+                                                                                backgroundColor: isSupervisor ? "#4C51BF" : "#38B2AC",
+                                                                            },
+                                                                        ]}
+                                                                    />
+                                                                    <Text style={styles.groupSenderName}>{senderName}</Text>
+                                                                    <View style={[styles.notifBadge, { backgroundColor: isSupervisor ? "#E9D5FF" : "#B2F5EA" }]}>
+                                                                        <Text style={[styles.notifBadgeText, { color: isSupervisor ? "#6B21A8" : "#00796B" }]}>
+                                                                            {userNotifications.length}
+                                                                        </Text>
+                                                                    </View>
+                                                                </View>
+                                                                <Ionicons 
+                                                                    name={isExpanded ? "chevron-up" : "chevron-down"} 
+                                                                    size={20} 
+                                                                    color="#718096" 
+                                                                />
+                                                            </TouchableOpacity>
 
-                                                            <View style={styles.tagContainer}>
-                                                                <Text style={styles.roleTagText}>
-                                                                    {item.status}
-                                                                </Text>
-                                                            </View>
+                                                            {/* Group Notifications */}
+                                                            {isExpanded && userNotifications.map((item: any, index: number) => (
+                                                                <TouchableOpacity
+                                                                    key={item.id || `${groupIndex}-${index}`}
+                                                                    style={styles.notifLine}
+                                                                    onPress={() => hideNotification(item.id)}
+                                                                    activeOpacity={0.7}
+                                                                >
+                                                                    <View style={styles.notifMainContent}>
+                                                                        <View style={styles.notifHeaderRow}>
+                                                                            <View style={styles.tagContainer}>
+                                                                                <Text style={styles.roleTagText}>
+                                                                                    {item.status}
+                                                                                </Text>
+                                                                            </View>
+                                                                            <Text style={styles.notifTime}>
+                                                                                {item.createdAt
+                                                                                    ? new Date(item.createdAt).toLocaleDateString("en-GB")
+                                                                                    : ""}
+                                                                            </Text>
+                                                                        </View>
+
+                                                                        <Text style={styles.assetContext}>
+                                                                            Asset:{" "}
+                                                                            <Text style={{ fontWeight: "bold" }}>
+                                                                                {item.asset?.name || "N/A"}
+                                                                            </Text>
+                                                                        </Text>
+
+                                                                        <Text style={styles.notifMessage} numberOfLines={2}>
+                                                                            "{item.message}"
+                                                                        </Text>
+
+                                                                        <Text style={styles.tapToHideText}>
+                                                                            Tap to mark as seen
+                                                                        </Text>
+                                                                    </View>
+                                                                </TouchableOpacity>
+                                                            ))}
                                                         </View>
-
-                                                        <Text style={styles.assetContext}>
-                                                            Asset:{" "}
-                                                            <Text style={{ fontWeight: "bold" }}>
-                                                                {item.asset?.name || "N/A"}
-                                                            </Text>
-                                                        </Text>
-
-                                                        <Text style={styles.notifMessage} numberOfLines={2}>
-                                                            "{item.message}"
-                                                        </Text>
-                                                    </View>
-
-                                                    <Text style={styles.notifTime}>
-                                                        {item.createdAt
-                                                            ? new Date(item.createdAt).toLocaleDateString("en-GB")
-                                                            : ""}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            ))
+                                                    );
+                                                });
+                                            })()
                                         ) : (
                                             <View style={styles.emptyContainer}>
                                                 <Text style={styles.emptyText}>No activity recorded</Text>
@@ -574,27 +624,79 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontStyle: 'italic',
     },
+    notifGroup: {
+        marginBottom: 20,
+        borderRadius: 12,
+        backgroundColor: '#F7FAFC',
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    groupHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 15,
+        backgroundColor: '#EDF2F7',
+        borderBottomWidth: 1,
+        borderBottomColor: '#CBD5E0',
+        cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+    },
+    groupHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    groupIndicator: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 10,
+    },
+    groupSenderName: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#2D3748',
+        marginRight: 10,
+    },
+    notifBadge: {
+        minWidth: 24,
+        height: 24,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+    },
+    notifBadgeText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
     roleIndicator: { width: 4, height: 40, borderRadius: 2, marginRight: 12 },
     notifMainContent: { flex: 1 },
     senderName: { fontSize: 15, fontWeight: 'bold', color: '#2D3748' },
     roleTag: { fontWeight: 'normal', color: '#A0AEC0', fontSize: 11 },
     notifMessage: { fontSize: 13, color: '#4A5568', marginTop: 2, fontStyle: 'italic' },
-    notifTime: { fontSize: 11, color: '#CBD5E0', marginLeft: 10 },
+    notifTime: { fontSize: 11, color: '#CBD5E0', marginLeft: 'auto' },
     notifLine: {
         flexDirection: 'row',
-        paddingVertical: 12,
-        paddingHorizontal: 10,
+        paddingVertical: 15,
+        paddingHorizontal: 15,
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(0,0,0,0.05)',
-        alignItems: 'center',
+        alignItems: 'flex-start',
+        backgroundColor: '#FFFFFF',
     },
-    notifHeaderRow: { flexDirection: 'row', alignItems: 'center', },
+    notifHeaderRow: { 
+        flexDirection: 'row', 
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
     tagContainer: {
         backgroundColor: '#EDF2F7',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        marginLeft: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
     },
     roleTagText: {
         fontSize: 10,
@@ -605,7 +707,14 @@ const styles = StyleSheet.create({
     assetContext: {
         fontSize: 12,
         color: '#718096',
-        marginTop: 2,
+        marginTop: 4,
+        marginBottom: 4,
+    },
+    tapToHideText: {
+        fontSize: 11,
+        color: '#A0AEC0',
+        fontStyle: 'italic',
+        marginTop: 6,
     },
 });
 

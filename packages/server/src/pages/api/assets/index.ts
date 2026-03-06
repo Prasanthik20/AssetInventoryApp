@@ -1,9 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
+import { setCorsHeaders } from '@/lib/corsHeaders';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    // Set CORS headers
+    const origin = req.headers.origin as string;
+    setCorsHeaders(res, origin);
+
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
     if (req.method !== 'GET') {
-        res.setHeader('Allow', ['GET']);
+        res.setHeader('Allow', ['GET', 'OPTIONS']);
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
 
@@ -33,11 +42,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 a.id,
                 a.name AS "assetName",
                 a."asset_Id" AS "barcode",
+                a."barcodeURL" AS "barcodeURL",
                 a."serial_no" AS "serialNumber",
                 a.location,
                 a."purchase_date" AS "purchaseDate",
                 a.price,
                 a."warranty_expiry" AS "warrantyExpiry",
+                a."photoURL" AS "photoURL",
+                
                 cat.category AS "category",
                 s.status AS "status",
                 u."fullName" AS "assignedBy",
@@ -81,6 +93,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             purchaseDate: asset.purchaseDate,
             warrantyExpiry: asset.warrantyExpiry,
             price: asset.price,
+            photoURL: asset.photoURL || null,
+            barcodeURL: asset.barcodeURL || null,
             expectedReturnDate: asset.expectedReturnDate || null,
             assignmentId: asset.assignmentId || null,
             operatorId: asset.operatorId || null,

@@ -1,7 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import query from "@/lib/db";
+import { setCorsHeaders } from "@/lib/corsHeaders";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    // Set CORS headers
+    const origin = req.headers.origin as string;
+    setCorsHeaders(res, origin);
+
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
     try {
         const sql = `
            SELECT

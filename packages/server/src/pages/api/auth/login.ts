@@ -1,15 +1,26 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
 import bcrypt from "bcryptjs";
+import { setCorsHeaders } from '@/lib/corsHeaders';
 
 export default async function loginCoreHandler(
   req: NextApiRequest,
   res: NextApiResponse
 ): Promise<void> {
 
+  // Set CORS headers
+  const origin = req.headers.origin as string;
+  setCorsHeaders(res, origin);
+
+  // Handle OPTIONS for CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   // ❌ Block non-POST requests
   if (req.method !== 'POST') {
-    res.setHeader("Allow", ['POST']);
+    res.setHeader("Allow", ['POST', 'OPTIONS']);
     res.status(405).end(`Method ${req.method} Not Allowed`);
     return;
   }
