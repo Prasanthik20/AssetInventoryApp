@@ -45,7 +45,6 @@ const AssignAssetScreen: React.FC = () => {
   // ⬅️ Supervisor details from CompanyLoginScreen
   const supervisor_employeeId = route.params?.supervisor_employeeId;
   const supervisorName = route.params?.supervisorName
-  console.log("Supervisor:", supervisor_employeeId, supervisorName);
 
   const today = new Date().toISOString().split('T')[0];
 

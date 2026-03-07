@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ImageBackground, TouchableOpacity, Image, TextInput, Modal,
-  FlatList, Platform, ScrollView,
+  FlatList, Platform, ScrollView, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -11,9 +11,45 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import useAssetMeta from "../../hooks/useAssetMeta";
 import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
 import axios from 'axios';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, "AddEditAsset">;
 const isMobileDevice = Platform.OS !== 'web';
+
+const inferMimeType = (uri: string, explicitMimeType?: string): string => {
+    if (explicitMimeType) return explicitMimeType;
+
+    const cleanUri = uri.split('?')[0].toLowerCase();
+    if (cleanUri.endsWith('.png')) return 'image/png';
+    if (cleanUri.endsWith('.webp')) return 'image/webp';
+    if (cleanUri.endsWith('.heic')) return 'image/heic';
+    if (cleanUri.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
+};
+
+const toPersistentDataUrl = async (uri: string, mimeType?: string): Promise<string> => {
+    if (!uri) return '';
+    if (uri.startsWith('data:')) return uri;
+
+    const resolvedMimeType = inferMimeType(uri, mimeType);
+
+    if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result || ''));
+            reader.onerror = () => reject(new Error('Failed to convert blob to data URL'));
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: 'base64' as any,
+    });
+    return `data:${resolvedMimeType};base64,${base64}`;
+};
 
 /**
  * Reusable Modal for Pickers
@@ -69,6 +105,8 @@ const AddEditAsset: React.FC = () => {
     purchaseDate: new Date().toISOString().split('T')[0],
     warrantyExpiry: "",
     price: "",
+    barcode: "",
+    photoURL: "",
     assignmentId: 0,
     isOverdue: false,
   });
@@ -85,6 +123,74 @@ const AddEditAsset: React.FC = () => {
 
   const handleInputChange = (field: keyof Asset, value: any) =>
     setAssetData((prev) => ({ ...prev, [field]: value }));
+
+  const handleImageUpload = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!permissionResult.granted) {
+        Alert.alert("Permission Required", "Please allow access to your photo library.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        try {
+          const dataURL = await toPersistentDataUrl(
+            result.assets[0].uri,
+            result.assets[0].mimeType || undefined
+          );
+          handleInputChange('photoURL', dataURL);
+        } catch (readError) {
+          console.warn("Could not read file, using URI:", readError);
+          handleInputChange('photoURL', result.assets[0].uri);
+        }
+      }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to select image");
+    }
+  };
+
+  const handleBarcodeUpload = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!permissionResult.granted) {
+        Alert.alert("Permission Required", "Please allow access to your photo library.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        try {
+          const dataURL = await toPersistentDataUrl(
+            result.assets[0].uri,
+            result.assets[0].mimeType || undefined
+          );
+          handleInputChange('barcode', dataURL);
+        } catch (readError) {
+          console.warn("Could not read barcode file, using URI:", readError);
+          handleInputChange('barcode', result.assets[0].uri);
+        }
+      }
+    } catch (error) {
+      console.error("Error picking barcode image:", error);
+      Alert.alert("Error", "Failed to select barcode image");
+    }
+  };
 
   // Shared Date Change Handler
   const onDateChange = (field: 'purchaseDate' | 'warrantyExpiry', event: any, selectedDate?: Date) => {
@@ -141,10 +247,27 @@ const AddEditAsset: React.FC = () => {
             colors={['rgba(59, 89, 184, 0.85)', 'rgba(93, 113, 200, 0.8)']}
             style={styles.leftPanel}
           >
-            <Image
-              source={{ uri: 'https://i.imgur.com/gYf2xmm.png' }}
-              style={styles.leftPanelImage}
-            />
+            <TouchableOpacity 
+              onPress={handleImageUpload}
+              style={styles.imageUploadContainer}
+            >
+              {assetData.photoURL ? (
+                <View style={styles.imageWrapper}>
+                  <Image
+                    source={{ uri: assetData.photoURL }}
+                    style={styles.leftPanelImage}
+                  />
+                  <View style={styles.editOverlay}>
+                    <Feather name="edit-2" size={24} color="#fff" />
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.uploadPlaceholderLarge}>
+                  <Feather name="camera" size={48} color="#fff" />
+                  <Text style={styles.uploadTextLarge}>Upload Asset Photo</Text>
+                </View>
+              )}
+            </TouchableOpacity>
             <Text style={styles.leftPanelTitle}>ASSET{"\n"}DETAILS</Text>
             <Text style={styles.leftPanelSubtitle}>EQUIPMENT RECORD SYSTEM</Text>
             <Text style={styles.brandName}>ASSETFLOW PRO</Text>
@@ -160,7 +283,7 @@ const AddEditAsset: React.FC = () => {
               <Text style={styles.headerTitle}>Add New Asset</Text>
               <View style={styles.headerRight}>
                 <Feather name="user" size={14} color="#3B59B8" />
-                <Text style={styles.userText}>Supervisor</Text>
+                {/* <Text style={styles.userText}>Supervisor</Text> */}
               </View>
             </View>
 
@@ -228,6 +351,29 @@ const AddEditAsset: React.FC = () => {
                 <View style={styles.formColumn}>
                   <Text style={styles.sectionTitle}>Acquisition Info</Text>
 
+                  {/* Mobile Image Upload */}
+                  {isMobileDevice && (
+                    <>
+                      <Text style={styles.label}>Asset Photo</Text>
+                      <TouchableOpacity 
+                        style={styles.imageUploadBox}
+                        onPress={handleImageUpload}
+                      >
+                        {assetData.photoURL ? (
+                          <Image 
+                            source={{ uri: assetData.photoURL }} 
+                            style={styles.photoPreview}
+                          />
+                        ) : (
+                          <View style={styles.uploadPlaceholder}>
+                            <Feather name="camera" size={24} color="#3B59B8" />
+                            <Text style={styles.uploadText}>Upload Photo</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  )}
+
                   <Text style={styles.label}>Current Location</Text>
                   <TouchableOpacity style={styles.pickerInput} onPress={() => setShowLocationPicker(true)}>
                     <Text style={styles.pickerText}>{assetData.location}</Text>
@@ -284,6 +430,24 @@ const AddEditAsset: React.FC = () => {
                       keyboardType="numeric" 
                     />
                   </View>
+
+                  <Text style={styles.label}>Barcode Image</Text>
+                  <TouchableOpacity 
+                    style={styles.imageUploadBox}
+                    onPress={handleBarcodeUpload}
+                  >
+                    {assetData.barcode ? (
+                      <Image 
+                        source={{ uri: assetData.barcode }} 
+                        style={styles.barcodePreview}
+                      />
+                    ) : (
+                      <View style={styles.uploadPlaceholder}>
+                        <Feather name="maximize" size={24} color="#3B59B8" />
+                        <Text style={styles.uploadText}>Upload Barcode</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
             </ScrollView>
@@ -367,7 +531,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 30,
   },
-  leftPanelImage: { width: 150, height: 150, resizeMode: 'contain', marginBottom: 20 },
+  leftPanelImage: { width: 150, height: 150, resizeMode: 'cover', borderRadius: 10, marginBottom: 20 },
+  imageUploadContainer: {
+    marginBottom: 20,
+  },
+  imageWrapper: {
+    position: 'relative',
+  },
+  editOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadPlaceholderLarge: {
+    width: 150,
+    height: 150,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadTextLarge: {
+    color: '#fff',
+    marginTop: 10,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   leftPanelTitle: { fontSize: 32, fontWeight: '900', color: '#fff', textAlign: 'center', lineHeight: 38 },
   leftPanelSubtitle: { fontSize: 12, color: '#fff', marginTop: 10, opacity: 0.8, letterSpacing: 1.5, textAlign: 'center' },
   brandName: { fontSize: 14, color: '#fff', marginTop: 40, fontWeight: 'bold', opacity: 0.6 },
@@ -463,6 +662,41 @@ paddingTop: 20,
     borderRadius: 15,
     alignItems: 'center' },
   buttonText: { color: '#fff', fontSize: 14, fontWeight: 'bold', letterSpacing: 1 },
+
+  // Image Upload Styles
+  imageUploadBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 18,
+    minHeight: 120,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  uploadPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  uploadText: {
+    color: '#3B59B8',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  barcodePreview: {
+    width: '100%',
+    height: 80,
+    resizeMode: 'contain',
+  },
+  photoPreview: {
+    width: '100%',
+    height: 120,
+    resizeMode: 'cover',
+  },
 
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },

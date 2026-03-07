@@ -347,6 +347,16 @@ useEffect(() => {
                                 {/* Quick Actions */}
                                 <View style={styles.actionsContainer}>
                                     <Text style={styles.sectionTitle}>Quick Actions</Text>
+                                    <TouchableOpacity onPress={() => navigation.navigate("AddEditAsset")}>
+                                        <LinearGradient
+                                            colors={['#4A90E2', '#2E5C8A']}
+                                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                            style={styles.addUserButton}
+                                        >
+                                            <Ionicons name="add-circle-outline" size={20} color="#fff" />
+                                            <Text style={styles.addUserButtonText}>Add New Asset</Text>
+                                        </LinearGradient>
+                                    </TouchableOpacity>
                                     <TouchableOpacity onPress={() => navigation.navigate("AddCompanyUser")}>
                                         <LinearGradient
                                             colors={['#27B2C3', '#40D69B']}
