@@ -1,7 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
+import { setCorsHeaders } from '@/lib/corsHeaders';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Set CORS headers
+  const origin = req.headers.origin as string;
+  setCorsHeaders(res, origin);
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
@@ -29,6 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ad.location AS "assetLocation",
     aa.expected_return_date AS "expectedReturnDate",
     ad.assigned_by AS "assignedBy",
+    
     s.status AS "Status"
   FROM "Asset_Assignments" aa
   INNER JOIN "Asset_Details" ad ON ad.id = aa."assetId"
@@ -63,6 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         barcode: asset.barcode,
         serialNo: asset.serialNo,
         location: asset.assetLocation,
+        photoURL: null,
         expectedReturnDate: asset.expectedReturnDate,
         assignedBy: asset.assignedBy,
         isOverdue,

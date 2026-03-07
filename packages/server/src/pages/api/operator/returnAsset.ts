@@ -1,23 +1,23 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
+import { setCorsHeaders } from '@/lib/corsHeaders';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    // Set CORS headers
+    const origin = req.headers.origin as string;
+    setCorsHeaders(res, origin);
 
     if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8081');
-        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        return res.status(200).end();
+        res.status(200).end();
+        return;
     }
-
-    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8081');
 
     if (req.method !== 'POST') {
         return res.status(405).end();
     }
 
     try {
-        const { assetIds, operatorEmployeeId } = req.body;
+        const { assetIds, operatorEmployeeId, photoURL } = req.body;
 
         if (!Array.isArray(assetIds) || assetIds.length === 0) {
             return res.status(400).json({ message: 'assetIds required' });
@@ -41,9 +41,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     [operatorEmployeeId, assetIdsInt]
         );
 
-        // 2️⃣ Unassign asset
-        await query(
-            `
+        // 2️⃣ Unassign asset and update photo if provided
+        if (photoURL) {
+            await query(
+                `
+          UPDATE "Asset_Details"
+    SET
+        assigned_to = NULL,
+        assigned_by = NULL,
+        "photoURL" = $2,
+        status_id = (
+            SELECT id FROM "Status" 
+            WHERE status ILIKE 'Unassigned' 
+            LIMIT 1
+        )
+    WHERE id = ANY($1::bigint[])
+    `,
+                [assetIdsInt, photoURL]
+            );
+        } else {
+            await query(
+                `
           UPDATE "Asset_Details"
     SET
         assigned_to = NULL,
@@ -55,8 +73,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         )
     WHERE id = ANY($1::bigint[])
     `,
-            [assetIdsInt]
-        );
+                [assetIdsInt]
+            );
+        }
 
         return res.status(200).json({
             message: 'Assets returned and unassigned successfully',

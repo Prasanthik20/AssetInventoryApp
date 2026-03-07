@@ -1,12 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
+import { setCorsHeaders } from '@/lib/corsHeaders';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    // Set CORS headers
+    const origin = req.headers.origin as string;
+    setCorsHeaders(res, origin);
 
-    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
     if (req.method !== 'POST') return res.status(405).json({ message: "Method not allowed" });
 
     try {
@@ -18,7 +22,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             expected_return_date,
             project_name,
             destination,
-            notes
+            notes,
+            photoURL
         } = req.body;
 
         if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
@@ -40,16 +45,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const assetId = Number(id);
 
             // Update Asset_Details: The source of truth for current status
-            await query(`
-                UPDATE "Asset_Details"
-                SET 
-                    status_id = $1, 
-                    assigned_by = $2, 
-                    assigned_to = $3, 
-                    location = $4
-                WHERE id = $5`, 
-                [statusId, supervisor_employeeId, operator_employeeId, destination, assetId]
-            );
+            // Update photo only if provided
+            if (photoURL) {
+                await query(`
+                    UPDATE "Asset_Details"
+                    SET 
+                        status_id = $1, 
+                        assigned_by = $2, 
+                        assigned_to = $3, 
+                        location = $4,
+                        "photoURL" = $5
+                    WHERE id = $6`, 
+                    [statusId, supervisor_employeeId, operator_employeeId, destination, photoURL, assetId]
+                );
+            } else {
+                await query(`
+                    UPDATE "Asset_Details"
+                    SET 
+                        status_id = $1, 
+                        assigned_by = $2, 
+                        assigned_to = $3, 
+                        location = $4
+                    WHERE id = $5`, 
+                    [statusId, supervisor_employeeId, operator_employeeId, destination, assetId]
+                );
+            }
 
             // Insert into Asset_Assignments: The history log
             await query(`

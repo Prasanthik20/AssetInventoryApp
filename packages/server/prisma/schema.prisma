@@ -74,6 +74,8 @@ model Asset_Details {
   purchase_date    DateTime?           @db.Date
   price            String?
   location         String?
+  photoURL         String?
+  barcodeURL       String?
   assignments      Asset_Assignments[]
   assignedByUser   Users?              @relation("AssetsAssignedBy", fields: [assigned_by], references: [employeeId])
   assignedToUser   Users?              @relation("AssetsAssignedTo", fields: [assigned_to], references: [employeeId])

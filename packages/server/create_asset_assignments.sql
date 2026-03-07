@@ -136,3 +136,6 @@ ALTER TABLE "Asset_Assignments"
 ADD CONSTRAINT "AssetAssignments_supervisor_fkey" 
 FOREIGN KEY ("supervisor_employeeId") REFERENCES "Users"("employeeId") 
 ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+-- Add photoURL column to Asset_Details for storing asset photos
+ALTER TABLE "Asset_Details" ADD COLUMN "photoURL" TEXT;

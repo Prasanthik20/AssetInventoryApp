@@ -1,14 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
+import { setCorsHeaders } from '@/lib/corsHeaders';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // Set CORS headers
+  const origin = req.headers.origin as string;
+  setCorsHeaders(res, origin);
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'GET') {
-    res.setHeader('Allow', ['GET']);
+    res.setHeader('Allow', ['GET', 'OPTIONS']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 

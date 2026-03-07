@@ -1,24 +1,27 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
 import bcrypt from "bcryptjs";
+import { setCorsHeaders } from '@/lib/corsHeaders';
 
 export default async function registerCoreHandler(
   req: NextApiRequest,
   res: NextApiResponse
 ): Promise<void> {
+  // Set CORS headers
+  const origin = req.headers.origin as string;
+  setCorsHeaders(res, origin);
 
-  // ✅ CORS HEADERS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  // ✅ Handle Preflight Request
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
   // ❌ Allow only POST
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'POST') {
     res.setHeader("Allow", ['POST']);
     res.status(405).end(`Method ${req.method} Not Allowed`);

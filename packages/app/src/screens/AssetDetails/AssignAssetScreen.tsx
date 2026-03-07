@@ -13,11 +13,13 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -65,6 +67,7 @@ const AssignAssetScreen: React.FC = () => {
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
 
   const [showAssignedPicker, setShowAssignedPicker] = useState(false);
   const [showDuePicker, setShowDuePicker] = useState(false);
@@ -142,6 +145,7 @@ const AssignAssetScreen: React.FC = () => {
         assigned_date: assignedDate,
         expected_return_date: dueDate,
         notes,
+        ...(photo && { photoURL: photo }), // Include photo if available
       });
 
       Alert.alert('Success', `${selectedAssets.length} Assets assigned!`);
@@ -170,8 +174,45 @@ const onDueChange = (event: any, selectedDate?: Date) => {
     Alert.alert('Scan Barcode', 'Camera functionality will be placed here.');
   };
 
-  const handleUploadPhoto = () => {
-    Alert.alert('Upload Photo', 'Image upload functionality will be placed here.');
+  const handleUploadPhoto = async () => {
+    try {
+      setPhotoLoading(true);
+
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera roll permission is required to upload photos.');
+        setPhotoLoading(false);
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const base64 = asset.base64;
+
+        if (base64) {
+          const photoURL = `data:image/jpeg;base64,${base64}`;
+          setPhoto(photoURL);
+          Alert.alert('✅ Photo Selected', 'Photo will be attached to the assignment.');
+        } else {
+          Alert.alert('Error', 'Failed to process image. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Photo picker error:', error);
+      Alert.alert('Error', 'Failed to open image library.');
+    } finally {
+      setPhotoLoading(false);
+    }
   };
 
   // -------------------- ASSET ITEM --------------------
@@ -412,12 +453,42 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                 )}
 
                 <Text style={styles.label}>Upload Photo (Optional)</Text>
-                <TouchableOpacity style={styles.uploadButton} onPress={handleUploadPhoto}>
-                  <Feather name="camera" size={20} color="#4A5568" />
-                  <Text style={styles.uploadButtonText}>
-                    {photo ? 'Photo Uploaded' : 'Tap to upload a photo'}
-                  </Text>
+                <TouchableOpacity 
+                  style={styles.uploadButton} 
+                  onPress={handleUploadPhoto}
+                  disabled={photoLoading}
+                >
+                  {photoLoading ? (
+                    <ActivityIndicator color="#4A5568" size="small" />
+                  ) : (
+                    <>
+                      <Feather name="camera" size={20} color="#4A5568" />
+                      <Text style={styles.uploadButtonText}>
+                        {photo ? '✓ Photo Uploaded' : 'Tap to upload a photo'}
+                      </Text>
+                    </>
+                  )}
                 </TouchableOpacity>
+
+                {/* Photo Preview */}
+                {photo && (
+                  <View style={styles.photoPreviewContainer}>
+                    <Image 
+                      source={{ uri: photo }} 
+                      style={styles.photoPreview}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity 
+                      style={styles.removePhotoButton}
+                      onPress={() => {
+                        setPhoto(null);
+                        Alert.alert('Removed', 'Photo has been removed.');
+                      }}
+                    >
+                      <Ionicons name="close" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </View>
           </ScrollView>
@@ -603,6 +674,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     marginLeft: 10,
+  },
+  photoPreviewContainer: {
+    position: 'relative',
+    marginTop: 15,
+    marginBottom: 20,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#F0F0F0',
+  },
+  photoPreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   footer: {
     flexDirection: 'row',

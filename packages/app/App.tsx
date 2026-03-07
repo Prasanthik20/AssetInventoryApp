@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
+import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -43,41 +44,65 @@ import ResetPasswordScreen from "./src/screens/Password/ResetPassword";
 
 function App(): React.JSX.Element {
   const [user, setUser] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
-  // ✅ Check user on app start
+  // Check if user is already logged in
   useEffect(() => {
-    const checkLogin = async () => {
+    const checkAuth = async () => {
       try {
-        const storedUser = await AsyncStorage.getItem("user");
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
+        const userData = await AsyncStorage.getItem("user");
+        if (userData) {
+          setUser(JSON.parse(userData));
         }
       } catch (error) {
-        console.log("Error checking login:", error);
+        console.error("Error loading user data:", error);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
-
-    checkLogin();
+    checkAuth();
   }, []);
 
-  if (isLoading) {
+  // Linking configuration so web refresh preserves the current route
+  const linking = {
+    prefixes: Platform.OS === 'web' && typeof window !== 'undefined'
+      ? [window.location.origin]
+      : ['assetinventory://'],
+    config: {
+      screens: {
+        CompanyLogin: 'login',
+        AddCompany: 'add-company',
+        CompanyDashboard: 'company-dashboard',
+        CompanyUsersScreen: 'company-users',
+        AddCompanyUser: 'add-company-user',
+        SupervisorDashboard: 'supervisor',
+        OperatorDashboard: 'operator',
+        SuperAdminLogin: 'superadmin/login',
+        SuperAdminDashboard: 'superadmin/dashboard',
+        TotalAssetDetails: 'assets/total',
+        OfficeAssets: 'assets/office',
+        FieldAssets: 'assets/field',
+        AddEditAsset: 'assets/edit',
+        AssignAsset: 'assign',
+        AssetFullDetails: 'assets/:asset',
+        ReturnAsset: 'return',
+        ForgotPassword: 'forgot-password',
+        ResetPassword: 'reset-password',
+      },
+    },
+  };
+
+  if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#0000ff" />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
-      {user ? (
-        <AppStack user={user} setUser={setUser} />
-      ) : (
-        <AuthStack setUser={setUser} />
-      )}
+    <NavigationContainer linking={linking}>
+      {user ? <AppStack user={user} setUser={setUser} /> : <AuthStack setUser={setUser} />}
     </NavigationContainer>
   );
 }

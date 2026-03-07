@@ -1,18 +1,22 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from "@/lib/db";
+import { setCorsHeaders } from "@/lib/corsHeaders";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  // Set CORS headers
+  const origin = req.headers.origin as string;
+  setCorsHeaders(res, origin);
 
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
 
   try {
     const {
       assetName, category, modelNumber, serialNumber,
-      purchaseDate, warrantyExpiry, price, location, status
+      purchaseDate, warrantyExpiry, price, location, status, photoURL
     } = req.body;
 
     // 1. Get Category ID (Matches Prisma categoryId)
@@ -37,8 +41,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const insertAsset = await query(
       `
       INSERT INTO "Asset_Details" 
-      (name, "categoryId", model_no, serial_no, purchase_date, warranty_expiry, price, location, status_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      (name, "categoryId", model_no, serial_no, purchase_date, warranty_expiry, price, location, status_id, "photoURL")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
       `,
       [
@@ -50,7 +54,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         warrantyExpiry || null,
         price || null,
         location || null,
-        statusId
+        statusId,
+        photoURL || null
       ]
     );
 
