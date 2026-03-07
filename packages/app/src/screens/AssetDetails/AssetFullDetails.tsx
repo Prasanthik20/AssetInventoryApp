@@ -355,7 +355,7 @@ const AssetFullDetails: React.FC = () => {
                             {!isMobileDevice && (
                             <View style={styles.headerRight}>
                                 <Feather name="user" size={16} color="#333" />
-                                <Text style={styles.userText}>Supervisor</Text>
+                                {/* <Text style={styles.userText}>Supervisor</Text> */}
                                 {/* <Switch
                                     trackColor={{ false: "#E9E9EA", true: "#34C759" }}
                                     thumbColor={"#f4f3f4"} value={true}
