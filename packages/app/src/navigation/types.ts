@@ -12,6 +12,7 @@ export type Asset = {
   category?: string;
   status?: string;
   barcode?: string;
+  barcodeURL?: string | null;
   location?: string;
   price?: string;
   purchaseDate?: string;

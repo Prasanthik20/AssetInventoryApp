@@ -212,22 +212,24 @@ const AddEditAsset: React.FC = () => {
 
   const handleCreate = async () => {
     try {
-      const res = await axios.post(`${baseURL}/api/assets/create`, {
-        headers: { "Content-Type": "application/json" },
-        data: assetData,
-      });
+      const res = await axios.post(
+        `${baseURL}/api/assets/create`,
+        assetData,
+        { headers: { "Content-Type": "application/json" } }
+      );
 
       const data = res.data;
-      if (res.status !== 200) {
+      if (res.status !== 201) {
         alert(data.message || "Something went wrong");
         return;
       }
 
       alert("Asset created successfully ✅");
       navigation.goBack();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Failed to create asset");
+      const errorMessage = error?.response?.data?.message || "Failed to create asset";
+      alert(errorMessage);
     }
   };
 
