@@ -289,7 +289,7 @@ const fetchDashboardData = async () => {
             ))}
           </Picker>
 
-      {/* Submit Button */}
+          {/* Submit Button */}
           <TouchableOpacity
               style={styles.modalButton}
               onPress={() => selectedItem && handleExtendDate(selectedItem.notificationId, extendDays)}>
@@ -314,10 +314,6 @@ const QuickActionsSection = ({ styles, navigation, employeeId, supervisorName }:
     <TouchableOpacity style={[styles.actionButton, styles.blueButton]} onPress={() => navigation.navigate('AddEditAsset')}>
       <Ionicons name="add-circle-outline" size={20} color="#fff" style={styles.actionIcon} />
       <Text style={styles.actionButtonText}>Add New Asset</Text>
-    </TouchableOpacity>
-    <TouchableOpacity style={[styles.actionButton, styles.whiteButton]}>
-      <Ionicons name="barcode-outline" size={20} color="#4A90E2" style={styles.actionIcon} />
-      <Text style={[styles.actionButtonText, styles.whiteButtonText]}>Scan Barcode</Text>
     </TouchableOpacity>
     <TouchableOpacity onPress={() => navigation.navigate('AssignAsset', { supervisor_employeeId: employeeId, supervisorName: supervisorName })}>
       <View style={[styles.actionButton, { backgroundColor: '#32C8A4' }]}>

@@ -33,6 +33,8 @@ const OfficeAssets: React.FC = () => {
     // Search Filter: Check if assetName or barcode matches search text
     const matchesSearch = searchText
       ? asset.assetName.toLowerCase().includes(searchText.toLowerCase()) ||
+      asset.assignedTo?.toLowerCase().includes(searchText.toLowerCase()) ||
+      asset.location?.toLowerCase().includes(searchText.toLowerCase()) ||
         // barcode may be undefined, so check before calling toLowerCase
         (asset.barcode?.toLowerCase().includes(searchText.toLowerCase()) ?? false)
       : true;
@@ -65,7 +67,7 @@ const OfficeAssets: React.FC = () => {
       <Ionicons name="business-outline" size={24} color="#3B59B8" style={styles.assetIcon} />
       <View style={styles.assetInfo}>
         <Text style={styles.assetName}>{item.assetName} ({item.barcode})</Text>
-        <Text style={styles.assetSubtext}>Last User: {item.assignedTo || 'N/A'}</Text>
+        <Text style={styles.assetSubtext}>Location: {item.location || 'N/A'}</Text>
       </View>
     </View>
   );
@@ -120,6 +122,7 @@ const OfficeAssets: React.FC = () => {
                 <View style={styles.assetInfo}>
                   <Text style={styles.assetName}>{item.assetName} ({item.barcode})</Text>
                   <Text style={styles.assetSubtext}>Last User: {item.assignedTo || 'N/A'}</Text>
+                  <Text style={styles.assetSubtext}>Location: {item.location || 'N/A'}</Text>
                 </View>
               </View>
             )}
