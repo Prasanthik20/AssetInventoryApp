@@ -167,6 +167,71 @@ export function assetStyles(isMobileLayout: boolean) {
       borderBottomColor: 'rgba(255,255,255,0.3)',
       paddingBottom: 5,
     },
+    valueText: {
+      fontSize: 14,
+      color: '#1A202C',
+      fontWeight: '500',
+    },
+    inlinePicker: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    inlinePickerText: {
+      fontSize: 14,
+      color: '#1A202C',
+      fontWeight: '500',
+      flex: 1,
+      marginRight: 8,
+    },
+    inlinePickerPlaceholder: {
+      color: '#6B7280',
+    },
+    pickerModalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 16,
+    },
+    pickerModalCard: {
+      width: '100%',
+      maxWidth: 420,
+      maxHeight: '70%',
+      backgroundColor: '#fff',
+      borderRadius: 12,
+      padding: 16,
+    },
+    pickerModalTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      marginBottom: 12,
+      color: '#111827',
+    },
+    pickerList: {
+      maxHeight: 320,
+    },
+    pickerModalItem: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: '#F1F5F9',
+    },
+    pickerModalItemText: {
+      fontSize: 14,
+      color: '#1F2937',
+    },
+    pickerModalCloseBtn: {
+      marginTop: 12,
+      alignSelf: 'flex-end',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      backgroundColor: '#E2E8F0',
+    },
+    pickerModalCloseText: {
+      color: '#334155',
+      fontWeight: '600',
+    },
 
     barcodeContainer: {
       marginBottom: 5,

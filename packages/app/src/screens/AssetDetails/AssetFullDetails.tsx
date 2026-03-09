@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, Alert, TextInput, useWindowDimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, Alert, TextInput, useWindowDimensions, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
 import assetStyles from './asset.styles';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 type AssetFullDetailsRouteProp = RouteProp<
@@ -26,6 +27,29 @@ const iconMap: any = {
     "user-check": <Feather name="user-check" size={16} color="#222" />,
     calendar: <Feather name="calendar" size={16} color="#222" />,
 };
+
+type AssigneeOption = {
+    label: string;
+    value: string;
+    roleName: string;
+};
+
+const FieldPicker = ({
+    value,
+    placeholder,
+    onPress,
+}: {
+    value?: string;
+    placeholder: string;
+    onPress: () => void;
+}) => (
+    <TouchableOpacity style={styles.inlinePicker} onPress={onPress}>
+        <Text style={[styles.inlinePickerText, !value && styles.inlinePickerPlaceholder]}>
+            {value || placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={16} color="#555" />
+    </TouchableOpacity>
+);
 const DisplayField = ({ label, value, icon, children, editable, onChangeText }: { 
     label: string, 
     value?: string, 
@@ -128,13 +152,75 @@ const AssetFullDetails: React.FC = () => {
     const [serialNumber, setSerialNumber] = useState(asset?.serialNumber || '');
     const [price, setPrice] = useState(asset?.price || '');
     const [location, setLocation] = useState(asset?.location || '');
+    const [statusValue, setStatusValue] = useState(asset?.status || '');
+    const [assignedTo, setAssignedTo] = useState(asset?.assignedTo || '');
     const [photoURL, setPhotoURL] = useState(asset?.photoURL || '');
     const [initialPhotoURL] = useState(asset?.photoURL || '');
     const [barcodeURL, setBarcodeURL] = useState(asset?.barcodeURL || '');
     const [initialBarcodeURL] = useState(asset?.barcodeURL || '');
+    const [showStatusPicker, setShowStatusPicker] = useState(false);
+    const [showLocationPicker, setShowLocationPicker] = useState(false);
+    const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+    const [assignableUsers, setAssignableUsers] = useState<AssigneeOption[]>([]);
+    const [isPrivilegedEditor, setIsPrivilegedEditor] = useState(false);
+
+    const locationOptions = ['Office', 'Field'];
     
     const matchedCategory = categories.find(c => String(c.id) === String(asset.category));
     const matchedStatus = statuses.find(s => String(s.id) === String(asset.status));
+
+    useEffect(() => {
+        const loadAssigneeOptions = async () => {
+            try {
+                const storedUser = await AsyncStorage.getItem('user');
+                const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+                const editorRole = String(
+                    parsedUser?.roleName || parsedUser?.role?.roleName || '',
+                ).toLowerCase();
+                const privilegedRoles = [
+                    'admin',
+                    'superadmin',
+                    'super admin',
+                ];
+                const canEditAllEmployees = privilegedRoles.includes(editorRole);
+                setIsPrivilegedEditor(canEditAllEmployees);
+
+                const response = await axios.get(`${baseURL}/api/auth/users`);
+                const rawUsers =
+                    response.data?.users || response.data?.data || response.data || [];
+
+                const filteredUsers = rawUsers.filter((u: any) => {
+                    const roleName = String(
+                        u?.role?.roleName || u?.roleName || '',
+                    ).toLowerCase();
+
+                    if (canEditAllEmployees) return true;
+                    return roleName === 'operator';
+                });
+
+                const mappedUsers = filteredUsers.map((u: any) => {
+                    const displayName =
+                        u?.fullName || u?.name || `Employee ${u?.employeeId || ''}`;
+                    const roleName = String(
+                        u?.role?.roleName || u?.roleName || 'Employee',
+                    );
+
+                    return {
+                        label: `${displayName} (${roleName})`,
+                        value: displayName,
+                        roleName,
+                    };
+                });
+
+                setAssignableUsers(mappedUsers);
+            } catch (error) {
+                console.error('Failed to load assignee options:', error);
+                setAssignableUsers([]);
+            }
+        };
+
+        loadAssigneeOptions();
+    }, []);
     
     const handleImageUpload = async () => {
         try {
@@ -233,6 +319,12 @@ const AssetFullDetails: React.FC = () => {
             if (location !== asset.location) {
                 updateData.location = location;
             }
+            if (statusValue !== asset.status) {
+                updateData.status = statusValue;
+            }
+            if (assignedTo !== (asset.assignedTo || '')) {
+                updateData.assignedTo = assignedTo;
+            }
             
             // Include photoURL if it changed and is not empty
             if (photoURL && photoURL !== initialPhotoURL) {
@@ -265,6 +357,8 @@ const AssetFullDetails: React.FC = () => {
                 asset.serialNumber = serialNumber;
                 asset.price = price;
                 asset.location = location;
+                asset.status = statusValue;
+                asset.assignedTo = assignedTo;
                 if (photoURL) {
                     asset.photoURL = photoURL;
                 }
@@ -287,6 +381,8 @@ const AssetFullDetails: React.FC = () => {
             setSerialNumber(asset?.serialNumber || '');
             setPrice(asset?.price || '');
             setLocation(asset?.location || '');
+            setStatusValue(asset?.status || '');
+            setAssignedTo(asset?.assignedTo || '');
             setPhotoURL(asset?.photoURL || '');
             setBarcodeURL(asset?.barcodeURL || '');
         }
@@ -387,7 +483,21 @@ const AssetFullDetails: React.FC = () => {
                                         onChangeText={setAssetName}
                                     />
                                     <DisplayField label="Category" value={asset.category} icon="layers"/>
-                                    <DisplayField label="Status" value={asset.status} icon="check-circle" />
+                                    <DisplayField
+                                        label="Status"
+                                        value={statusValue || 'N/A'}
+                                        icon="check-circle"
+                                    >
+                                        {isEditMode ? (
+                                            <FieldPicker
+                                                value={statusValue}
+                                                placeholder="Select Status"
+                                                onPress={() => setShowStatusPicker(true)}
+                                            />
+                                        ) : (
+                                            <Text style={styles.valueText}>{statusValue || 'N/A'}</Text>
+                                        )}
+                                    </DisplayField>
                                     <DisplayField 
                                         label="Model Number" 
                                         value={modelNumber} 
@@ -399,15 +509,11 @@ const AssetFullDetails: React.FC = () => {
                                         label="Serial Number" 
                                         value={serialNumber} 
                                         icon="hash" 
-                                        editable={isEditMode}
-                                        onChangeText={setSerialNumber}
                                     />
                                     <DisplayField 
                                         label="Price" 
                                         value={price} 
                                         icon="dollar" 
-                                        editable={isEditMode}
-                                        onChangeText={setPrice}
                                     />
                                 </View>
 
@@ -450,13 +556,35 @@ const AssetFullDetails: React.FC = () => {
                                     </TouchableOpacity>
                                    
                                     <DisplayField 
-                                        label="Current Location" 
-                                        value={location} 
-                                        icon="map-pin" 
-                                        editable={isEditMode}
-                                        onChangeText={setLocation}
-                                    />
-                                    <DisplayField label="Assigned To" value={asset.assignedTo || "N/A"} icon="user-check" />
+                                        label="Location"
+                                        value={location}
+                                        icon="map-pin"
+                                    >
+                                        {isEditMode ? (
+                                            <FieldPicker
+                                                value={location}
+                                                placeholder="Select Base Station"
+                                                onPress={() => setShowLocationPicker(true)}
+                                            />
+                                        ) : (
+                                            <Text style={styles.valueText}>{location || 'N/A'}</Text>
+                                        )}
+                                    </DisplayField>
+                                    <DisplayField label="Assigned To" value={assignedTo || "N/A"} icon="user-check">
+                                        {isEditMode ? (
+                                            <FieldPicker
+                                                value={assignedTo}
+                                                placeholder={
+                                                    isPrivilegedEditor
+                                                        ? 'Select Employee'
+                                                        : 'Select Operator'
+                                                }
+                                                onPress={() => setShowAssigneePicker(true)}
+                                            />
+                                        ) : (
+                                            <Text style={styles.valueText}>{assignedTo || 'N/A'}</Text>
+                                        )}
+                                    </DisplayField>
                                     <DisplayField label="Warranty Expiry" value={formatDate(asset.warrantyExpiry)} icon="calendar" />
                                     <DisplayField label="Purchase Date" value={formatDate(asset.purchaseDate)} icon="calendar" />
                                 </View>
@@ -486,6 +614,113 @@ const AssetFullDetails: React.FC = () => {
                         </View>
                     </View>
                 </View>
+
+                {/* Status Picker Modal */}
+                <Modal
+                    visible={showStatusPicker}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowStatusPicker(false)}
+                >
+                    <View style={styles.pickerModalBackdrop}>
+                        <View style={styles.pickerModalCard}>
+                            <Text style={styles.pickerModalTitle}>Select Status</Text>
+                            <ScrollView style={styles.pickerList}>
+                                {statuses.map((s: any, index: number) => {
+                                    const value = String(s?.status || '');
+                                    return (
+                                        <TouchableOpacity
+                                            key={`${value}-${index}`}
+                                            style={styles.pickerModalItem}
+                                            onPress={() => {
+                                                setStatusValue(value);
+                                                setShowStatusPicker(false);
+                                            }}
+                                        >
+                                            <Text style={styles.pickerModalItemText}>{value}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                            <TouchableOpacity
+                                style={styles.pickerModalCloseBtn}
+                                onPress={() => setShowStatusPicker(false)}
+                            >
+                                <Text style={styles.pickerModalCloseText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Location Picker Modal */}
+                <Modal
+                    visible={showLocationPicker}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowLocationPicker(false)}
+                >
+                    <View style={styles.pickerModalBackdrop}>
+                        <View style={styles.pickerModalCard}>
+                            <Text style={styles.pickerModalTitle}>Select Location</Text>
+                            <ScrollView style={styles.pickerList}>
+                                {locationOptions.map((item, index) => (
+                                    <TouchableOpacity
+                                        key={`${item}-${index}`}
+                                        style={styles.pickerModalItem}
+                                        onPress={() => {
+                                            setLocation(item);
+                                            setShowLocationPicker(false);
+                                        }}
+                                    >
+                                        <Text style={styles.pickerModalItemText}>{item}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                            <TouchableOpacity
+                                style={styles.pickerModalCloseBtn}
+                                onPress={() => setShowLocationPicker(false)}
+                            >
+                                <Text style={styles.pickerModalCloseText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Assignee Picker Modal */}
+                <Modal
+                    visible={showAssigneePicker}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowAssigneePicker(false)}
+                >
+                    <View style={styles.pickerModalBackdrop}>
+                        <View style={styles.pickerModalCard}>
+                            <Text style={styles.pickerModalTitle}>
+                                {isPrivilegedEditor ? 'Select Employee' : 'Select Operator'}
+                            </Text>
+                            <ScrollView style={styles.pickerList}>
+                                {assignableUsers.map((u, index) => (
+                                    <TouchableOpacity
+                                        key={`${u.value}-${index}`}
+                                        style={styles.pickerModalItem}
+                                        onPress={() => {
+                                            setAssignedTo(u.value);
+                                            setShowAssigneePicker(false);
+                                        }}
+                                    >
+                                        <Text style={styles.pickerModalItemText}>{u.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                            <TouchableOpacity
+                                style={styles.pickerModalCloseBtn}
+                                onPress={() => setShowAssigneePicker(false)}
+                            >
+                                <Text style={styles.pickerModalCloseText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
             </SafeAreaView>
         </ImageBackground>
     );
@@ -522,6 +757,64 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         padding: 0,
         margin: 0,
+    },
+    inlinePicker: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    inlinePickerText: {
+        fontSize: 14,
+        color: '#1A202C',
+        fontWeight: '500',
+    },
+    inlinePickerPlaceholder: {
+        color: '#6b7280',
+    },
+    pickerModalBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 16,
+    },
+    pickerModalCard: {
+        width: '100%',
+        maxWidth: 420,
+        maxHeight: '70%',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 16,
+    },
+    pickerModalTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 12,
+        color: '#111827',
+    },
+    pickerList: {
+        maxHeight: 320,
+    },
+    pickerModalItem: {
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    pickerModalItemText: {
+        fontSize: 14,
+        color: '#1f2937',
+    },
+    pickerModalCloseBtn: {
+        marginTop: 12,
+        alignSelf: 'flex-end',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        backgroundColor: '#e2e8f0',
+    },
+    pickerModalCloseText: {
+        color: '#334155',
+        fontWeight: '600',
     },
 });
 
