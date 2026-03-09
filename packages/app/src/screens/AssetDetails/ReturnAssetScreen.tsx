@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, Platform,ImageBackground, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, Platform,ImageBackground, ScrollView, Image, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -9,11 +9,12 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 
-const isMobileDevice = Platform.OS !== 'web';
-
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
 const ReturnAssetScreen: React.FC = () => {
+    const { width } = useWindowDimensions();
+    const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+    const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
     const route = useRoute<ReturnAssetRouteProp>();
     const { assets, operatorEmployeeId } = route.params;
     const navigation = useNavigation<any>();
@@ -414,7 +415,7 @@ const ReturnAssetScreen: React.FC = () => {
             blurRadius={10}
         >
             <SafeAreaView style={styles.safeArea}>
-                <View style={[styles.container, isMobileDevice && { margin: 10, borderRadius: 15 }]}>
+                <View style={[styles.container, isMobileLayout && { margin: 10, borderRadius: 15 }]}>
                     {/* Header */}
                     <View style={styles.header}>
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -428,15 +429,15 @@ const ReturnAssetScreen: React.FC = () => {
                     <ScrollView 
                         style={styles.body} 
                         showsVerticalScrollIndicator={false}
-                        contentContainerStyle={isMobileDevice ? { paddingBottom: 20 } : { flex: 1 }}
+                        contentContainerStyle={isMobileLayout ? { paddingBottom: 20 } : { flex: 1 }}
                     >
-                        <View style={[styles.formBody, isMobileDevice && { flexDirection: 'column', gap: 15 }]}>
+                        <View style={[styles.formBody, isMobileLayout && { flexDirection: 'column', gap: 15 }]}>
                             {/* Left Column - Asset List */}
                             <View style={styles.formColumn}>
                                 <Text style={styles.instructions}>
                                     Select one or more assets you wish to return.
                                 </Text>
-                                {isMobileDevice ? (
+                                {isMobileLayout ? (
                                     // 2. MOBILE FIX: Pass item directly to the updated function
                                     assets.map((item) => renderAssetItem(item))
                                 ) : (
@@ -587,15 +588,15 @@ const ReturnAssetScreen: React.FC = () => {
                     </ScrollView>
 
                     {/* Footer with actions */}
-                    <View style={[styles.footer, isMobileDevice && { justifyContent: 'space-between' }]}>
+                    <View style={[styles.footer, isMobileLayout && { justifyContent: 'space-between' }]}>
                         <TouchableOpacity 
-                            style={[styles.cancelButton, isMobileDevice && { flex: 1, marginRight: 10 }]} 
+                            style={[styles.cancelButton, isMobileLayout && { flex: 1, marginRight: 10 }]} 
                             onPress={() => navigation.goBack()}
                         >
                             <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
-                            style={isMobileDevice && { flex: 2 }} 
+                            style={isMobileLayout && { flex: 2 }} 
                             onPress={handleReturn}>
                             <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.returnButton}>
                                 <Text style={styles.buttonText}>

@@ -13,6 +13,7 @@ import {
   ScrollView,
   Platform,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -28,8 +29,6 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { baseURL, RootStackParamList } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { opratorStyles } from './operator.styles';
-
-const isMobileDevice = Platform.OS !== 'web';
 
 type DashboardNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -74,8 +73,11 @@ interface LocationStat {
 }
 
 const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
+  const { width, height } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
   const route = useRoute<RouteProp<RootStackParamList, 'OperatorDashboard'>>();
-  const styles = opratorStyles();
+  const styles = opratorStyles({ width, height });
   // ----------------------------
   // 🔹 Get operator data
   // ----------------------------
@@ -431,17 +433,6 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
     >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
-          {/* {!isMobileDevice && (
-          <LinearGradient
-            colors={["rgba(93, 113, 200, 0.7)", "rgba(59, 89, 184, 0.8)"]}
-            style={styles.leftPanel}
-          >
-            <Image source={{ uri: "https://i.imgur.com/gYf2xmm.png" }} style={styles.leftPanelImage} />
-            <Text style={styles.leftPanelTitle}>YOUR ASSIGNED{"\n"}EQUIPMENT</Text>
-            <Text style={styles.leftPanelSubtitle}>ASSETFLOW PRO</Text>
-          </LinearGradient>
-        )} */}
-
           <ScrollView
             style={styles.rightPanel}
             contentContainerStyle={{ paddingBottom: 50 }}
@@ -460,7 +451,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
 
               <View style={styles.headerRight}>
                 <Feather name="user" size={16} color="#333" />
-                <Text style={styles.userText}>{user?.roleName}</Text>
+                <Text style={styles.userText}>{user?.fullName}</Text>
                 <TouchableOpacity onPress={handleLogout}>
                   <Feather
                     name="log-out"
@@ -516,7 +507,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
             <View
               style={[
                 styles.dashboardTwoColumnRow,
-                !isMobileDevice && styles.dashboardTwoColumnRowWeb,
+                !isMobileLayout && styles.dashboardTwoColumnRowWeb,
               ]}
             >
               {/* ASSETS */}
@@ -524,7 +515,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                 style={[
                   styles.assetsSection,
                   styles.dashboardColumn,
-                  !isMobileDevice && styles.dashboardColumnWeb,
+                  !isMobileLayout && styles.dashboardColumnWeb,
                 ]}
               >
                 <View style={styles.notificationsHeaderRow}>
@@ -678,7 +669,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                 style={[
                   styles.assetsSection,
                   styles.dashboardColumn,
-                  !isMobileDevice && styles.dashboardColumnWeb,
+                  !isMobileLayout && styles.dashboardColumnWeb,
                 ]}
               >
                 <View style={styles.notificationsHeaderRow}>
@@ -688,7 +679,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                 <View
                   style={[
                     styles.replyRowContainer,
-                    !isMobileDevice && styles.replyRowContainerWeb,
+                    !isMobileLayout && styles.replyRowContainerWeb,
                   ]}
                 >
                   {pendingReplyNotifications.length === 0 ? (
@@ -706,7 +697,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                           key={item.id.toString()}
                           style={[
                             styles.notificationItem,
-                            !isMobileDevice && styles.replyRowItemWeb,
+                            !isMobileLayout && styles.replyRowItemWeb,
                             isFromSupervisor
                               ? {
                                   backgroundColor: '#f0f9ff',

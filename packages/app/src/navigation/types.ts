@@ -71,7 +71,9 @@ ResetPassword: { token: string };
   SuperAdminLogin: undefined;
   SuperAdminDashboard: undefined;
 
-  TotalAssetDetails: undefined;
+  TotalAssetDetails: {
+    statusFilter?: string;
+  } | undefined;
   OfficeAssets: undefined;
   FieldAssets: {
     employeeId: string;

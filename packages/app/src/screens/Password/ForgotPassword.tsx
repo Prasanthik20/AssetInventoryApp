@@ -11,7 +11,7 @@ import {
     ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
-    Dimensions,
+    useWindowDimensions,
     ImageBackground,
     ScrollView,
 } from "react-native";
@@ -20,9 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { baseURL, RootStackParamList } from "../../navigation/types";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useNavigation } from "@react-navigation/native";
-
-const { width } = Dimensions.get("window");
-const isMobileDevice = Platform.OS !== "web";
+import { Feather } from '@expo/vector-icons';
 
 type ForgotPasswordNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -31,10 +29,15 @@ type ForgotPasswordNavigationProp = StackNavigationProp<
 
 export default function ForgotPasswordScreen() {
     const navigation = useNavigation<ForgotPasswordNavigationProp>();
+    const { width } = useWindowDimensions();
+    const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+    const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
 
     const [email, setEmail] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [successMessage, setSuccessMessage] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -99,17 +102,17 @@ export default function ForgotPasswordScreen() {
                                         showsVerticalScrollIndicator={false}
                                         keyboardShouldPersistTaps="handled"
                                     >
-                    <View style={styles.loginContainer}>
+                    <View style={[styles.loginContainer, isMobileLayout && styles.loginContainerMobile]}>
                                             {/* Left Decorative Panel */}
-                                            <View style={styles.leftPanel}>
+                                            <View style={[styles.leftPanel, isMobileLayout && styles.leftPanelMobile]}>
                                                 <Image
                                                     source={require("../../assets/Asq_Logo_IV.png")}
-                                                    style={styles.image}
+                                                    style={[styles.image, isMobileLayout && styles.imageMobile]}
                                                 />
-                                                <Text style={styles.leftTitle}>A SQUARE TECHNOLOGIES</Text>
+                                                <Text style={[styles.leftTitle, isMobileLayout && styles.leftTitleMobile]}>A SQUARE TECHNOLOGIES</Text>
                                                 <Text style={styles.leftSubtitle}>SECURE ASSETFLOW</Text>
                                             </View>
-                    <View style={styles.rightPanel}>
+                    <View style={[styles.rightPanel, isMobileLayout && styles.rightPanelMobile]}>
                                 {successMessage !== "" && (
                                     <View style={styles.successBox}>
                                         <Text style={styles.successText}>{successMessage}</Text>
@@ -131,23 +134,47 @@ export default function ForgotPasswordScreen() {
                                 onChangeText={setEmail}
                             />
 
-                            <TextInput
-                                style={styles.input}
-                                placeholder="New Password"
-                                placeholderTextColor="#94a3b8"
-                                secureTextEntry
-                                value={newPassword}
-                                onChangeText={setNewPassword}
-                            />
+                            <View style={styles.passwordFieldContainer}>
+                                <TextInput
+                                    style={[styles.input, styles.passwordInput]}
+                                    placeholder="New Password"
+                                    placeholderTextColor="#94a3b8"
+                                    secureTextEntry={!showNewPassword}
+                                    value={newPassword}
+                                    onChangeText={setNewPassword}
+                                />
+                                <TouchableOpacity
+                                    style={styles.eyeButton}
+                                    onPress={() => setShowNewPassword(!showNewPassword)}
+                                >
+                                    <Feather
+                                      name={showNewPassword ? 'eye-off' : 'eye'}
+                                      size={18}
+                                      color="#475569"
+                                    />
+                                </TouchableOpacity>
+                            </View>
 
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Confirm Password"
-                                placeholderTextColor="#94a3b8"
-                                secureTextEntry
-                                value={confirmPassword}
-                                onChangeText={setConfirmPassword}
-                            />
+                            <View style={styles.passwordFieldContainer}>
+                                <TextInput
+                                    style={[styles.input, styles.passwordInput]}
+                                    placeholder="Confirm Password"
+                                    placeholderTextColor="#94a3b8"
+                                    secureTextEntry={!showConfirmPassword}
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
+                                />
+                                <TouchableOpacity
+                                    style={styles.eyeButton}
+                                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                                >
+                                    <Feather
+                                      name={showConfirmPassword ? 'eye-off' : 'eye'}
+                                      size={18}
+                                      color="#475569"
+                                    />
+                                </TouchableOpacity>
+                            </View>
 
                             <TouchableOpacity
                                 style={styles.buttonWrapper}
@@ -200,10 +227,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(61, 138, 233, 0.4)"
   },
    loginContainer: {
-        flexDirection: isMobileDevice ? 'column' : 'row', 
-        width: isMobileDevice ? "90%" : "75%",
-        // Key Fix: Do not set a fixed height on mobile. Let it grow.
-        minHeight: isMobileDevice ? 650 : 550, 
+       flexDirection: 'row', 
+       width: "75%",
+       minHeight: 550,
         alignSelf: 'center',
         maxWidth: 1000, 
         backgroundColor: "rgba(255, 255, 255, 0.8)", 
@@ -213,25 +239,40 @@ const styles = StyleSheet.create({
         marginVertical: 40,
         elevation: 10,
     },
+        loginContainerMobile: {
+            flexDirection: 'column',
+            width: '92%',
+            minHeight: 650,
+            marginVertical: 20,
+        },
     leftPanel: {
-        // In mobile view, don't use 'flex: 1' or it will push the form off-screen
-        flex: isMobileDevice ? 0 : 1.2, 
+                flex: 1.2,
         alignItems: "center",
         justifyContent: "center",
         padding: 20,
     },
+        leftPanelMobile: {
+            flex: 0,
+        },
     image: {
-       width: isMobileDevice ? 200 : 300, 
-        height: isMobileDevice ? 80 : 150,
+             width: 300,
+                height: 150,
         resizeMode: 'contain',
     },
+        imageMobile: {
+            width: 200,
+            height: 80,
+        },
     leftTitle: {
-        fontSize: isMobileDevice ? 20 : 26,
+                fontSize: 26,
         color: "#1A202C",
         fontWeight: "bold",
         textAlign: 'center',
         letterSpacing: 1,
     },
+        leftTitleMobile: {
+            fontSize: 20,
+        },
     leftSubtitle: {
         fontSize: 16,
         color: "#64748b",
@@ -241,9 +282,12 @@ const styles = StyleSheet.create({
     rightPanel: {
      flex: 1,
         backgroundColor: "#ffffff",
-        padding: isMobileDevice ? 20 : 50,
+                padding: 50,
         justifyContent: 'center',
     },
+        rightPanelMobile: {
+            padding: 20,
+        },
 //   container: {
 //     flex: 1,
 //     justifyContent: "center",
@@ -299,6 +343,19 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
   },
+passwordFieldContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+},
+passwordInput: {
+    paddingRight: 48,
+},
+eyeButton: {
+    position: 'absolute',
+    right: 14,
+    top: 16,
+    padding: 2,
+},
 successBox: {
     backgroundColor: "#e6f9f0",
     padding: 14,

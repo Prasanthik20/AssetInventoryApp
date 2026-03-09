@@ -1,9 +1,20 @@
-import { StyleSheet, Platform } from 'react-native'; // Ensure this import is present
+import { StyleSheet, Platform, Dimensions } from 'react-native'; // Ensure this import is present
 
-export function dashboardStyles() {
+type DashboardViewport = {
+  width: number;
+  height: number;
+};
+
+export function dashboardStyles(viewport?: DashboardViewport) {
+  const { width, height } = viewport ?? Dimensions.get('window');
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isNarrowWeb = Platform.OS === 'web' && width < 420;
+  const isShortViewport = height < 700;
+
   return StyleSheet.create({
      backgroundImage: {
-    flex: 1,
+     flex: 1,
+      flexDirection: isDesktopWeb ? 'row' : 'column',
     width: '100%',
     height: '100%',
   },
@@ -12,16 +23,16 @@ export function dashboardStyles() {
   },
   container: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: isDesktopWeb ? 'row' : 'column',
   },
   mainScroll: { flex: 1 },
   scrollContent: { flexGrow: 1 },
   leftPanel: {
-    width: '25%',
+     width: isDesktopWeb ? '25%' : '100%',
     justifyContent: 'center',
     backgroundColor: 'rgba(192, 215, 243, 0.52)',
     alignItems: 'center',
-    padding: 20,
+    padding: isShortViewport ? 14 : 20,
   },
   leftPanelName: { fontSize: 32, fontWeight: 'bold', marginTop: 10 },
   leftPanelRole: { fontSize: 24, color: 'gray' },
@@ -47,9 +58,8 @@ export function dashboardStyles() {
   // Right Panel & Mobile Adapters
   rightPanel: {
     flex: 1,
-    backgroundColor:
-      Platform.OS === 'web' ? 'rgba(61, 138, 233, 0.4)' : 'transparent',
-    padding: 25,
+     backgroundColor: isDesktopWeb ? 'rgba(61, 138, 233, 0.4)' : 'transparent',
+    padding: isShortViewport ? 16 : 25,
   },
   mobilePadding: { padding: 15 },
   idBadge: {
@@ -121,18 +131,25 @@ export function dashboardStyles() {
   },
   metricBox: {
     // 23.5% width allows 4 items + spacing in one row on web
-    width: Platform.OS === 'web' ? '23.5%' : '48%',
+   width: isDesktopWeb ? '23.5%' : isNarrowWeb ? '100%' : '48%',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
-    padding: 20,
+    padding: isShortViewport ? 14 : 20,
     marginBottom: 15,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+     metricRow: {
+      display: 'flex',
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      gap: 10,
+    },
   metricValue: { fontSize: 24, fontWeight: 'bold', color: '#1A202C' },
   metricLabel: { fontSize: 13, color: '#718096', fontWeight: '600' },
   metricValueText: {
@@ -147,22 +164,55 @@ export function dashboardStyles() {
     color: '#718096',
     textAlign: 'center',
   },
+  fieldMetricBox: {
+    alignItems: 'stretch',
+  },
+  fieldLocationGrid: {
+    marginTop: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    width: '100%',
+  },
+  fieldLocationCell: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    minWidth: 72,
+    flexGrow: 1,
+  },
+  fieldLocationName: {
+    fontSize: 10,
+    color: '#475569',
+  },
+  fieldLocationCount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  fieldLocationEmpty: {
+    fontSize: 11,
+    color: '#64748B',
+  },
   bottomRow: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    flexDirection: isDesktopWeb ? 'row' : 'column',
     justifyContent: 'space-between',
     width: '100%',
-    gap: 25,
+    gap: isShortViewport ? 16 : 25,
   },
   feedContainer: {
-    flex: Platform.OS === 'web' ? 3 : 1, // Takes 75% of space on web
+     flex: isDesktopWeb ? 3 : 1, // Takes 75% of space on web
   },
   actionsContainer: {
-    flex: Platform.OS === 'web' ? 1 : 1, // Takes 25% of space on web
+    flex: isDesktopWeb ? 1 : 1, // Takes 25% of space on web
   },
   bottomContent: {
     flex: 1,
-    flexDirection: 'row',
-    gap: 20,
+    flexDirection: isDesktopWeb ? 'row' : 'column',
+    gap: isShortViewport ? 12 : 20,
   },
   userSection: {
     flex: 2.5,
@@ -216,10 +266,10 @@ export function dashboardStyles() {
   },
   // Floating Button for Mobile
   floatingAction: {
-    position: Platform.OS === 'web' ? 'relative' : 'absolute',
-    bottom: Platform.OS === 'web' ? 0 : 30,
-    left: Platform.OS === 'web' ? 0 : 20,
-    right: Platform.OS === 'web' ? 0 : 20,
+    position: isDesktopWeb ? 'relative' : 'absolute',
+      bottom: isDesktopWeb ? 0 : 20,
+      left: isDesktopWeb ? 0 : 16,
+      right: isDesktopWeb ? 0 : 16,
   },
   addUserButton: {
     flexDirection: 'row',

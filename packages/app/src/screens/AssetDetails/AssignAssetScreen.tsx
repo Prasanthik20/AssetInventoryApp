@@ -14,6 +14,7 @@ import {
   Modal,
   Platform,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -23,8 +24,8 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
-
-const isMobileDevice = Platform.OS !== 'web';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import assignStyles from './assign.styles';
 
 type AssignAssetNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -32,6 +33,9 @@ type AssignAssetNavigationProp = StackNavigationProp<
 >;
 
 const AssignAssetScreen: React.FC = () => {
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
   const navigation = useNavigation<AssignAssetNavigationProp>();
   const route = useRoute<{
     key: string;
@@ -42,6 +46,7 @@ const AssignAssetScreen: React.FC = () => {
     };
   }>();
 
+  const styles = assignStyles(isMobileLayout);
   // ⬅️ Supervisor details from CompanyLoginScreen
   const supervisor_employeeId = route.params?.supervisor_employeeId;
   const supervisorName = route.params?.supervisorName
@@ -51,6 +56,7 @@ const AssignAssetScreen: React.FC = () => {
   // -------------------- STATES --------------------
   const [assets, setAssets] = useState<Asset[]>([]);
   const [operators, setOperators] = useState<any[]>([]);
+  const [canAssignToSupervisor, setCanAssignToSupervisor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,6 +89,20 @@ const AssignAssetScreen: React.FC = () => {
       try {
         setLoading(true);
 
+        const storedUser = await AsyncStorage.getItem('user');
+        const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+        const assignerRole = String(
+          parsedUser?.roleName || parsedUser?.role?.roleName || '',
+        ).toLowerCase();
+        const privilegedRoles = [
+          'admin',
+          'super',
+          'superadmin',
+          'super admin',
+        ];
+        const isPrivilegedAssigner = privilegedRoles.includes(assignerRole);
+        setCanAssignToSupervisor(isPrivilegedAssigner);
+
         // ----- FETCH ASSETS -----
         const res = await axios.get(`${baseURL}/api/assets`);
 
@@ -107,14 +127,22 @@ const AssignAssetScreen: React.FC = () => {
 
         const rawUsers = response.data.users || response.data.data || response.data || [];
 
-        const operatorsList = rawUsers.filter(
-          (u: any) => u.role?.roleName?.toLowerCase() === "operator"
-        );
+        const assignableUsers = rawUsers.filter((u: any) => {
+          const targetRole = String(
+            u.role?.roleName || u.roleName || '',
+          ).toLowerCase();
 
-        setOperators(operatorsList);
+          if (isPrivilegedAssigner) {
+            return targetRole === 'operator' || targetRole === 'supervisor';
+          }
+
+          return targetRole === 'operator';
+        });
+
+        setOperators(assignableUsers);
       } catch (err) {
         console.log(err);
-        setError("Failed to fetch assets or operators");
+        setError("Failed to fetch assets or users");
       } finally {
         setLoading(false);
       }
@@ -130,7 +158,7 @@ const AssignAssetScreen: React.FC = () => {
       return;
     }
     if (!selectedOperator) {
-      Alert.alert('Error', 'Please select an operator');
+      Alert.alert('Error', 'Please select assignee');
       return;
     }
 
@@ -415,7 +443,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       blurRadius={10}
     >
       <SafeAreaView style={styles.safeArea}>
-        <View style={[styles.container, isMobileDevice && { margin: 0, borderRadius: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)' }]}>
+        <View style={[styles.container, isMobileLayout && { margin: 0, borderRadius: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)' }]}>
           {/* HEADER */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -431,7 +459,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           <ScrollView 
           contentContainerStyle={[
             styles.formScrollContainer,
-            isMobileDevice && { paddingHorizontal: 15 } // Tighter padding for phones
+            isMobileLayout && { paddingHorizontal: 15 } // Tighter padding for phones
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -440,7 +468,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           */}
           <View style={[
             styles.formBody, 
-            { flexDirection: isMobileDevice ? 'column' : 'row', gap: isMobileDevice ? 0 : 25 }
+            { flexDirection: isMobileLayout ? 'column' : 'row', gap: isMobileLayout ? 0 : 25 }
           ]}>
 
               {/* LEFT COLUMN */}
@@ -458,13 +486,15 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                 </TouchableOpacity>
 
                 {/* OPERATOR DROPDOWN */}
-                <Text style={styles.label}>Assign to Operator</Text>
+                <Text style={styles.label}>
+                  {canAssignToSupervisor ? 'Assign to Employee' : 'Assign to Operator'}
+                </Text>
                 <TouchableOpacity
                   style={styles.pickerInput}
                   onPress={() => setOperatorModal(true)}
                 >
                   <Text style={styles.pickerText}>{selectedOperator ? `${selectedOperator.fullName}
-                   (${selectedOperator.employeeId})` : "Select Operator"}</Text>
+                   (${selectedOperator.employeeId})` : (canAssignToSupervisor ? 'Select Employee' : 'Select Operator')}</Text>
                   <Ionicons name="chevron-down" size={20} color="#333" />
                 </TouchableOpacity>
 
@@ -504,7 +534,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               </View>
 
               {/* RIGHT COLUMN */}
-              <View style={[styles.formColumn, isMobileDevice && { marginTop: 10 }]}> 
+              <View style={[styles.formColumn, isMobileLayout && { marginTop: 10 }]}> 
 
                 {/* ASSIGNED DATE */}
                 <Text style={styles.label}>Assigned Date</Text>
@@ -723,7 +753,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           {/* FOOTER */}
           <View style={[
           styles.footer, 
-          isMobileDevice && { justifyContent: 'center', paddingBottom: 30 }
+          isMobileLayout && { justifyContent: 'center', paddingBottom: 30 }
         ]}>
             <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
               <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
@@ -771,7 +801,9 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           onPress={() => setOperatorModal(false)}
         >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Operator</Text>
+            <Text style={styles.modalTitle}>
+              {canAssignToSupervisor ? 'Select Employee' : 'Select Operator'}
+            </Text>
 
             {operators.map((op) => (
               <TouchableOpacity
@@ -796,218 +828,5 @@ const onDueChange = (event: any, selectedDate?: Date) => {
   );
 };
 
-// -------------------- YOUR ORIGINAL STYLES (UNTOUCHED) --------------------
-const styles = StyleSheet.create({
-  backgroundImage: { flex: 1, width: '100%', height: '100%' },
-  safeArea: { flex: 1 ,backgroundColor: "rgba(61, 138, 233, 0.4)"},
-  container: {
-    flex: 1,
-    margin: 20,
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  backButton: { position: 'absolute', left: 20 , marginTop : 25},
-  headerTitle: { color: '#1A202C', fontSize: 20, fontWeight: 'bold' , marginTop : 25},
-  formScrollContainer: { padding: 25 },
-  formBody: { flexDirection: 'row', gap: 25 },
-  formColumn: { flex: 1, width: '100%', },
-  label: {
-    fontSize: 14,
-    color: '#2D3748',
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#4A5568',
-    marginBottom: 10,
-  },
-  mediaCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 10,
-    marginBottom: 10,
-  },
-  mediaCardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1A202C',
-    marginBottom: 8,
-  },
-  pickerInput: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    paddingVertical: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-  },
-  pickerText: { fontSize: 15, color: '#1A202C', fontWeight: '500',flex: 1,}, // Allows text to truncate correctly if too long },
-  inputGroup: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    marginBottom: 20,
-  },
-  inputIcon: { marginRight: 10 },
-  textInput: {
-    flex: 1,
-    height: 50,
-    fontSize: 15,
-    color: '#1A202C',
-    fontWeight: '500',
-  },
-  notesInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-    padding: 15,
-    fontSize: 15,
-    color: '#1A202C',
-    height: 100, // Reduced slightly for mobile comfort
-    textAlignVertical: 'top',
-    marginBottom: 20, // Add bottom margin for mobile stacking
-  },
-  scanButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4A55A2',
-    borderRadius: 10,
-    paddingVertical: 14,
-    marginBottom: 20,
-  },
-  scanButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EDF2F7',
-    borderRadius: 10,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-  },
-  uploadButtonText: {
-    color: '#4A5568',
-    fontSize: 15,
-    fontWeight: '500',
-    marginLeft: 10,
-  },
-  photoPreviewContainer: {
-    position: 'relative',
-    marginTop: 15,
-    marginBottom: 20,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: '#F0F0F0',
-  },
-  photoPreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 10,
-  },
-  removePhotoButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    padding: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    marginTop: 'auto',
-  },
-  assignButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    marginLeft: 15,
-  },
-  cancelButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    backgroundColor: '#E2E8F0',
-  },
-  buttonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  assetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-
-  centeredView: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 20,
-    color: '#1A202C',
-  },
-  doneButton: {
-  backgroundColor: '#3B59B8',
-  padding: 15,
-  borderRadius: 10,
-  alignItems: 'center',
-  marginTop: 10
-},
-doneButtonText: {
-  color: '#FFF',
-  fontWeight: 'bold',
-  fontSize: 16
-},
-modalContent: {
-  backgroundColor: 'white',
-  padding: 20,
-  borderTopLeftRadius: 20,
-  borderTopRightRadius: 20,
-  maxHeight: '80%', // Important so the list doesn't go off screen
-},
-});
 
 export default AssignAssetScreen;

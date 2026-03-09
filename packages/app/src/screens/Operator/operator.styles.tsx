@@ -1,6 +1,14 @@
 import { StyleSheet, Platform } from 'react-native'; // Ensure this import is present
 
-export function opratorStyles() {
+type DashboardViewport = {
+  width: number;
+  height: number;
+};
+
+export function opratorStyles(viewport?: DashboardViewport) {
+  const width = viewport?.width ?? 1024;
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+
   return StyleSheet.create({
     backgroundImage: {
       flex: 1,
@@ -28,7 +36,7 @@ export function opratorStyles() {
     notifyButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
     container: {
       flex: 1,
-      flexDirection: Platform.OS !== 'web' ? 'column' : 'row',
+      flexDirection: isDesktopWeb ? 'row' : 'column',
     },
     leftPanel: {
       width: '40%',
@@ -59,7 +67,7 @@ export function opratorStyles() {
     rightPanel: {
       flex: 1,
       backgroundColor: 'rgba(255,255,255,0.4)',
-      padding: 25,
+      padding: isDesktopWeb ? 25 : 16,
     },
 
     header: {
@@ -68,6 +76,7 @@ export function opratorStyles() {
       marginBottom: 20,
       alignItems: 'center',
       width: '100%',
+    paddingHorizontal: 20,
       paddingVertical: 10,
     },
     headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#000000ff' },
@@ -88,12 +97,13 @@ export function opratorStyles() {
     },
 
     metricsContainer: {
-      flexDirection: 'row',
+      flexDirection: isDesktopWeb ? 'row' : 'column',
       justifyContent: 'space-between',
       marginBottom: 25,
+      gap: isDesktopWeb ? 0 : 10,
     },
     metricBox: {
-      width: '48%',
+      width: isDesktopWeb ? '48%' : '100%',
       backgroundColor: 'rgba(255,255,255,0.8)',
       borderRadius: 15,
       padding: 20,

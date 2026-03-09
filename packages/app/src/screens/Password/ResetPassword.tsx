@@ -8,24 +8,27 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackScreenProps } from "@react-navigation/stack";
 import axios from "axios";
 import { RootStackParamList, baseURL } from "../../navigation/types";
-
-const { width } = Dimensions.get("window");
-const isMobileDevice = Platform.OS !== "web";
+import { Feather } from '@expo/vector-icons';
 
 type Props = StackScreenProps<RootStackParamList, "ResetPassword">;
 
 export default function ResetPassword({ route, navigation }: Props) {
   const { token } = route.params;
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleResetPassword = async () => {
@@ -83,27 +86,51 @@ export default function ResetPassword({ route, navigation }: Props) {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <View style={styles.container}>
+        <View style={[styles.container, isMobileLayout && styles.containerMobile]}>
           <Text style={styles.title}>Reset Password</Text>
           <Text style={styles.subtitle}>
             Enter your new password below
           </Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="New Password"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          <View style={styles.passwordFieldContainer}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              placeholder="New Password"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Feather
+                name={showPassword ? 'eye-off' : 'eye'}
+                size={18}
+                color="#475569"
+              />
+            </TouchableOpacity>
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm Password"
-            secureTextEntry
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-          />
+          <View style={styles.passwordFieldContainer}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              placeholder="Confirm Password"
+              secureTextEntry={!showConfirmPassword}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+            />
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              <Feather
+                name={showConfirmPassword ? 'eye-off' : 'eye'}
+                size={18}
+                color="#475569"
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={styles.button}
@@ -132,12 +159,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   container: {
-    width: isMobileDevice ? "90%" : 400,
+    width: 400,
     alignSelf: "center",
     backgroundColor: "#ffffff",
     padding: 30,
     borderRadius: 20,
     elevation: 5,
+  },
+  containerMobile: {
+    width: '92%',
+    padding: 20,
   },
   title: {
     fontSize: 24,
@@ -158,6 +189,19 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderWidth: 1,
     borderColor: "#e2e8f0",
+  },
+  passwordFieldContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 14,
+    top: 14,
+    padding: 2,
   },
   button: {
     borderRadius: 12,

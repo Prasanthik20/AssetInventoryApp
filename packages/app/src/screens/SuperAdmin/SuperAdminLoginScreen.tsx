@@ -10,15 +10,21 @@ import {
   SafeAreaView,
   Platform,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Checkbox from "expo-checkbox";
 import { useNavigation } from "@react-navigation/native";
+import { Feather } from '@expo/vector-icons';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
 
   // ✅ Mock credentials
@@ -44,9 +50,9 @@ export default function LoginScreen() {
           resizeMode="cover"
           blurRadius={7}
         >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, isMobileLayout && { flexDirection: 'column', width: '94%' }]}>
         {/* Left Section */}
-        <View style={styles.leftCard}>
+        <View style={[styles.leftCard, isMobileLayout && { width: '100%', marginBottom: 8 }]}>
           <Image
             source={{
               uri: "https://cdn-icons-png.flaticon.com/512/3064/3064197.png",
@@ -58,7 +64,7 @@ export default function LoginScreen() {
         </View>
 
         {/* Right Section */}
-        <View style={styles.rightCard}>
+        <View style={[styles.rightCard, isMobileLayout && { width: '100%' }]}>
           <Text style={styles.header}>Super Admin Login</Text>
 
           <TextInput
@@ -71,14 +77,26 @@ export default function LoginScreen() {
             onChangeText={setEmail}
           />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#333"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          <View style={styles.passwordFieldContainer}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              placeholder="Password"
+              placeholderTextColor="#333"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Feather
+                name={showPassword ? 'eye-off' : 'eye'}
+                size={18}
+                color="#1f2937"
+              />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.rememberRow}>
             <Checkbox value={remember} onValueChange={setRemember} color="#4A00E0" />
@@ -131,7 +149,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   container: {
-    flexDirection: Platform.OS === "web" ? "row" : "column",
+    flexDirection: "row",
     backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
@@ -190,6 +208,19 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 15,
     color: "#000000ff",
+  },
+  passwordFieldContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 46,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    padding: 2,
   },
   rememberRow: {
     flexDirection: "row",

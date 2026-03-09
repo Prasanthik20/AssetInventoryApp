@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, ImageBackground, TouchableOpacity, Image, TextInput, Modal,
-  FlatList, Platform, ScrollView, Alert,
+  View, Text, SafeAreaView, ImageBackground, TouchableOpacity, Image, TextInput, Modal,
+  FlatList, Platform, ScrollView, Alert, useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -13,9 +13,9 @@ import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import { addStyles } from './addstyles';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, "AddEditAsset">;
-const isMobileDevice = Platform.OS !== 'web';
 
 const inferMimeType = (uri: string, explicitMimeType?: string): string => {
     if (explicitMimeType) return explicitMimeType;
@@ -54,7 +54,8 @@ const toPersistentDataUrl = async (uri: string, mimeType?: string): Promise<stri
 /**
  * Reusable Modal for Pickers
  */
-const CustomPickerModal = ({ visible, title, data, onSelect, onClose, keyLabel }: any) => (
+
+const CustomPickerModal = ({ visible, title, data, onSelect, onClose, keyLabel, styles }: any) => (
   <Modal visible={visible} transparent animationType="fade">
     <View style={styles.modalOverlay}>
       <View style={styles.modalContainer}>
@@ -85,6 +86,10 @@ const CustomPickerModal = ({ visible, title, data, onSelect, onClose, keyLabel }
 const AddEditAsset: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { categories, statuses } = useAssetMeta();
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
+  const styles = addStyles(isMobileLayout);
 
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
@@ -244,7 +249,7 @@ const AddEditAsset: React.FC = () => {
         <View style={styles.container}>
           
           {/* Left Side: Branding */}
-          {!isMobileDevice && (
+          {!isMobileLayout && (
           <LinearGradient
             colors={['rgba(59, 89, 184, 0.85)', 'rgba(93, 113, 200, 0.8)']}
             style={styles.leftPanel}
@@ -277,7 +282,7 @@ const AddEditAsset: React.FC = () => {
         )}
 
           {/* Right Side: Form */}
-          <View style={[styles.rightPanel, isMobileDevice && { margin: 0, borderRadius: 0, flex: 1 }]}>
+          <View style={[styles.rightPanel, isMobileLayout && { margin: 0, borderRadius: 0, flex: 1 }]}>
             <View style={styles.header}>
               <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backCircle}>
                 <Ionicons name="arrow-back" size={20} color="#333" />
@@ -290,11 +295,11 @@ const AddEditAsset: React.FC = () => {
             </View>
 
             <ScrollView 
-            scrollEnabled={isMobileDevice} // Disables internal scroll on web if preferred
+            scrollEnabled={isMobileLayout} // Keep internal scroll on mobile/native and narrow web
             showsVerticalScrollIndicator={false} 
             contentContainerStyle={{ flexGrow: 1 }}
           >
-              <View style={[styles.formBody, isMobileDevice && { flexDirection: 'column', gap: 0 }]}>
+              <View style={[styles.formBody, isMobileLayout && { flexDirection: 'column', gap: 0 }]}>
                 
                 {/* Column 1 */}
                 <View style={styles.formColumn}>
@@ -354,7 +359,7 @@ const AddEditAsset: React.FC = () => {
                   <Text style={styles.sectionTitle}>Acquisition Info</Text>
 
                   {/* Mobile Image Upload */}
-                  {isMobileDevice && (
+                  {isMobileLayout && (
                     <>
                       <Text style={styles.label}>Asset Photo</Text>
                       <TouchableOpacity 
@@ -470,6 +475,7 @@ const AddEditAsset: React.FC = () => {
           title="Select Category"
           data={categories}
           keyLabel="category"
+          styles={styles}
           onSelect={(item: any) => {
             handleInputChange('category', item.category);
             setShowCategoryPicker(false);
@@ -482,6 +488,7 @@ const AddEditAsset: React.FC = () => {
           title="Select Status"
           data={statuses}
           keyLabel="status"
+          styles={styles}
           onSelect={(item: any) => {
             handleInputChange('status', item.status);
             setShowStatusPicker(false);
@@ -493,6 +500,7 @@ const AddEditAsset: React.FC = () => {
           visible={showLocationPicker}
           title="Select Location"
           data={locations}
+          styles={styles}
           onSelect={(loc: string) => {
             handleInputChange('location', loc);
             setShowLocationPicker(false);
@@ -522,191 +530,5 @@ const AddEditAsset: React.FC = () => {
     </ImageBackground>
   );
 };
-
-const styles = StyleSheet.create({
-  backgroundImage: { flex: 1, width: "100%", height: "100%" },
-  safeArea: { flex: 1,backgroundColor: "rgba(61, 138, 233, 0.4)" },
-  container: { flex: 1, flexDirection: 'row' },
-  leftPanel: {
-    width: '30%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  leftPanelImage: { width: 150, height: 150, resizeMode: 'cover', borderRadius: 10, marginBottom: 20 },
-  imageUploadContainer: {
-    marginBottom: 20,
-  },
-  imageWrapper: {
-    position: 'relative',
-  },
-  editOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  uploadPlaceholderLarge: {
-    width: 150,
-    height: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 10,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  uploadTextLarge: {
-    color: '#fff',
-    marginTop: 10,
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  leftPanelTitle: { fontSize: 32, fontWeight: '900', color: '#fff', textAlign: 'center', lineHeight: 38 },
-  leftPanelSubtitle: { fontSize: 12, color: '#fff', marginTop: 10, opacity: 0.8, letterSpacing: 1.5, textAlign: 'center' },
-  brandName: { fontSize: 14, color: '#fff', marginTop: 40, fontWeight: 'bold', opacity: 0.6 },
-  
-  rightPanel: {
-   flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    // Margin is removed on mobile via the inline style in the component
-    margin: 20, 
-    borderRadius: 30,
-    padding: 20,
-    elevation: 5,
-  },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  backCircle: { backgroundColor: '#fff', padding: 8, borderRadius: 20, elevation: 2 , marginTop:10},
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1A202C', textAlign: 'center', flex: 1, marginTop: 10 },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#eee'
-  },
-  userText: { marginLeft: 8, fontSize: 14, fontWeight: '600', color: '#3B59B8', marginTop : 10 },
-  dateText: { marginLeft: 10, fontSize: 14, color: '#333' },
-  formBody: { flexDirection: 'row', // Default for Web
-    gap: 20, 
-    flex: 1 },
-  formColumn: { flex: 1 , width: '100%',},
-  sectionTitle: { 
-    fontSize: 14, 
-    fontWeight: '800', 
-    color: '#3B59B8', 
-    marginBottom: 15, 
-    marginTop: isMobileDevice ? 10 : 0, // Add spacing between stacked sections
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    paddingBottom: 5
-  },
-  label: { fontSize: 12, color: '#444', marginBottom: 6, fontWeight: '700', marginLeft: 4 },
-  inputGroup: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    marginBottom: 18,
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  inputIcon: { marginRight: 10 },
-  textInput: { flex: 1, fontSize: 14, color: '#333', fontWeight: '500' },
-  pickerInput: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    marginBottom: 18,
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  pickerText: { color: '#333', fontSize: 14, fontWeight: '500' },
-  
-  footer: {
-paddingTop: 20,
-    paddingBottom: isMobileDevice ? 10 : 0,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    // Align button to right on web, center on mobile
-    alignItems: isMobileDevice ? 'center' : 'flex-end',  },
-  webDatePicker: {
-    width: '100%',
-    height: 45,
-    borderRadius: 10,
-    border: '1px solid #ddd',
-    paddingVertical: 0,
-    paddingHorizontal: 12,
-    marginBottom: 15,
-    fontSize: '14px',
-    fontFamily: 'inherit'
-  } as any,
-  saveButton: {paddingVertical: 14, 
-    paddingHorizontal: 40, 
-    borderRadius: 15,
-    alignItems: 'center' },
-  buttonText: { color: '#fff', fontSize: 14, fontWeight: 'bold', letterSpacing: 1 },
-
-  // Image Upload Styles
-  imageUploadBox: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 18,
-    minHeight: 120,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#e2e8f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  uploadPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  uploadText: {
-    color: '#3B59B8',
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 8,
-  },
-  barcodePreview: {
-    width: '100%',
-    height: 80,
-    resizeMode: 'contain',
-  },
-  photoPreview: {
-    width: '100%',
-    height: 120,
-    resizeMode: 'cover',
-  },
-
-  // Modal Styles
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
-  modalContainer: { backgroundColor: "#fff", borderRadius: 20, width: "35%", maxHeight: "60%", overflow: 'hidden' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  modalItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 18, borderBottomWidth: 1, borderBottomColor: "#f9f9f9", alignItems: 'center' },
-  modalItemText: { fontSize: 14, color: "#333", fontWeight: '500' },
-});
 
 export default AddEditAsset;
