@@ -94,7 +94,13 @@ model Asset_Assignments {
   location              String?
   assigned_date         DateTime?       @db.Date
   expected_return_date  DateTime?       @db.Date
+  returned_date         DateTime?       @db.Timestamp
   notes                 String?
+  photoURL              String?
+  barcodeURL            String?
+  status                String          @default("assigned")
+  serialNoVerified      Boolean?
+  createdAt             DateTime        @default(now())
   asset                 Asset_Details   @relation(fields: [assetId], references: [id])
   operator              Users           @relation("OperatorAssignments", fields: [operator_employeeId], references: [employeeId])
   supervisor            Users           @relation("SupervisorAssignments", fields: [supervisor_employeeId], references: [employeeId])

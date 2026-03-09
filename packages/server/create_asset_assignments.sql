@@ -118,7 +118,9 @@ CREATE TABLE "Asset_Assignments" (
     "location" TEXT,
     "assigned_date" DATE,
     "expected_return_date" DATE,
-    "notes" TEXT
+    "notes" TEXT,
+    "photoURL" TEXT,
+    "barcodeURL" TEXT
 );
 
 -- Add foreign keys

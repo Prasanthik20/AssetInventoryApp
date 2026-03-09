@@ -9,6 +9,7 @@ import {
   ImageBackground,
   SafeAreaView,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -31,10 +32,13 @@ const mockCompanies: Company[] = [
 
 
 export default function SuperAdminDashboard() {
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
 
   const navigation = useNavigation();
   const renderCompanyItem = ({ item } : { item : Company }) => (
-    <View style={styles.tableRow}>
+    <View style={[styles.tableRow, isMobileLayout && { flexWrap: 'wrap', rowGap: 6, paddingHorizontal: 10 }]}>
       <Text style={[styles.tableCell, styles.companyName]}>{item.name}</Text>
       <Text style={styles.tableCell}>{item.status}</Text>
       <Text style={styles.tableCell}>{item.assets}</Text>
@@ -54,9 +58,9 @@ export default function SuperAdminDashboard() {
           blurRadius={5}
         >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.dashboardContainer}>
+        <View style={[styles.dashboardContainer, isMobileLayout && { width: '96%', padding: 14, borderRadius: 16 }]}>
           {/* Header */}
-          <View style={styles.headerRow}>
+          <View style={[styles.headerRow, isMobileLayout && { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
             <Text style={styles.headerTitle}>Super Admin Dashboard</Text>
             <View style={styles.adminBadge}>
               <Ionicons name="person-circle-outline" size={20} color="#fff" />
@@ -66,22 +70,22 @@ export default function SuperAdminDashboard() {
 
           {/* Top Stats */}
           <View style={styles.statsRow}>
-            <View style={styles.statCard}>
+            <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
               <MaterialIcons name="business" size={26} color="#fff" />
               <Text style={styles.statNumber}>25</Text>
               <Text style={styles.statLabel}>Total Companies</Text>
             </View>
-            <View style={styles.statCard}>
+            <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
               <Ionicons name="checkmark-done" size={26} color="#fff" />
               <Text style={styles.statNumber}>22</Text>
               <Text style={styles.statLabel}>Active Subscriptions</Text>
             </View>
-            <View style={styles.statCard}>
+            <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
               <Ionicons name="time-outline" size={26} color="#fff" />
               <Text style={styles.statNumber}>3</Text>
               <Text style={styles.statLabel}>Pending Onboarding</Text>
             </View>
-            <View style={styles.statCard}>
+            <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
               <Ionicons name="cash-outline" size={26} color="#fff" />
               <Text style={styles.statNumber}>5.2M</Text>
               <Text style={styles.statLabel}>Platform Assets</Text>
@@ -91,14 +95,14 @@ export default function SuperAdminDashboard() {
           {/* Client Companies */}
           <View style={styles.tableContainer}>
             <Text style={styles.sectionTitle}>Client Companies</Text>
-            <View style={styles.tableHeader}>
+            {!isMobileLayout && <View style={styles.tableHeader}>
               <Text style={[styles.tableHeaderText, { flex: 2 }]}>
-                Company Name
+                Client Name
               </Text>
               <Text style={styles.tableHeaderText}>Status</Text>
               <Text style={styles.tableHeaderText}>Assets</Text>
               <Text style={styles.tableHeaderText}>Action</Text>
-            </View>
+            </View>}
             <FlatList
               data={mockCompanies}
               keyExtractor={(item) => item.id}
@@ -107,7 +111,7 @@ export default function SuperAdminDashboard() {
           </View>
 
           {/* Quick Actions */}
-          <View style={styles.actionsContainer}>
+          <View style={[styles.actionsContainer, isMobileLayout && { flexDirection: 'column', gap: 8 }]}>
           <TouchableOpacity style={styles.actionPrimary}
                 onPress={() => navigation.navigate("AddCompany" as never)}
                 >

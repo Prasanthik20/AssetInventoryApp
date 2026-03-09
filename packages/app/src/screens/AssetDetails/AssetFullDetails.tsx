@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, Alert, TextInput } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, Alert, TextInput, useWindowDimensions, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -8,6 +8,8 @@ import useAssetMeta from "../../hooks/useAssetMeta";
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
+import assetStyles from './asset.styles';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 type AssetFullDetailsRouteProp = RouteProp<
@@ -25,6 +27,29 @@ const iconMap: any = {
     "user-check": <Feather name="user-check" size={16} color="#222" />,
     calendar: <Feather name="calendar" size={16} color="#222" />,
 };
+
+type AssigneeOption = {
+    label: string;
+    value: string;
+    roleName: string;
+};
+
+const FieldPicker = ({
+    value,
+    placeholder,
+    onPress,
+}: {
+    value?: string;
+    placeholder: string;
+    onPress: () => void;
+}) => (
+    <TouchableOpacity style={styles.inlinePicker} onPress={onPress}>
+        <Text style={[styles.inlinePickerText, !value && styles.inlinePickerPlaceholder]}>
+            {value || placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={16} color="#555" />
+    </TouchableOpacity>
+);
 const DisplayField = ({ label, value, icon, children, editable, onChangeText }: { 
     label: string, 
     value?: string, 
@@ -113,7 +138,11 @@ const AssetFullDetails: React.FC = () => {
     const route = useRoute<AssetFullDetailsRouteProp>();
     const { categories, statuses } = useAssetMeta();
     const { asset } = route.params;
+    const { width } = useWindowDimensions();
+    const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+    const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
     
+    const styles = assetStyles(isMobileLayout);
     // Edit mode state
     const [isEditMode, setIsEditMode] = useState(false);
     
@@ -123,14 +152,75 @@ const AssetFullDetails: React.FC = () => {
     const [serialNumber, setSerialNumber] = useState(asset?.serialNumber || '');
     const [price, setPrice] = useState(asset?.price || '');
     const [location, setLocation] = useState(asset?.location || '');
+    const [statusValue, setStatusValue] = useState(asset?.status || '');
+    const [assignedTo, setAssignedTo] = useState(asset?.assignedTo || '');
     const [photoURL, setPhotoURL] = useState(asset?.photoURL || '');
     const [initialPhotoURL] = useState(asset?.photoURL || '');
     const [barcodeURL, setBarcodeURL] = useState(asset?.barcodeURL || '');
     const [initialBarcodeURL] = useState(asset?.barcodeURL || '');
+    const [showStatusPicker, setShowStatusPicker] = useState(false);
+    const [showLocationPicker, setShowLocationPicker] = useState(false);
+    const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+    const [assignableUsers, setAssignableUsers] = useState<AssigneeOption[]>([]);
+    const [isPrivilegedEditor, setIsPrivilegedEditor] = useState(false);
+
+    const locationOptions = ['Office', 'Field'];
     
     const matchedCategory = categories.find(c => String(c.id) === String(asset.category));
     const matchedStatus = statuses.find(s => String(s.id) === String(asset.status));
-    const isMobileDevice = Platform.OS !== 'web';
+
+    useEffect(() => {
+        const loadAssigneeOptions = async () => {
+            try {
+                const storedUser = await AsyncStorage.getItem('user');
+                const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+                const editorRole = String(
+                    parsedUser?.roleName || parsedUser?.role?.roleName || '',
+                ).toLowerCase();
+                const privilegedRoles = [
+                    'admin',
+                    'superadmin',
+                    'super admin',
+                ];
+                const canEditAllEmployees = privilegedRoles.includes(editorRole);
+                setIsPrivilegedEditor(canEditAllEmployees);
+
+                const response = await axios.get(`${baseURL}/api/auth/users`);
+                const rawUsers =
+                    response.data?.users || response.data?.data || response.data || [];
+
+                const filteredUsers = rawUsers.filter((u: any) => {
+                    const roleName = String(
+                        u?.role?.roleName || u?.roleName || '',
+                    ).toLowerCase();
+
+                    if (canEditAllEmployees) return true;
+                    return roleName === 'operator';
+                });
+
+                const mappedUsers = filteredUsers.map((u: any) => {
+                    const displayName =
+                        u?.fullName || u?.name || `Employee ${u?.employeeId || ''}`;
+                    const roleName = String(
+                        u?.role?.roleName || u?.roleName || 'Employee',
+                    );
+
+                    return {
+                        label: `${displayName} (${roleName})`,
+                        value: displayName,
+                        roleName,
+                    };
+                });
+
+                setAssignableUsers(mappedUsers);
+            } catch (error) {
+                console.error('Failed to load assignee options:', error);
+                setAssignableUsers([]);
+            }
+        };
+
+        loadAssigneeOptions();
+    }, []);
     
     const handleImageUpload = async () => {
         try {
@@ -229,6 +319,12 @@ const AssetFullDetails: React.FC = () => {
             if (location !== asset.location) {
                 updateData.location = location;
             }
+            if (statusValue !== asset.status) {
+                updateData.status = statusValue;
+            }
+            if (assignedTo !== (asset.assignedTo || '')) {
+                updateData.assignedTo = assignedTo;
+            }
             
             // Include photoURL if it changed and is not empty
             if (photoURL && photoURL !== initialPhotoURL) {
@@ -261,6 +357,8 @@ const AssetFullDetails: React.FC = () => {
                 asset.serialNumber = serialNumber;
                 asset.price = price;
                 asset.location = location;
+                asset.status = statusValue;
+                asset.assignedTo = assignedTo;
                 if (photoURL) {
                     asset.photoURL = photoURL;
                 }
@@ -283,6 +381,8 @@ const AssetFullDetails: React.FC = () => {
             setSerialNumber(asset?.serialNumber || '');
             setPrice(asset?.price || '');
             setLocation(asset?.location || '');
+            setStatusValue(asset?.status || '');
+            setAssignedTo(asset?.assignedTo || '');
             setPhotoURL(asset?.photoURL || '');
             setBarcodeURL(asset?.barcodeURL || '');
         }
@@ -303,7 +403,7 @@ const AssetFullDetails: React.FC = () => {
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.container}>
                     {/* Left Decorative Panel */}
-                    {!isMobileDevice && (
+                    {!isMobileLayout && (
                     <LinearGradient
                         colors={['rgba(93, 113, 200, 0.7)', 'rgba(59, 89, 184, 0.8)']}
                         style={styles.leftPanel}
@@ -338,7 +438,7 @@ const AssetFullDetails: React.FC = () => {
                     </LinearGradient>
                     )}
                     {/* Right Details Panel */}
-                    <View style={styles.rightPanel}>
+                    <View style={[styles.rightPanel, isMobileLayout && styles.mobileRightPanel]}>
                         {/* Header */}
                         <View style={styles.header}>
                             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -352,7 +452,7 @@ const AssetFullDetails: React.FC = () => {
                                     </View>
                                 )}
                             </View>
-                            {!isMobileDevice && (
+                            {!isMobileLayout && (
                             <View style={styles.headerRight}>
                                 <Feather name="user" size={16} color="#333" />
                                 {/* <Text style={styles.userText}>Supervisor</Text> */}
@@ -370,7 +470,7 @@ const AssetFullDetails: React.FC = () => {
                        <ScrollView showsVerticalScrollIndicator={false}>
                             <View style={[
                                 styles.formBody, 
-                                isMobileDevice && { flexDirection: 'column', gap: 0 } 
+                                isMobileLayout && { flexDirection: 'column', gap: 0 } 
                             ]}>
                                 
                                 <View style={styles.formColumn}>
@@ -383,7 +483,21 @@ const AssetFullDetails: React.FC = () => {
                                         onChangeText={setAssetName}
                                     />
                                     <DisplayField label="Category" value={asset.category} icon="layers"/>
-                                    <DisplayField label="Status" value={asset.status} icon="check-circle" />
+                                    <DisplayField
+                                        label="Status"
+                                        value={statusValue || 'N/A'}
+                                        icon="check-circle"
+                                    >
+                                        {isEditMode ? (
+                                            <FieldPicker
+                                                value={statusValue}
+                                                placeholder="Select Status"
+                                                onPress={() => setShowStatusPicker(true)}
+                                            />
+                                        ) : (
+                                            <Text style={styles.valueText}>{statusValue || 'N/A'}</Text>
+                                        )}
+                                    </DisplayField>
                                     <DisplayField 
                                         label="Model Number" 
                                         value={modelNumber} 
@@ -395,21 +509,17 @@ const AssetFullDetails: React.FC = () => {
                                         label="Serial Number" 
                                         value={serialNumber} 
                                         icon="hash" 
-                                        editable={isEditMode}
-                                        onChangeText={setSerialNumber}
                                     />
                                     <DisplayField 
                                         label="Price" 
                                         value={price} 
                                         icon="dollar" 
-                                        editable={isEditMode}
-                                        onChangeText={setPrice}
                                     />
                                 </View>
 
                                 <View style={styles.formColumn}>
                                     {/* Mobile Image Upload */}
-                                    {isMobileDevice && (
+                                    {isMobileLayout && (
                                         <TouchableOpacity 
                                             onPress={handleImageUpload}
                                             style={styles.mobileImageContainer}
@@ -446,13 +556,35 @@ const AssetFullDetails: React.FC = () => {
                                     </TouchableOpacity>
                                    
                                     <DisplayField 
-                                        label="Current Location" 
-                                        value={location} 
-                                        icon="map-pin" 
-                                        editable={isEditMode}
-                                        onChangeText={setLocation}
-                                    />
-                                    <DisplayField label="Assigned To" value={asset.assignedTo || "N/A"} icon="user-check" />
+                                        label="Location"
+                                        value={location}
+                                        icon="map-pin"
+                                    >
+                                        {isEditMode ? (
+                                            <FieldPicker
+                                                value={location}
+                                                placeholder="Select Base Station"
+                                                onPress={() => setShowLocationPicker(true)}
+                                            />
+                                        ) : (
+                                            <Text style={styles.valueText}>{location || 'N/A'}</Text>
+                                        )}
+                                    </DisplayField>
+                                    <DisplayField label="Assigned To" value={assignedTo || "N/A"} icon="user-check">
+                                        {isEditMode ? (
+                                            <FieldPicker
+                                                value={assignedTo}
+                                                placeholder={
+                                                    isPrivilegedEditor
+                                                        ? 'Select Employee'
+                                                        : 'Select Operator'
+                                                }
+                                                onPress={() => setShowAssigneePicker(true)}
+                                            />
+                                        ) : (
+                                            <Text style={styles.valueText}>{assignedTo || 'N/A'}</Text>
+                                        )}
+                                    </DisplayField>
                                     <DisplayField label="Warranty Expiry" value={formatDate(asset.warrantyExpiry)} icon="calendar" />
                                     <DisplayField label="Purchase Date" value={formatDate(asset.purchaseDate)} icon="calendar" />
                                 </View>
@@ -460,9 +592,9 @@ const AssetFullDetails: React.FC = () => {
                         </ScrollView>
                         
                         {/* Action Buttons */}
-                        <View style={[styles.footer, isMobileDevice && { justifyContent: 'space-between' }]}>
+                        <View style={[styles.footer, isMobileLayout && { justifyContent: 'space-between' }]}>
                             <TouchableOpacity 
-                                style={isMobileDevice && { flex: 1 }}
+                                style={isMobileLayout && { flex: 1 }}
                                 onPress={isEditMode ? handleSaveAsset : handleEditToggle}
                             >
                                 <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.saveButton}>
@@ -472,7 +604,7 @@ const AssetFullDetails: React.FC = () => {
                                 </LinearGradient>
                             </TouchableOpacity>
                             <TouchableOpacity 
-                                style={[styles.cancelButton, isMobileDevice && { flex: 1 }]} 
+                                style={[styles.cancelButton, isMobileLayout && { flex: 1 }]} 
                                 onPress={isEditMode ? handleEditToggle : () => navigation.goBack()}
                             >
                                 <Text style={[styles.buttonText, { color: '#555' }]}>
@@ -482,6 +614,113 @@ const AssetFullDetails: React.FC = () => {
                         </View>
                     </View>
                 </View>
+
+                {/* Status Picker Modal */}
+                <Modal
+                    visible={showStatusPicker}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowStatusPicker(false)}
+                >
+                    <View style={styles.pickerModalBackdrop}>
+                        <View style={styles.pickerModalCard}>
+                            <Text style={styles.pickerModalTitle}>Select Status</Text>
+                            <ScrollView style={styles.pickerList}>
+                                {statuses.map((s: any, index: number) => {
+                                    const value = String(s?.status || '');
+                                    return (
+                                        <TouchableOpacity
+                                            key={`${value}-${index}`}
+                                            style={styles.pickerModalItem}
+                                            onPress={() => {
+                                                setStatusValue(value);
+                                                setShowStatusPicker(false);
+                                            }}
+                                        >
+                                            <Text style={styles.pickerModalItemText}>{value}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                            <TouchableOpacity
+                                style={styles.pickerModalCloseBtn}
+                                onPress={() => setShowStatusPicker(false)}
+                            >
+                                <Text style={styles.pickerModalCloseText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Location Picker Modal */}
+                <Modal
+                    visible={showLocationPicker}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowLocationPicker(false)}
+                >
+                    <View style={styles.pickerModalBackdrop}>
+                        <View style={styles.pickerModalCard}>
+                            <Text style={styles.pickerModalTitle}>Select Location</Text>
+                            <ScrollView style={styles.pickerList}>
+                                {locationOptions.map((item, index) => (
+                                    <TouchableOpacity
+                                        key={`${item}-${index}`}
+                                        style={styles.pickerModalItem}
+                                        onPress={() => {
+                                            setLocation(item);
+                                            setShowLocationPicker(false);
+                                        }}
+                                    >
+                                        <Text style={styles.pickerModalItemText}>{item}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                            <TouchableOpacity
+                                style={styles.pickerModalCloseBtn}
+                                onPress={() => setShowLocationPicker(false)}
+                            >
+                                <Text style={styles.pickerModalCloseText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Assignee Picker Modal */}
+                <Modal
+                    visible={showAssigneePicker}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowAssigneePicker(false)}
+                >
+                    <View style={styles.pickerModalBackdrop}>
+                        <View style={styles.pickerModalCard}>
+                            <Text style={styles.pickerModalTitle}>
+                                {isPrivilegedEditor ? 'Select Employee' : 'Select Operator'}
+                            </Text>
+                            <ScrollView style={styles.pickerList}>
+                                {assignableUsers.map((u, index) => (
+                                    <TouchableOpacity
+                                        key={`${u.value}-${index}`}
+                                        style={styles.pickerModalItem}
+                                        onPress={() => {
+                                            setAssignedTo(u.value);
+                                            setShowAssigneePicker(false);
+                                        }}
+                                    >
+                                        <Text style={styles.pickerModalItemText}>{u.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                            <TouchableOpacity
+                                style={styles.pickerModalCloseBtn}
+                                onPress={() => setShowAssigneePicker(false)}
+                            >
+                                <Text style={styles.pickerModalCloseText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
             </SafeAreaView>
         </ImageBackground>
     );
@@ -490,123 +729,6 @@ const AssetFullDetails: React.FC = () => {
 
 // --- STYLES MODIFIED FOR FULL-SCREEN "FROSTED GLASS" LAYOUT ---
 const styles = StyleSheet.create({
-    backgroundImage: { flex: 1,
-    width: "100%",
-    height: "100%",
-    },
-    safeArea: { flex: 1,backgroundColor: "rgba(61, 138, 233, 0.4)" },
-    container: { // Renamed from 'modalCard'
-        flex: 1,
-        flexDirection: 'row',
-    },
-    leftPanel: {
-        width: '35%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 30,
-    },
-    imageUploadContainer: {
-        marginBottom: 20,
-    },
-    imageWrapper: {
-        position: 'relative',
-    },
-    editOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    uploadPlaceholder: {
-        width: 180,
-        height: 180,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        borderRadius: 10,
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: '#fff',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    uploadText: {
-        color: '#fff',
-        marginTop: 10,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    leftPanelImage: { width: 180, height: 180, resizeMode: 'contain', borderRadius: 10 },
-    mobileImageContainer: {
-        width: '100%',
-        marginBottom: 20,
-        alignItems: 'center',
-    },
-    mobileImage: {
-        width: 150,
-        height: 150,
-        resizeMode: 'cover',
-        borderRadius: 10,
-        backgroundColor: '#f5f5f5',
-    },
-    mobileUploadPlaceholder: {
-        width: 150,
-        height: 150,
-        backgroundColor: '#f5f5f5',
-        borderRadius: 10,
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: '#ccc',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    mobileUploadText: {
-        color: '#666',
-        marginTop: 8,
-        fontSize: 13,
-        fontWeight: '500',
-    },
-    leftPanelTitle: { fontSize: 30, fontWeight: 'bold', color: '#000000ff', textAlign: 'center' },
-    leftPanelSubtitle: { fontSize: 13, color: '#000000ff', marginTop: 10, opacity: 0.8, letterSpacing: 1 },
-    brandName: { fontSize: 15, color: '#000000ff', marginTop: 30, opacity: 0.8 },
-    rightPanel: {
-        flex: 1,
-        // If mobile, make background solid white for better readability
-        backgroundColor: Platform.OS !== 'web' ? '#fff' : 'rgba(255, 255, 255, 0.4)', 
-        padding: 20,
-        borderTopLeftRadius: Platform.OS !== 'web' ? 25 : 0, // Rounded corners for mobile
-        borderTopRightRadius: Platform.OS !== 'web' ? 25 : 0,
-    },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#000000ff' }, // White text
-    editBadge: {
-        backgroundColor: '#27B2C3',
-        paddingVertical: 4,
-        paddingHorizontal: 12,
-        borderRadius: 12,
-    },
-    editBadgeText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    headerRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        // backgroundColor: 'rgba(20, 2, 2, 0.7)', // Semi-transparent
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 20,
-    },
-    // Added backButton style to avoid missing property error
-    backButton: { padding: 6, marginRight: 10, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 6 },
-    userText: { marginLeft: 8, marginRight: 8, fontSize: 14, fontWeight: '500' },
-    formBody: { flexDirection: 'row', gap: 25, flex: 1 },
-    formColumn: { flex: 1, width: '100%' },
-    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#000000ff', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)', paddingBottom: 5},
     fieldContainer: { marginBottom: 12 },
     labelContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: 5 },
     label: { fontSize: 12, color: '#000000ff', fontWeight: '500' }, // Light text
@@ -624,7 +746,7 @@ const styles = StyleSheet.create({
         borderColor: '#27B2C3',
         borderWidth: 2,
     },
-    valueText: {
+     valueText: {
         fontSize: 14,
         color: '#1A202C', // Dark text inside light boxes for contrast
         fontWeight: '500',
@@ -636,60 +758,64 @@ const styles = StyleSheet.create({
         padding: 0,
         margin: 0,
     },
-    barcodeContainer: {
-        marginBottom: 5,
+    inlinePicker: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
-    barcodeImage: {
-        width: '100%',
-        height: 70,
-        resizeMode: 'contain',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)', // Almost solid white
-        padding: 5,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#0f0101ff',
+    inlinePickerText: {
+        fontSize: 14,
+        color: '#1A202C',
+        fontWeight: '500',
     },
-    barcodeUploadPlaceholder: {
-        width: '100%',
-        height: 70,
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        borderRadius: 8,
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: '#ccc',
+    inlinePickerPlaceholder: {
+        color: '#6b7280',
+    },
+    pickerModalBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
         justifyContent: 'center',
         alignItems: 'center',
-        flexDirection: 'row',
+        padding: 16,
     },
-    barcodeUploadText: {
-        color: '#666',
-        fontSize: 13,
-        fontWeight: '500',
-        marginLeft: 8,
+    pickerModalCard: {
+        width: '100%',
+        maxWidth: 420,
+        maxHeight: '70%',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 16,
     },
-    barcodeText: { textAlign: 'center', fontSize: 14, fontWeight: '600', color: '#000000ff' },
-    currentUserText: { textAlign: 'center', fontSize: 13, color: '#000000ff', marginTop: 5, marginBottom: 20 },
-    purchaseDetails: { flexDirection: 'row' },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        paddingTop: 15,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.3)',
+    pickerModalTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 12,
+        color: '#111827',
     },
-    saveButton: { paddingVertical: 12, 
-        paddingHorizontal: 20, 
-        borderRadius: 10,
-        alignItems: 'center' },
-    cancelButton: { paddingVertical: 12, 
-        paddingHorizontal: 20, 
-        borderRadius: 10, 
-        backgroundColor: '#EAEAEA', 
-        marginLeft: 10,
-        alignItems: 'center'
-     },
-    buttonText: { color: '#000000ff', fontSize: 14, fontWeight: 'bold' },
+    pickerList: {
+        maxHeight: 320,
+    },
+    pickerModalItem: {
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    pickerModalItemText: {
+        fontSize: 14,
+        color: '#1f2937',
+    },
+    pickerModalCloseBtn: {
+        marginTop: 12,
+        alignSelf: 'flex-end',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        backgroundColor: '#e2e8f0',
+    },
+    pickerModalCloseText: {
+        color: '#334155',
+        fontWeight: '600',
+    },
 });
 
 export default AssetFullDetails;

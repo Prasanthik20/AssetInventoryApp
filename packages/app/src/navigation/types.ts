@@ -12,6 +12,7 @@ export type Asset = {
   category?: string;
   status?: string;
   barcode?: string;
+  barcodeURL?: string | null;
   location?: string;
   price?: string;
   purchaseDate?: string;
@@ -70,7 +71,9 @@ ResetPassword: { token: string };
   SuperAdminLogin: undefined;
   SuperAdminDashboard: undefined;
 
-  TotalAssetDetails: undefined;
+  TotalAssetDetails: {
+    statusFilter?: string;
+  } | undefined;
   OfficeAssets: undefined;
   FieldAssets: {
     employeeId: string;

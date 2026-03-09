@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground, FlatList, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground, FlatList, TouchableOpacity, TextInput, ScrollView, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { baseURL,Asset } from 'src/navigation/types';
@@ -9,6 +9,9 @@ import { useAssetFilter } from 'src/hooks/useAssetFilter';
 
 const OfficeAssets: React.FC = () => {
   const navigation = useNavigation();
+  const { width, height } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -33,6 +36,8 @@ const OfficeAssets: React.FC = () => {
     // Search Filter: Check if assetName or barcode matches search text
     const matchesSearch = searchText
       ? asset.assetName.toLowerCase().includes(searchText.toLowerCase()) ||
+      asset.assignedTo?.toLowerCase().includes(searchText.toLowerCase()) ||
+      asset.location?.toLowerCase().includes(searchText.toLowerCase()) ||
         // barcode may be undefined, so check before calling toLowerCase
         (asset.barcode?.toLowerCase().includes(searchText.toLowerCase()) ?? false)
       : true;
@@ -60,21 +65,16 @@ const OfficeAssets: React.FC = () => {
     fetchAssets();
   }, []);
 
-  const renderAsset = ({ item }: { item: Asset }) => (
-    <View style={styles.assetRow}>
-      <Ionicons name="business-outline" size={24} color="#3B59B8" style={styles.assetIcon} />
-      <View style={styles.assetInfo}>
-        <Text style={styles.assetName}>{item.assetName} ({item.barcode})</Text>
-        <Text style={styles.assetSubtext}>Last User: {item.assignedTo || 'N/A'}</Text>
-      </View>
-    </View>
-  );
-
-
    return (
     <ImageBackground source={require("../../assets/Company-bg.webp")} style={styles.backgroundImage} resizeMode="cover" blurRadius={5}>
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
+        <View
+          style={[
+            styles.container,
+            isMobileLayout && { width: '100%', height: '100%', borderRadius: 0 },
+            height < 700 && { height: '100%' },
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="arrow-back-outline" size={24} color="#fff" /></TouchableOpacity>
@@ -83,7 +83,7 @@ const OfficeAssets: React.FC = () => {
           </View>
 
           {/* Combined Search and Filter Row */}
-          <View style={styles.topControlsRow}>
+          <View style={[styles.topControlsRow, isMobileLayout && { flexDirection: 'column', alignItems: 'stretch' }]}>
             <View style={styles.searchContainer}>
               <Feather name="search" size={18} color="#888" style={styles.searchIcon} />
               <TextInput
@@ -95,7 +95,7 @@ const OfficeAssets: React.FC = () => {
               />
             </View>
 
-            <View style={styles.dropdownContainer}>
+            <View style={[styles.dropdownContainer, isMobileLayout && { width: '100%' }]}>
               <Picker
                 selectedValue={selectedName}
                 onValueChange={(val) => setSelectedName(val)}
@@ -119,7 +119,9 @@ const OfficeAssets: React.FC = () => {
                 <Ionicons name="business-outline" size={24} color="#3B59B8" style={styles.assetIcon} />
                 <View style={styles.assetInfo}>
                   <Text style={styles.assetName}>{item.assetName} ({item.barcode})</Text>
+                  <Text style={styles.assetSubtext}>Serial No: {item.serialNumber || 'N/A'}</Text>
                   <Text style={styles.assetSubtext}>Last User: {item.assignedTo || 'N/A'}</Text>
+                  <Text style={styles.assetSubtext}>Location: {item.location || 'N/A'}</Text>
                 </View>
               </View>
             )}

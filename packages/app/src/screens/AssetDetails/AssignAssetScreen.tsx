@@ -14,6 +14,7 @@ import {
   Modal,
   Platform,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -23,8 +24,8 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
-
-const isMobileDevice = Platform.OS !== 'web';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import assignStyles from './assign.styles';
 
 type AssignAssetNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -32,6 +33,9 @@ type AssignAssetNavigationProp = StackNavigationProp<
 >;
 
 const AssignAssetScreen: React.FC = () => {
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
   const navigation = useNavigation<AssignAssetNavigationProp>();
   const route = useRoute<{
     key: string;
@@ -42,6 +46,7 @@ const AssignAssetScreen: React.FC = () => {
     };
   }>();
 
+  const styles = assignStyles(isMobileLayout);
   // ⬅️ Supervisor details from CompanyLoginScreen
   const supervisor_employeeId = route.params?.supervisor_employeeId;
   const supervisorName = route.params?.supervisorName
@@ -51,6 +56,7 @@ const AssignAssetScreen: React.FC = () => {
   // -------------------- STATES --------------------
   const [assets, setAssets] = useState<Asset[]>([]);
   const [operators, setOperators] = useState<any[]>([]);
+  const [canAssignToSupervisor, setCanAssignToSupervisor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +72,13 @@ const AssignAssetScreen: React.FC = () => {
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [barcodeURL, setBarcodeURL] = useState<string | null>(null);
+  const [assetPhotoMap, setAssetPhotoMap] = useState<Record<string, string>>({});
+  const [assetBarcodeMap, setAssetBarcodeMap] = useState<Record<string, string>>({});
+  const [assetPhotoLoadingMap, setAssetPhotoLoadingMap] = useState<Record<string, boolean>>({});
+  const [assetBarcodeLoadingMap, setAssetBarcodeLoadingMap] = useState<Record<string, boolean>>({});
   const [photoLoading, setPhotoLoading] = useState(false);
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
 
   const [showAssignedPicker, setShowAssignedPicker] = useState(false);
   const [showDuePicker, setShowDuePicker] = useState(false);
@@ -77,13 +89,27 @@ const AssignAssetScreen: React.FC = () => {
       try {
         setLoading(true);
 
+        const storedUser = await AsyncStorage.getItem('user');
+        const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+        const assignerRole = String(
+          parsedUser?.roleName || parsedUser?.role?.roleName || '',
+        ).toLowerCase();
+        const privilegedRoles = [
+          'admin',
+          'super',
+          'superadmin',
+          'super admin',
+        ];
+        const isPrivilegedAssigner = privilegedRoles.includes(assignerRole);
+        setCanAssignToSupervisor(isPrivilegedAssigner);
+
         // ----- FETCH ASSETS -----
         const res = await axios.get(`${baseURL}/api/assets`);
 
         const rawData = res.data.assets || res.data || [];
         const normalizedAssets = rawData.map((a: any) => ({
           ...a,
-          assetId: a.assetId || a.id,
+          assetId: Number(a.assetId || a.id),
         }));
 
         const unassignedAssets = normalizedAssets.filter(
@@ -101,14 +127,22 @@ const AssignAssetScreen: React.FC = () => {
 
         const rawUsers = response.data.users || response.data.data || response.data || [];
 
-        const operatorsList = rawUsers.filter(
-          (u: any) => u.role?.roleName?.toLowerCase() === "operator"
-        );
+        const assignableUsers = rawUsers.filter((u: any) => {
+          const targetRole = String(
+            u.role?.roleName || u.roleName || '',
+          ).toLowerCase();
 
-        setOperators(operatorsList);
+          if (isPrivilegedAssigner) {
+            return targetRole === 'operator' || targetRole === 'supervisor';
+          }
+
+          return targetRole === 'operator';
+        });
+
+        setOperators(assignableUsers);
       } catch (err) {
         console.log(err);
-        setError("Failed to fetch assets or operators");
+        setError("Failed to fetch assets or users");
       } finally {
         setLoading(false);
       }
@@ -124,7 +158,7 @@ const AssignAssetScreen: React.FC = () => {
       return;
     }
     if (!selectedOperator) {
-      Alert.alert('Error', 'Please select an operator');
+      Alert.alert('Error', 'Please select assignee');
       return;
     }
 
@@ -133,10 +167,51 @@ const AssignAssetScreen: React.FC = () => {
       return;
     }
 
+    if (selectedAssets.length > 1) {
+      console.log('🔍 Validating multi-select media...');
+      console.log('assetPhotoMap:', assetPhotoMap);
+      console.log('assetBarcodeMap:', assetBarcodeMap);
+      
+      const missingMediaAssets = selectedAssets.filter(
+        (asset) => {
+          const key = toAssetKey(asset.assetId);
+          const hasPhoto = !!assetPhotoMap[key];
+          const hasBarcode = !!assetBarcodeMap[key];
+          console.log(`Asset ${key}: photo=${hasPhoto}, barcode=${hasBarcode}`);
+          return !hasPhoto || !hasBarcode;
+        }
+      );
+
+      if (missingMediaAssets.length > 0) {
+        console.log('❌ Missing media for:', missingMediaAssets.map(a => toAssetKey(a.assetId)));
+        Alert.alert(
+          'Media Required',
+          'Please upload both photo and barcode for each selected asset.'
+        );
+        return;
+      }
+      console.log('✅ All media present for multi-select');
+    }
+
     try {
+      const selectedAssetIds = selectedAssets.map(a => toAssetId(a.assetId));
+      const assetMedia = selectedAssetIds.map((assetId) => ({
+        assetId,
+        photoURL: assetPhotoMap[toAssetKey(assetId)] || photo || null,
+        barcodeURL: assetBarcodeMap[toAssetKey(assetId)] || barcodeURL || null,
+      }));
+
+      console.log('🔍 Assignment Payload:');
+      console.log('selectedAssetIds:', selectedAssetIds);
+      console.log('assetMedia:', assetMedia.map(m => ({
+        assetId: m.assetId,
+        hasPhoto: !!m.photoURL,
+        hasBarcode: !!m.barcodeURL
+      })));
+
       // 🔥 Send the array of IDs to your bulk assignment API
       await axios.post(`${baseURL}/api/assets/assign`, {
-        assetIds: selectedAssets.map(a => a.assetId), // Change asset_id to assetIds
+        assetIds: selectedAssetIds,
         operator_employeeId: selectedOperator.employeeId,
         supervisor_employeeId: supervisor_employeeId,
         project_name: projectName,
@@ -144,7 +219,9 @@ const AssignAssetScreen: React.FC = () => {
         assigned_date: assignedDate,
         expected_return_date: dueDate,
         notes,
+        assetMedia,
         ...(photo && { photoURL: photo }), // Include photo if available
+        ...(barcodeURL && { barcodeURL }),
       });
 
       Alert.alert('Success', `${selectedAssets.length} Assets assigned!`);
@@ -168,20 +245,92 @@ const onDueChange = (event: any, selectedDate?: Date) => {
   }
 };
 
-  // -------------------- SCAN FUNCTIONS --------------------
-  const handleScanBarcode = () => {
-    Alert.alert('Scan Barcode', 'Camera functionality will be placed here.');
+  const toAssetId = (value: unknown) => Number(value);
+  const toAssetKey = (value: unknown) => String(toAssetId(value));
+
+  const handleUploadBarcode = async (targetAssetId?: number | string) => {
+    const hasTargetAsset =
+      targetAssetId !== undefined &&
+      targetAssetId !== null &&
+      !Number.isNaN(toAssetId(targetAssetId));
+    const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+
+    try {
+      if (hasTargetAsset && targetKey) {
+        setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+      } else {
+        setBarcodeLoading(true);
+      }
+
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Media library permission is required to upload barcode image.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const base64 = result.assets[0].base64;
+
+        if (base64) {
+          const barcodeData = `data:image/jpeg;base64,${base64}`;
+          if (hasTargetAsset && targetKey) {
+            setAssetBarcodeMap((prev) => {
+              const updated = { ...prev, [targetKey]: barcodeData };
+              console.log('🔍 Barcode uploaded for asset:', targetKey, '| Map:', updated);
+              return updated;
+            });
+            Alert.alert('✅ Barcode Selected', 'Barcode saved for selected asset.');
+          } else {
+            setBarcodeURL(barcodeData);
+            Alert.alert('✅ Barcode Selected', 'Barcode image will be attached to the assignment.');
+          }
+        } else {
+          Alert.alert('Error', 'Failed to process barcode image. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Barcode picker error:', error);
+      Alert.alert('Error', 'Failed to open image library.');
+    } finally {
+      if (hasTargetAsset && targetKey) {
+        setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+      } else {
+        setBarcodeLoading(false);
+      }
+    }
   };
 
-  const handleUploadPhoto = async () => {
+  const handleUploadPhoto = async (targetAssetId?: number | string) => {
+    const hasTargetAsset =
+      targetAssetId !== undefined &&
+      targetAssetId !== null &&
+      !Number.isNaN(toAssetId(targetAssetId));
+    const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+
     try {
-      setPhotoLoading(true);
+      if (hasTargetAsset && targetKey) {
+        setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+      } else {
+        setPhotoLoading(true);
+      }
 
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Camera roll permission is required to upload photos.');
-        setPhotoLoading(false);
+        if (hasTargetAsset && targetKey) {
+          setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+        } else {
+          setPhotoLoading(false);
+        }
         return;
       }
 
@@ -200,8 +349,17 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
         if (base64) {
           const photoURL = `data:image/jpeg;base64,${base64}`;
-          setPhoto(photoURL);
-          Alert.alert('✅ Photo Selected', 'Photo will be attached to the assignment.');
+          if (hasTargetAsset && targetKey) {
+            setAssetPhotoMap((prev) => {
+              const updated = { ...prev, [targetKey]: photoURL };
+              console.log('🔍 Photo uploaded for asset:', targetKey, '| Map:', updated);
+              return updated;
+            });
+            Alert.alert('✅ Photo Selected', 'Photo saved for selected asset.');
+          } else {
+            setPhoto(photoURL);
+            Alert.alert('✅ Photo Selected', 'Photo will be attached to the assignment.');
+          }
         } else {
           Alert.alert('Error', 'Failed to process image. Please try again.');
         }
@@ -210,7 +368,11 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       console.error('Photo picker error:', error);
       Alert.alert('Error', 'Failed to open image library.');
     } finally {
-      setPhotoLoading(false);
+      if (hasTargetAsset && targetKey) {
+        setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+      } else {
+        setPhotoLoading(false);
+      }
     }
   };
 
@@ -220,6 +382,17 @@ const onDueChange = (event: any, selectedDate?: Date) => {
     setSelectedAssets((prev) => {
       const isSelected = prev.find((a) => a.assetId === asset.assetId);
       if (isSelected) {
+        const assetKey = toAssetKey(asset.assetId);
+        setAssetPhotoMap((current) => {
+          const next = { ...current };
+          delete next[assetKey];
+          return next;
+        });
+        setAssetBarcodeMap((current) => {
+          const next = { ...current };
+          delete next[assetKey];
+          return next;
+        });
         return prev.filter((a) => a.assetId !== asset.assetId); // Remove if already selected
       } else {
         return [...prev, asset]; // Add if not selected
@@ -270,14 +443,14 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       blurRadius={10}
     >
       <SafeAreaView style={styles.safeArea}>
-        <View style={[styles.container, isMobileDevice && { margin: 0, borderRadius: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)' }]}>
+        <View style={[styles.container, isMobileLayout && { margin: 0, borderRadius: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)' }]}>
           {/* HEADER */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#1A202C" />
             </TouchableOpacity>
 
-            <Text style={styles.headerTitle}>Assign Asset to Operator</Text>
+            <Text style={styles.headerTitle}>Assign Asset</Text>
 
             <View style={{ width: 40 }} />
           </View>
@@ -286,7 +459,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           <ScrollView 
           contentContainerStyle={[
             styles.formScrollContainer,
-            isMobileDevice && { paddingHorizontal: 15 } // Tighter padding for phones
+            isMobileLayout && { paddingHorizontal: 15 } // Tighter padding for phones
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -295,7 +468,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           */}
           <View style={[
             styles.formBody, 
-            { flexDirection: isMobileDevice ? 'column' : 'row', gap: isMobileDevice ? 0 : 25 }
+            { flexDirection: isMobileLayout ? 'column' : 'row', gap: isMobileLayout ? 0 : 25 }
           ]}>
 
               {/* LEFT COLUMN */}
@@ -313,13 +486,15 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                 </TouchableOpacity>
 
                 {/* OPERATOR DROPDOWN */}
-                <Text style={styles.label}>Assign to Operator</Text>
+                <Text style={styles.label}>
+                  {canAssignToSupervisor ? 'Assign to Employee' : 'Assign to Operator'}
+                </Text>
                 <TouchableOpacity
                   style={styles.pickerInput}
                   onPress={() => setOperatorModal(true)}
                 >
                   <Text style={styles.pickerText}>{selectedOperator ? `${selectedOperator.fullName}
-                   (${selectedOperator.employeeId})` : "Select Operator"}</Text>
+                   (${selectedOperator.employeeId})` : (canAssignToSupervisor ? 'Select Employee' : 'Select Operator')}</Text>
                   <Ionicons name="chevron-down" size={20} color="#333" />
                 </TouchableOpacity>
 
@@ -359,13 +534,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               </View>
 
               {/* RIGHT COLUMN */}
-              <View style={[styles.formColumn, isMobileDevice && { marginTop: 10 }]}>
-                <Text style={styles.label}>Scan Barcode</Text>
-
-                <TouchableOpacity style={styles.scanButton} onPress={handleScanBarcode}>
-                  <MaterialCommunityIcons name="barcode-scan" size={24} color="#fff" />
-                  <Text style={styles.scanButtonText}>Scan Asset Barcode</Text>
-                </TouchableOpacity>
+              <View style={[styles.formColumn, isMobileLayout && { marginTop: 10 }]}> 
 
                 {/* ASSIGNED DATE */}
                 <Text style={styles.label}>Assigned Date</Text>
@@ -451,42 +620,131 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                   </>
                 )}
 
-                <Text style={styles.label}>Upload Photo (Optional)</Text>
-                <TouchableOpacity 
-                  style={styles.uploadButton} 
-                  onPress={handleUploadPhoto}
-                  disabled={photoLoading}
-                >
-                  {photoLoading ? (
-                    <ActivityIndicator color="#4A5568" size="small" />
-                  ) : (
-                    <>
-                      <Feather name="camera" size={20} color="#4A5568" />
-                      <Text style={styles.uploadButtonText}>
-                        {photo ? '✓ Photo Uploaded' : 'Tap to upload a photo'}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                {/* Photo Preview */}
-                {photo && (
-                  <View style={styles.photoPreviewContainer}>
-                    <Image 
-                      source={{ uri: photo }} 
-                      style={styles.photoPreview}
-                      resizeMode="cover"
-                    />
-                    <TouchableOpacity 
-                      style={styles.removePhotoButton}
-                      onPress={() => {
-                        setPhoto(null);
-                        Alert.alert('Removed', 'Photo has been removed.');
-                      }}
+                {selectedAssets.length > 1 ? (
+                  <>
+                    <Text style={styles.label}>Upload Per Asset (Required for Multi-Select)</Text>
+                    <Text style={styles.helperText}>Each selected asset needs both a photo and barcode image.</Text>
+                    {selectedAssets.map((asset) => {
+                      const assetKey = toAssetKey(asset.assetId);
+                      const currentPhoto = assetPhotoMap[assetKey] || null;
+                      const currentBarcode = assetBarcodeMap[assetKey] || null;
+                      const isPhotoLoading = assetPhotoLoadingMap[assetKey] || false;
+                      const isBarcodeLoading = assetBarcodeLoadingMap[assetKey] || false;
+                      return (
+                        <View key={`media-${asset.assetId}`} style={styles.mediaCard}>
+                          <Text style={styles.mediaCardTitle}>{asset.assetName}</Text>
+                          <TouchableOpacity
+                            style={styles.uploadButton}
+                            onPress={() => handleUploadPhoto(asset.assetId)}
+                            disabled={isPhotoLoading}
+                          >
+                            {isPhotoLoading ? (
+                              <ActivityIndicator color="#4A5568" size="small" />
+                            ) : (
+                              <>
+                                <Feather name="camera" size={20} color="#4A5568" />
+                                <Text style={styles.uploadButtonText}>
+                                  {currentPhoto ? '✓ Photo Uploaded' : 'Upload Photo'}
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.uploadButton}
+                            onPress={() => handleUploadBarcode(asset.assetId)}
+                            disabled={isBarcodeLoading}
+                          >
+                            {isBarcodeLoading ? (
+                              <ActivityIndicator color="#4A5568" size="small" />
+                            ) : (
+                              <>
+                                <MaterialCommunityIcons name="barcode" size={20} color="#4A5568" />
+                                <Text style={styles.uploadButtonText}>
+                                  {currentBarcode ? '✓ Barcode Uploaded' : 'Scan/Upload Barcode'}
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.label}>Upload Photo</Text>
+                    <TouchableOpacity
+                      style={styles.uploadButton}
+                      onPress={() => handleUploadPhoto()}
+                      disabled={photoLoading}
                     >
-                      <Ionicons name="close" size={20} color="#fff" />
+                      {photoLoading ? (
+                        <ActivityIndicator color="#4A5568" size="small" />
+                      ) : (
+                        <>
+                          <Feather name="camera" size={20} color="#4A5568" />
+                          <Text style={styles.uploadButtonText}>
+                            {photo ? '✓ Photo Uploaded' : 'Tap to upload a photo'}
+                          </Text>
+                        </>
+                      )}
                     </TouchableOpacity>
-                  </View>
+
+                    {photo && (
+                      <View style={styles.photoPreviewContainer}>
+                        <Image
+                          source={{ uri: photo }}
+                          style={styles.photoPreview}
+                          resizeMode="cover"
+                        />
+                        <TouchableOpacity
+                          style={styles.removePhotoButton}
+                          onPress={() => {
+                            setPhoto(null);
+                            Alert.alert('Removed', 'Photo has been removed.');
+                          }}
+                        >
+                          <Ionicons name="close" size={20} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Upload Barcode </Text>
+                    <TouchableOpacity
+                      style={styles.uploadButton}
+                      onPress={() => handleUploadBarcode()}
+                      disabled={barcodeLoading}
+                    >
+                      {barcodeLoading ? (
+                        <ActivityIndicator color="#4A5568" size="small" />
+                      ) : (
+                        <>
+                          <MaterialCommunityIcons name="barcode" size={20} color="#4A5568" />
+                          <Text style={styles.uploadButtonText}>
+                            {barcodeURL ? '✓ Barcode Uploaded' : 'Tap to upload barcode image'}
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    {barcodeURL && (
+                      <View style={styles.photoPreviewContainer}>
+                        <Image
+                          source={{ uri: barcodeURL }}
+                          style={styles.photoPreview}
+                          resizeMode="contain"
+                        />
+                        <TouchableOpacity
+                          style={styles.removePhotoButton}
+                          onPress={() => {
+                            setBarcodeURL(null);
+                            Alert.alert('Removed', 'Barcode image has been removed.');
+                          }}
+                        >
+                          <Ionicons name="close" size={20} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </>
                 )}
               </View>
             </View>
@@ -495,7 +753,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           {/* FOOTER */}
           <View style={[
           styles.footer, 
-          isMobileDevice && { justifyContent: 'center', paddingBottom: 30 }
+          isMobileLayout && { justifyContent: 'center', paddingBottom: 30 }
         ]}>
             <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
               <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
@@ -543,7 +801,9 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           onPress={() => setOperatorModal(false)}
         >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Operator</Text>
+            <Text style={styles.modalTitle}>
+              {canAssignToSupervisor ? 'Select Employee' : 'Select Operator'}
+            </Text>
 
             {operators.map((op) => (
               <TouchableOpacity
@@ -568,199 +828,5 @@ const onDueChange = (event: any, selectedDate?: Date) => {
   );
 };
 
-// -------------------- YOUR ORIGINAL STYLES (UNTOUCHED) --------------------
-const styles = StyleSheet.create({
-  backgroundImage: { flex: 1, width: '100%', height: '100%' },
-  safeArea: { flex: 1 ,backgroundColor: "rgba(61, 138, 233, 0.4)"},
-  container: {
-    flex: 1,
-    margin: 20,
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  backButton: { position: 'absolute', left: 20 , marginTop : 25},
-  headerTitle: { color: '#1A202C', fontSize: 20, fontWeight: 'bold' , marginTop : 25},
-  formScrollContainer: { padding: 25 },
-  formBody: { flexDirection: 'row', gap: 25 },
-  formColumn: { flex: 1, width: '100%', },
-  label: {
-    fontSize: 14,
-    color: '#2D3748',
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  pickerInput: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    paddingVertical: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-  },
-  pickerText: { fontSize: 15, color: '#1A202C', fontWeight: '500',flex: 1,}, // Allows text to truncate correctly if too long },
-  inputGroup: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    marginBottom: 20,
-  },
-  inputIcon: { marginRight: 10 },
-  textInput: {
-    flex: 1,
-    height: 50,
-    fontSize: 15,
-    color: '#1A202C',
-    fontWeight: '500',
-  },
-  notesInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-    padding: 15,
-    fontSize: 15,
-    color: '#1A202C',
-    height: 100, // Reduced slightly for mobile comfort
-    textAlignVertical: 'top',
-    marginBottom: 20, // Add bottom margin for mobile stacking
-  },
-  scanButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4A55A2',
-    borderRadius: 10,
-    paddingVertical: 14,
-    marginBottom: 20,
-  },
-  scanButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EDF2F7',
-    borderRadius: 10,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-  },
-  uploadButtonText: {
-    color: '#4A5568',
-    fontSize: 15,
-    fontWeight: '500',
-    marginLeft: 10,
-  },
-  photoPreviewContainer: {
-    position: 'relative',
-    marginTop: 15,
-    marginBottom: 20,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: '#F0F0F0',
-  },
-  photoPreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 10,
-  },
-  removePhotoButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    padding: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    marginTop: 'auto',
-  },
-  assignButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    marginLeft: 15,
-  },
-  cancelButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    backgroundColor: '#E2E8F0',
-  },
-  buttonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  assetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-
-  centeredView: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 20,
-    color: '#1A202C',
-  },
-  doneButton: {
-  backgroundColor: '#3B59B8',
-  padding: 15,
-  borderRadius: 10,
-  alignItems: 'center',
-  marginTop: 10
-},
-doneButtonText: {
-  color: '#FFF',
-  fontWeight: 'bold',
-  fontSize: 16
-},
-modalContent: {
-  backgroundColor: 'white',
-  padding: 20,
-  borderTopLeftRadius: 20,
-  borderTopRightRadius: 20,
-  maxHeight: '80%', // Important so the list doesn't go off screen
-},
-});
 
 export default AssignAssetScreen;

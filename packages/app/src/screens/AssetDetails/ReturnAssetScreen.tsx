@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, Platform,ImageBackground, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, Platform,ImageBackground, ScrollView, Image, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -9,11 +9,12 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 
-const isMobileDevice = Platform.OS !== 'web';
-
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
 const ReturnAssetScreen: React.FC = () => {
+    const { width } = useWindowDimensions();
+    const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+    const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
     const route = useRoute<ReturnAssetRouteProp>();
     const { assets, operatorEmployeeId } = route.params;
     const navigation = useNavigation<any>();
@@ -22,7 +23,17 @@ const ReturnAssetScreen: React.FC = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedOverdueAsset, setSelectedOverdueAsset] = useState('');
     const [photo, setPhoto] = useState<string | null>(null);
+    const [barcodeURL, setBarcodeURL] = useState<string | null>(null);
+    const [assetPhotoMap, setAssetPhotoMap] = useState<Record<string, string>>({});
+    const [assetBarcodeMap, setAssetBarcodeMap] = useState<Record<string, string>>({});
+    const [assetPhotoLoadingMap, setAssetPhotoLoadingMap] = useState<Record<string, boolean>>({});
+    const [assetBarcodeLoadingMap, setAssetBarcodeLoadingMap] = useState<Record<string, boolean>>({});
     const [photoLoading, setPhotoLoading] = useState(false);
+    const [barcodeLoading, setBarcodeLoading] = useState(false);
+
+    const toAssetId = (value: unknown) => Number(value);
+    const toAssetKey = (value: unknown) => String(toAssetId(value));
+    const toAssignmentId = (value: unknown) => Number(value);
 
     // --- Modal Handler Functions ---
     const handleOpenModal = (assetName: string) => {
@@ -37,17 +48,95 @@ const ReturnAssetScreen: React.FC = () => {
     };
 
     // --- Button Action Handlers ---
-    const handleScanBarcode = () => Alert.alert("Scan Barcode", "Camera functionality for scanning returns would be implemented here.");
-    
-    const handleUploadPhoto = async () => {
+    const handleScanBarcode = async (targetAssetId?: number | string) => {
+        const hasTargetAsset =
+            targetAssetId !== undefined &&
+            targetAssetId !== null &&
+            !Number.isNaN(toAssetId(targetAssetId));
+        const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+
         try {
-            setPhotoLoading(true);
+            if (hasTargetAsset && targetKey) {
+                setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+            } else {
+                setBarcodeLoading(true);
+            }
+
+            if (Platform.OS === 'web') {
+                // Web fallback: use file picker for barcode/QR image capture.
+                await handleUploadBarcode(targetAssetId);
+                return;
+            }
+
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission Denied', 'Camera permission is required to scan QR/barcode.');
+                if (hasTargetAsset && targetKey) {
+                    setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+                } else {
+                    setBarcodeLoading(false);
+                }
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+                base64: true,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                const base64 = result.assets[0].base64;
+
+                if (base64) {
+                    const barcodeData = `data:image/jpeg;base64,${base64}`;
+                    if (hasTargetAsset && targetKey) {
+                        setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: barcodeData }));
+                        Alert.alert('✅ Barcode Captured', 'Captured barcode saved for selected asset.');
+                    } else {
+                        setBarcodeURL(barcodeData);
+                        Alert.alert('✅ Barcode Captured', 'Captured barcode image will be attached to the return.');
+                    }
+                } else {
+                    Alert.alert('Error', 'Failed to process captured image. Please try again.');
+                }
+            }
+        } catch (error) {
+            console.error('Barcode camera error:', error);
+            Alert.alert('Error', 'Failed to open camera.');
+        } finally {
+            if (hasTargetAsset && targetKey) {
+                setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+            } else {
+                setBarcodeLoading(false);
+            }
+        }
+    };
+    
+    const handleUploadPhoto = async (targetAssetId?: number | string) => {
+        const hasTargetAsset =
+            targetAssetId !== undefined &&
+            targetAssetId !== null &&
+            !Number.isNaN(toAssetId(targetAssetId));
+        const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+
+        try {
+            if (hasTargetAsset && targetKey) {
+                setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+            } else {
+                setPhotoLoading(true);
+            }
 
             // Request permission
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
                 Alert.alert('Permission Denied', 'Camera roll permission is required to upload photos.');
-                setPhotoLoading(false);
+                if (hasTargetAsset && targetKey) {
+                    setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+                } else {
+                    setPhotoLoading(false);
+                }
                 return;
             }
 
@@ -66,8 +155,13 @@ const ReturnAssetScreen: React.FC = () => {
 
                 if (base64) {
                     const photoURL = `data:image/jpeg;base64,${base64}`;
-                    setPhoto(photoURL);
-                    Alert.alert('✅ Photo Selected', 'Photo will be attached to the return.');
+                    if (hasTargetAsset && targetKey) {
+                        setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: photoURL }));
+                        Alert.alert('✅ Photo Selected', 'Photo saved for selected asset.');
+                    } else {
+                        setPhoto(photoURL);
+                        Alert.alert('✅ Photo Selected', 'Photo will be attached to the return.');
+                    }
                 } else {
                     Alert.alert('Error', 'Failed to process image. Please try again.');
                 }
@@ -76,16 +170,98 @@ const ReturnAssetScreen: React.FC = () => {
             console.error('Photo picker error:', error);
             Alert.alert('Error', 'Failed to open image library.');
         } finally {
-            setPhotoLoading(false);
+            if (hasTargetAsset && targetKey) {
+                setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+            } else {
+                setPhotoLoading(false);
+            }
+        }
+    };
+
+    const handleUploadBarcode = async (targetAssetId?: number | string) => {
+        const hasTargetAsset =
+            targetAssetId !== undefined &&
+            targetAssetId !== null &&
+            !Number.isNaN(toAssetId(targetAssetId));
+        const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+
+        try {
+            if (hasTargetAsset && targetKey) {
+                setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+            } else {
+                setBarcodeLoading(true);
+            }
+
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission Denied', 'Camera roll permission is required to upload barcode image.');
+                if (hasTargetAsset && targetKey) {
+                    setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+                } else {
+                    setBarcodeLoading(false);
+                }
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+                base64: true,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                const base64 = result.assets[0].base64;
+
+                if (base64) {
+                    const barcodeData = `data:image/jpeg;base64,${base64}`;
+                    if (hasTargetAsset && targetKey) {
+                        setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: barcodeData }));
+                        Alert.alert('✅ Barcode Selected', 'Barcode saved for selected asset.');
+                    } else {
+                        setBarcodeURL(barcodeData);
+                        Alert.alert('✅ Barcode Selected', 'Barcode image will be attached to the return.');
+                    }
+                } else {
+                    Alert.alert('Error', 'Failed to process barcode image. Please try again.');
+                }
+            }
+        } catch (error) {
+            console.error('Barcode picker error:', error);
+            Alert.alert('Error', 'Failed to open image library.');
+        } finally {
+            if (hasTargetAsset && targetKey) {
+                setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+            } else {
+                setBarcodeLoading(false);
+            }
         }
     };
 
     const toggleAssetSelection = (id: number) => {
-        setSelectedAssets(current =>
-            current.includes(id)
-                ? current.filter(aid => aid !== id)
-                : [...current, id]
-        );
+        setSelectedAssets(current => {
+            const isSelected = current.includes(id);
+            if (isSelected) {
+                const removedAsset = assets.find((asset) => toAssignmentId(asset.assignmentId) === id);
+                if (removedAsset) {
+                    const assetKey = toAssetKey(removedAsset.assetId);
+                    setAssetPhotoMap((prev) => {
+                        const next = { ...prev };
+                        delete next[assetKey];
+                        return next;
+                    });
+                    setAssetBarcodeMap((prev) => {
+                        const next = { ...prev };
+                        delete next[assetKey];
+                        return next;
+                    });
+                }
+                return current.filter(aid => aid !== id);
+            }
+
+            return [...current, id];
+        });
     };
 
 
@@ -108,13 +284,36 @@ const ReturnAssetScreen: React.FC = () => {
             return;
         }
 
+        const selectedAssetRows = assets.filter((a) => selectedAssets.includes(toAssignmentId(a.assignmentId)));
+        if (selectedAssetRows.length > 1) {
+            const missing = selectedAssetRows.filter(
+                (asset) => {
+                    const key = toAssetKey(asset.assetId);
+                    return !assetPhotoMap[key] || !assetBarcodeMap[key];
+                }
+            );
+
+            if (missing.length > 0) {
+                Alert.alert(
+                    'Media Required',
+                    'Please upload both photo and barcode for each selected asset.'
+                );
+                return;
+            }
+        }
+
         try {
             const payload = {
-                assetIds: assets
-                    .filter(a => selectedAssets.includes(a.assignmentId))
-                    .map(a => a.assetId),
+                assetIds: selectedAssetRows.map((a) => toAssetId(a.assetId)),
                 operatorEmployeeId: employeeId,
+                assetMedia: selectedAssetRows.map((asset) => ({
+                    assetId: toAssetId(asset.assetId),
+                    // Send only media selected in this return flow to keep request payload small.
+                    photoURL: assetPhotoMap[toAssetKey(asset.assetId)] || photo || null,
+                    barcodeURL: assetBarcodeMap[toAssetKey(asset.assetId)] || barcodeURL || null,
+                })),
                 ...(photo && { photoURL: photo }), // Include photo if available
+                ...(barcodeURL && { barcodeURL }),
             };
 
             console.log("RETURN PAYLOAD 👉", payload);
@@ -141,6 +340,7 @@ const ReturnAssetScreen: React.FC = () => {
                     }
                 ]
             );
+            navigation.goBack();
         }
         } catch (error: any) {
             console.error("Return asset error:", error?.response?.data || error.message);
@@ -154,12 +354,15 @@ const ReturnAssetScreen: React.FC = () => {
 
 
     const renderAssetItem = (item: Asset) => {
-        const id = item.assignmentId; // ✅ UNIQUE & SAFE
+        const id = toAssignmentId(item.assignmentId); // ✅ UNIQUE & SAFE
+        if (Number.isNaN(id)) {
+            return null;
+        }
         const isSelected = selectedAssets.includes(id);
 
         return (
             <TouchableOpacity
-            key={id.toString()} // Required for .map()
+            key={String(id)} // Required for .map()
                 style={[styles.assetRow, isSelected && styles.assetRowSelected]}
                 onPress={() => toggleAssetSelection(id)}
             >
@@ -212,7 +415,7 @@ const ReturnAssetScreen: React.FC = () => {
             blurRadius={10}
         >
             <SafeAreaView style={styles.safeArea}>
-                <View style={[styles.container, isMobileDevice && { margin: 10, borderRadius: 15 }]}>
+                <View style={[styles.container, isMobileLayout && { margin: 10, borderRadius: 15 }]}>
                     {/* Header */}
                     <View style={styles.header}>
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -226,15 +429,15 @@ const ReturnAssetScreen: React.FC = () => {
                     <ScrollView 
                         style={styles.body} 
                         showsVerticalScrollIndicator={false}
-                        contentContainerStyle={isMobileDevice ? { paddingBottom: 20 } : { flex: 1 }}
+                        contentContainerStyle={isMobileLayout ? { paddingBottom: 20 } : { flex: 1 }}
                     >
-                        <View style={[styles.formBody, isMobileDevice && { flexDirection: 'column', gap: 15 }]}>
+                        <View style={[styles.formBody, isMobileLayout && { flexDirection: 'column', gap: 15 }]}>
                             {/* Left Column - Asset List */}
                             <View style={styles.formColumn}>
                                 <Text style={styles.instructions}>
                                     Select one or more assets you wish to return.
                                 </Text>
-                                {isMobileDevice ? (
+                                {isMobileLayout ? (
                                     // 2. MOBILE FIX: Pass item directly to the updated function
                                     assets.map((item) => renderAssetItem(item))
                                 ) : (
@@ -242,7 +445,7 @@ const ReturnAssetScreen: React.FC = () => {
                                     <FlatList
                                         data={assets}
                                         renderItem={({ item }) => renderAssetItem(item)}
-                                        keyExtractor={(item) => item.assignmentId.toString()}
+                                        keyExtractor={(item) => String(toAssignmentId(item.assignmentId))}
                                         showsVerticalScrollIndicator={false}
                                     />
                                 )}
@@ -250,63 +453,150 @@ const ReturnAssetScreen: React.FC = () => {
 
                             {/* Right Column - Actions */}
                             <View style={styles.formColumn}>
-                                <Text style={styles.label}>Scan to Add</Text>
-                                <TouchableOpacity style={styles.scanButton} onPress={handleScanBarcode}>
-                                    <MaterialCommunityIcons name="barcode-scan" size={24} color="#fff" />
-                                    <Text style={styles.scanButtonText}>Scan Asset Barcode</Text>
-                                </TouchableOpacity>
+                                {selectedAssets.length > 1 ? (
+                                    <>
+                                        <Text style={styles.label}>Upload Per Asset (Required for Multi-Select)</Text>
+                                        <Text style={styles.helperText}>Each selected asset needs both a photo and barcode image.</Text>
+                                        {assets
+                                            .filter((asset) => selectedAssets.includes(toAssignmentId(asset.assignmentId)))
+                                            .map((asset) => {
+                                                const assetKey = toAssetKey(asset.assetId);
+                                                const currentPhoto = assetPhotoMap[assetKey] || null;
+                                                const currentBarcode = assetBarcodeMap[assetKey] || null;
+                                                const isPhotoLoading = assetPhotoLoadingMap[assetKey] || false;
+                                                const isBarcodeLoading = assetBarcodeLoadingMap[assetKey] || false;
 
-                                <Text style={styles.label}>Proof of Condition</Text>
-                                <TouchableOpacity 
-                                    style={styles.uploadButton} 
-                                    onPress={handleUploadPhoto}
-                                    disabled={photoLoading}
-                                >
-                                    {photoLoading ? (
-                                        <ActivityIndicator color="#4A5568" size="small" />
-                                    ) : (
-                                        <>
-                                            <Feather name="camera" size={20} color="#4A5568" />
-                                            <Text style={styles.uploadButtonText}>
-                                                {photo ? '✓ Photo Uploaded' : 'Tap to upload a photo'}
-                                            </Text>
-                                        </>
-                                    )}
-                                </TouchableOpacity>
-
-                                {/* Photo Preview */}
-                                {photo && (
-                                    <View style={styles.photoPreviewContainer}>
-                                        <Image 
-                                            source={{ uri: photo }} 
-                                            style={styles.photoPreview}
-                                            resizeMode="cover"
-                                        />
-                                        <TouchableOpacity 
-                                            style={styles.removePhotoButton}
-                                            onPress={() => {
-                                                setPhoto(null);
-                                                Alert.alert('Removed', 'Photo has been removed.');
-                                            }}
+                                                return (
+                                                    <View key={`return-media-${asset.assignmentId}`} style={styles.mediaCard}>
+                                                        <Text style={styles.mediaCardTitle}>{asset.assetName}</Text>
+                                                        <TouchableOpacity
+                                                            style={styles.uploadButton}
+                                                            onPress={() => handleUploadPhoto(asset.assetId)}
+                                                            disabled={isPhotoLoading}
+                                                        >
+                                                            {isPhotoLoading ? (
+                                                                <ActivityIndicator color="#4A5568" size="small" />
+                                                            ) : (
+                                                                <>
+                                                                    <Feather name="camera" size={20} color="#4A5568" />
+                                                                    <Text style={styles.uploadButtonText}>
+                                                                        {currentPhoto ? '✓ Photo Uploaded' : 'Upload Photo'}
+                                                                    </Text>
+                                                                </>
+                                                            )}
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity
+                                                            style={styles.uploadButton}
+                                                            onPress={() => handleScanBarcode(asset.assetId)}
+                                                            disabled={isBarcodeLoading}
+                                                        >
+                                                            {isBarcodeLoading ? (
+                                                                <ActivityIndicator color="#4A5568" size="small" />
+                                                            ) : (
+                                                                <>
+                                                                    <MaterialCommunityIcons name="barcode-scan" size={20} color="#4A5568" />
+                                                                    <Text style={styles.uploadButtonText}>
+                                                                        {currentBarcode ? '✓ Barcode Uploaded' : 'Scan/Upload Barcode'}
+                                                                    </Text>
+                                                                </>
+                                                            )}
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                );
+                                            })}
+                                    </>
+                                ) : (
+                                    <>
+                                
+                                        <Text style={styles.label}>Proof of Condition</Text>
+                                        <TouchableOpacity
+                                            style={styles.uploadButton}
+                                            onPress={() => handleUploadPhoto()}
+                                            disabled={photoLoading}
                                         >
-                                            <Ionicons name="close" size={20} color="#fff" />
+                                            {photoLoading ? (
+                                                <ActivityIndicator color="#4A5568" size="small" />
+                                            ) : (
+                                                <>
+                                                    <Feather name="camera" size={20} color="#4A5568" />
+                                                    <Text style={styles.uploadButtonText}>
+                                                        {photo ? '✓ Photo Uploaded' : 'Tap to upload a photo'}
+                                                    </Text>
+                                                </>
+                                            )}
                                         </TouchableOpacity>
-                                    </View>
+
+                                        {photo && (
+                                            <View style={styles.photoPreviewContainer}>
+                                                <Image
+                                                    source={{ uri: photo }}
+                                                    style={styles.photoPreview}
+                                                    resizeMode="cover"
+                                                />
+                                                <TouchableOpacity
+                                                    style={styles.removePhotoButton}
+                                                    onPress={() => {
+                                                        setPhoto(null);
+                                                        Alert.alert('Removed', 'Photo has been removed.');
+                                                    }}
+                                                >
+                                                    <Ionicons name="close" size={20} color="#fff" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+
+                                        <Text style={styles.label}>Upload Barcode (Optional)</Text>
+                                        <TouchableOpacity
+                                            style={styles.uploadButton}
+                                            onPress={() => handleUploadBarcode()}
+                                            disabled={barcodeLoading}
+                                        >
+                                            {barcodeLoading ? (
+                                                <ActivityIndicator color="#4A5568" size="small" />
+                                            ) : (
+                                                <>
+                                                    <MaterialCommunityIcons name="barcode" size={20} color="#4A5568" />
+                                                    <Text style={styles.uploadButtonText}>
+                                                        {barcodeURL ? '✓ Barcode Uploaded' : 'Tap to upload barcode image'}
+                                                    </Text>
+                                                </>
+                                            )}
+                                        </TouchableOpacity>
+
+                                        {barcodeURL && (
+                                            <View style={styles.photoPreviewContainer}>
+                                                <Image
+                                                    source={{ uri: barcodeURL }}
+                                                    style={styles.photoPreview}
+                                                    resizeMode="contain"
+                                                />
+                                                <TouchableOpacity
+                                                    style={styles.removePhotoButton}
+                                                    onPress={() => {
+                                                        setBarcodeURL(null);
+                                                        Alert.alert('Removed', 'Barcode image has been removed.');
+                                                    }}
+                                                >
+                                                    <Ionicons name="close" size={20} color="#fff" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+                                    </>
                                 )}
                             </View>
                         </View>
                     </ScrollView>
 
                     {/* Footer with actions */}
-                    <View style={[styles.footer, isMobileDevice && { justifyContent: 'space-between' }]}>
+                    <View style={[styles.footer, isMobileLayout && { justifyContent: 'space-between' }]}>
                         <TouchableOpacity 
-                            style={[styles.cancelButton, isMobileDevice && { flex: 1, marginRight: 10 }]} 
+                            style={[styles.cancelButton, isMobileLayout && { flex: 1, marginRight: 10 }]} 
                             onPress={() => navigation.goBack()}
                         >
                             <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
-                            style={isMobileDevice && { flex: 2 }} 
+                            style={isMobileLayout && { flex: 2 }} 
                             onPress={handleReturn}>
                             <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.returnButton}>
                                 <Text style={styles.buttonText}>
@@ -366,6 +656,25 @@ const styles = StyleSheet.create({
         marginBottom: 15,
         textAlign: 'center',
         lineHeight: 22,
+    },
+    helperText: {
+        fontSize: 12,
+        color: '#4A5568',
+        marginBottom: 10,
+    },
+    mediaCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        padding: 10,
+        marginBottom: 10,
+    },
+    mediaCardTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1A202C',
+        marginBottom: 8,
     },
     assetRow: {
         flexDirection: 'row',

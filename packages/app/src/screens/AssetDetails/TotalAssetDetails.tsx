@@ -11,9 +11,10 @@ import {
     TextInput,
     ActivityIndicator,
     Platform,
+    useWindowDimensions,
 } from "react-native";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { Picker } from "@react-native-picker/picker";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
@@ -21,8 +22,6 @@ import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
 import axios from "axios";
 import { useAssetFilter } from "src/hooks/useAssetFilter";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const isMobileDevice = Platform.OS !== 'web';
 
 type AssetsDetailsNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -89,6 +88,10 @@ const StatusBadge = ({
 
 const TotalAssetsDetails: React.FC = () => {
     const navigation = useNavigation<AssetsDetailsNavigationProp>();
+    const route = useRoute<RouteProp<RootStackParamList, 'TotalAssetDetails'>>();
+    const { width } = useWindowDimensions();
+    const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+    const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
 
     const [assets, setAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
@@ -114,6 +117,13 @@ const TotalAssetsDetails: React.FC = () => {
     uniqueStatuses,
     clearFilters,
 } = useAssetFilter(assets);
+
+    useEffect(() => {
+        const statusFromRoute = route.params?.statusFilter;
+        if (statusFromRoute) {
+            setSelectedStatus(statusFromRoute);
+        }
+    }, [route.params?.statusFilter, setSelectedStatus]);
 
     /* 🔹 Load logged-in supervisor */
     useEffect(() => {
@@ -208,7 +218,7 @@ const TotalAssetsDetails: React.FC = () => {
     const renderAsset = ({ item, index }: { item: Asset, index: number }) => {
 
         const isOverdue = item.status?.toLowerCase() === 'overdue';
-        if (isMobileDevice) {
+        if (isMobileLayout) {
             return (
                 <View style={styles.mobileCard}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -303,12 +313,12 @@ const TotalAssetsDetails: React.FC = () => {
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                             <Ionicons name="arrow-back" size={24} color="#E0E0E0" />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>All Company Assets</Text>
+                        <Text style={styles.headerTitle}>All Assets</Text>
                     </View>
                     
                     {/* BODY MUST BE flex: 1 */}
                     <View style={styles.body}>
-                        <View style={styles.topActionRow}>
+                        <View style={[styles.topActionRow, isMobileLayout && { flexDirection: 'column' }]}>
                             <View style={styles.searchContainer}>
                                 <Feather name="search" size={18} color="#666" style={styles.searchIcon} />
                                 <TextInput 
@@ -320,7 +330,7 @@ const TotalAssetsDetails: React.FC = () => {
                                 />  
                             </View>
 
-                           <View style={isMobileDevice ? styles.mobileFilterContainer : styles.filterGroup}>
+                           <View style={isMobileLayout ? styles.mobileFilterContainer : styles.filterGroup}>
                                <View style={styles.pickerWrapper}>
                                     <Picker
                                         selectedValue={selectedName}
@@ -333,7 +343,7 @@ const TotalAssetsDetails: React.FC = () => {
                                         ))}
                                     </Picker>
                                 </View>
-                                <View style={isMobileDevice ? styles.mobileFilterSubRow : styles.desktopFilterSubRow}>
+                                <View style={isMobileLayout ? styles.mobileFilterSubRow : styles.desktopFilterSubRow}>
                                 <View style={styles.pickerWrapper}>
                                     <Picker selectedValue={selectedSerial} onValueChange={setSelectedSerial} style={styles.pickerInternal}>
                                         <Picker.Item label="All Serials" value="" />
@@ -350,7 +360,7 @@ const TotalAssetsDetails: React.FC = () => {
                         </View>
                     </View>
 
-                        {!isMobileDevice && (
+                        {!isMobileLayout && (
                             <View style={styles.tableHeader}>
                                 <Text style={[styles.headerCell, { width: 50, textAlign: 'center' }]}>S.No</Text>
                                 <Text style={[styles.headerCell, { flex: 2 }]}>Asset Name</Text>
@@ -432,14 +442,14 @@ const styles = StyleSheet.create({
         borderBottomColor: 'rgba(0, 0, 0, 0.1)',
     },
     
-    filterRow: {
-  flexDirection: isMobileDevice ? "column" : "row",
-  gap: 10,
-  marginBottom: 15,
+        filterRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 15,
 },
 
 topActionRow: {
-        flexDirection : isMobileDevice ? "column" : "row",
+                flexDirection : "row",
         gap: 12,
         marginBottom: 20,
         width: '100%',
