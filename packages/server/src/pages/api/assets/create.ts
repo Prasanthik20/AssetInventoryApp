@@ -73,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       existingAsset = existingRes.rows[0];
     } else {
       const existingRes = await query(
-        `SELECT id FROM "Asset_Details" WHERE "serialNumber" = $1 LIMIT 1`,
+        `SELECT id FROM "Asset_Details" WHERE "serial_no" = $1 LIMIT 1`,
         [serialNumber]
       );
       existingAsset = existingRes.rows[0];
@@ -89,9 +89,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       await query(
         `UPDATE "Asset_Details" 
-        SET name = $1, "categoryId" = $2, "modelNumber" = $3, "serialNumber" = $4, 
-            "purchaseDate" = $5, "warrantyExpiry" = $6, price = $7, location = $8, 
-            "statusId" = $9, "photoURL" = $10, "barcodeURL" = $11, 
+        SET name = $1, "categoryId" = $2, "model_no" = $3, "serial_no" = $4, 
+            "purchase_date" = $5, "warranty_expiry" = $6, price = $7, location = $8, 
+            "status_id" = $9, "photoURL" = $10, "barcodeURL" = $11, 
             assigned_by = $12, assigned_to = $13
         WHERE id = $14`,
         [
@@ -148,7 +148,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 3. Insert into Asset_Details with all fields including assigned_by, assigned_to
     const insertAsset = await query(
-      `INSERT INTO "Asset_Details" (id, name, "categoryId", "modelNumber", "serialNumber", "purchaseDate", "warrantyExpiry", price, location, "statusId", "photoURL", "barcodeURL", assigned_by, assigned_to)
+      `INSERT INTO "Asset_Details" (id, name, "categoryId", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING id`,
       [
