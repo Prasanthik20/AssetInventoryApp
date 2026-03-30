@@ -63,6 +63,27 @@ function App(): React.JSX.Element {
     checkAuth();
   }, []);
 
+  // Set browser tab title for web and prevent navigation from changing it
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.title = 'ASQ - NSCLLP Asset Management';
+      
+      // Monitor for title changes and reset if needed
+      const observer = new MutationObserver(() => {
+        if (document.title !== 'ASQ - NSCLLP Asset Management') {
+          document.title = 'ASQ - NSCLLP Asset Management';
+        }
+      });
+      
+      observer.observe(document.head, {
+        childList: true,
+        subtree: true,
+      });
+      
+      return () => observer.disconnect();
+    }
+  }, []);
+
   // Linking configuration so web refresh preserves the current route
   const linking = {
     prefixes: Platform.OS === 'web' && typeof window !== 'undefined'
@@ -100,8 +121,20 @@ function App(): React.JSX.Element {
     );
   }
 
+  // Reset title whenever navigation state changes
+  const onNavigationStateChange = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      setTimeout(() => {
+        document.title = 'ASQ - NSCLLP Asset Management';
+      }, 0);
+    }
+  };
+
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer
+      linking={linking}
+      onStateChange={onNavigationStateChange}
+    >
       {user ? <AppStack user={user} setUser={setUser} /> : <AuthStack setUser={setUser} />}
     </NavigationContainer>
   );

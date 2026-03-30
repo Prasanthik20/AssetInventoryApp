@@ -39,9 +39,9 @@ const getEnv = () => {
 // Platform-specific configuration
 const getPlatformConfig = () => {
   if (Platform.OS === 'web') {
-    // Web: Use relative URLs (same domain)
+    // Web: during development, point directly to local API for consistency.
     return {
-      apiUrl: process.env.REACT_APP_API_URL || '/api',
+      apiUrl: __DEV__ ? 'http://localhost:3000' : (process.env.REACT_APP_API_URL || '/api'),
       timeout: 30000,
     };
   }

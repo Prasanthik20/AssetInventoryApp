@@ -21,12 +21,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const id = Number(req.body?.id);
     if (!id) return res.status(400).json({ error: "Invalid notification id" });
 
-    await query(
-      `UPDATE "Notifications"
-       SET "isSeenByAdmin" = true
-       WHERE id = $1`,
-      [id]
-    );
+    try {
+      await query(
+        `UPDATE "Notifications"
+         SET "status" = 'seen'
+         WHERE id = $1`,
+        [id]
+      );
+    } catch (error: any) {
+      const relationMissing =
+        typeof error?.message === 'string' &&
+        error.message.includes('relation "Notifications" does not exist');
+
+      if (!relationMissing) {
+        throw error;
+      }
+
+      await query(
+        `UPDATE notifications
+         SET status = 'seen'
+         WHERE id = $1`,
+        [id]
+      );
+    }
 
     return res.status(200).json({ success: true });
   } catch (error) {

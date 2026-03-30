@@ -25,6 +25,38 @@ interface LocationStat {
   count: number;
 }
 
+const SafeFeatherIcon = ({
+  name,
+  size,
+  color,
+}: {
+  name: React.ComponentProps<typeof Feather>['name'];
+  size: number;
+  color: string;
+}) => {
+  try {
+    return <Feather name={name} size={size} color={color} />;
+  } catch {
+    return <View style={{ width: size, height: size, backgroundColor: color, opacity: 0.2 }} />;
+  }
+};
+
+const SafeIonicons = ({
+  name,
+  size,
+  color,
+}: {
+  name: React.ComponentProps<typeof Ionicons>['name'];
+  size: number;
+  color: string;
+}) => {
+  try {
+    return <Ionicons name={name} size={size} color={color} />;
+  } catch {
+    return <View style={{ width: size, height: size, backgroundColor: color, opacity: 0.2 }} />;
+  }
+};
+
 // 2. Create a specific type for this screen's navigation prop
 type Props = NativeStackScreenProps<RootStackParamList, 'CompanyDashboard'> & {
   setUser: React.Dispatch<React.SetStateAction<any>>;
@@ -131,12 +163,10 @@ const CompanyDashboard: React.FC<Props> = ({
   const fetchGlobalNotifications = async () => {
     if (!user?.employeeId) return;
     try {
-      const response = await axios.get(`${baseURL}/api/notifications/admin`);
+      const response = await axios.get(`${baseURL}/api/notifications/admin`, {
+        params: { id: user.employeeId },
+      });
       console.log('Employee ID:', user?.employeeId);
-      console.log(
-        'Fetching:',
-        `${baseURL}/api/notifications/admin?id=${user?.employeeId}`,
-      );
 
       setNotifications(response.data.notifications || []);
     } catch (error) {
@@ -273,7 +303,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     </View>
                   </View>
                   <TouchableOpacity onPress={handleLogout}>
-                    <Feather name="log-out" size={24} color="#FF4D4D" />
+                    <SafeFeatherIcon name="log-out" size={24} color="#FF4D4D" />
                   </TouchableOpacity>
                 </View>
               )}
@@ -283,10 +313,10 @@ const CompanyDashboard: React.FC<Props> = ({
                 <Text style={styles.headerTitle}>Analytics</Text>
                 {!isMobileLayout && (
                   <View style={styles.headerRight}>
-                    <Ionicons name="person-outline" size={16} color="#333" />
+                    <SafeIonicons name="person-outline" size={16} color="#333" />
                     <Text style={styles.userText}>{user?.fullName}</Text>
                     <TouchableOpacity onPress={handleLogout}>
-                      <Feather name="log-out" size={24} color="#FF4D4D" />
+                      <SafeFeatherIcon name="log-out" size={24} color="#FF4D4D" />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -299,7 +329,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     style={styles.metricRow}
                     onPress={() => navigation.navigate('TotalAssetDetails')}
                   >
-                    <Ionicons
+                    <SafeIonicons
                       name="settings-outline"
                       size={24}
                       color="#6B46C1"
@@ -314,7 +344,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     style={styles.metricRow}
                     onPress={() => navigation.navigate('CompanyUsersScreen')}
                   >
-                    <Ionicons name="people-outline" size={24} color="#6B46C1" />
+                    <SafeIonicons name="people-outline" size={24} color="#6B46C1" />
                     <Text style={styles.metricLabel}>Total Users</Text>
                   </TouchableOpacity>
                   <Text style={styles.metricValue}>{totalUsers ?? 0}</Text>
@@ -325,7 +355,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     style={styles.metricRow}
                     onPress={() => navigation.navigate('OfficeAssets')}
                   >
-                    <Ionicons
+                    <SafeIonicons
                       name="business-outline"
                       size={24}
                       color="#6B46C1"
@@ -340,7 +370,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     style={[styles.metricRow, styles.fieldMetricBox]}
                     onPress={() => navigation.navigate('FieldAssets')}
                   >
-                    <Ionicons name="map-outline" size={24} color="#6B46C1" />
+                    <SafeIonicons name="map-outline" size={24} color="#6B46C1" />
                     <Text style={styles.metricValue}>{fieldAssets ?? 0}</Text>
                     <Text style={styles.metricLabel}>Field Assets</Text>
                   </TouchableOpacity>
@@ -379,7 +409,7 @@ const CompanyDashboard: React.FC<Props> = ({
                       })
                     }
                   >
-                    <Ionicons
+                    <SafeIonicons
                       name="remove-circle-outline"
                       size={24}
                       color="#DD6B20"
@@ -398,7 +428,7 @@ const CompanyDashboard: React.FC<Props> = ({
                       })
                     }
                   >
-                    <Ionicons
+                    <SafeIonicons
                       name="checkmark-done-outline"
                       size={24}
                       color="#2B6CB0"
@@ -417,7 +447,7 @@ const CompanyDashboard: React.FC<Props> = ({
                       })
                     }
                   >
-                    <Ionicons
+                    <SafeIonicons
                       name="alert-circle-outline"
                       size={24}
                       color="#C53030"
@@ -436,7 +466,7 @@ const CompanyDashboard: React.FC<Props> = ({
                       })
                     }
                   >
-                    <Ionicons name="build-outline" size={24} color="#6B46C1" />
+                    <SafeIonicons name="build-outline" size={24} color="#6B46C1" />
                     <Text style={styles.metricLabel}>Under Maintenance</Text>
                   </TouchableOpacity>
                   <Text style={styles.metricValue}>
@@ -525,7 +555,7 @@ const CompanyDashboard: React.FC<Props> = ({
                                       </Text>
                                     </View>
                                   </View>
-                                  <Ionicons
+                                  <SafeIonicons
                                     name={
                                       isExpanded ? 'chevron-up' : 'chevron-down'
                                     }
@@ -614,7 +644,7 @@ const CompanyDashboard: React.FC<Props> = ({
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}
                     >
-                      <Ionicons name="cube-outline" size={20} color="#fff" />
+                      <SafeIonicons name="cube-outline" size={20} color="#fff" />
                       <Text style={styles.addUserButtonText}>
                         Add New Asset
                       </Text>
@@ -635,7 +665,7 @@ const CompanyDashboard: React.FC<Props> = ({
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}
                     >
-                      <Ionicons
+                      <SafeIonicons
                         name="hand-right-outline"
                         size={20}
                         color="#fff"
@@ -653,7 +683,7 @@ const CompanyDashboard: React.FC<Props> = ({
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}
                     >
-                      <Ionicons
+                      <SafeIonicons
                         name="person-add-outline"
                         size={20}
                         color="#fff"

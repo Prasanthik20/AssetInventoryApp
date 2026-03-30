@@ -106,7 +106,7 @@ export default function ForgotPasswordScreen() {
                                             {/* Left Decorative Panel */}
                                             <View style={[styles.leftPanel, isMobileLayout && styles.leftPanelMobile]}>
                                                 <Image
-                                                    source={require("../../assets/Asq_Logo_IV.png")}
+                                                    source={require("../../assets/nscllp.png")}
                                                     style={[styles.image, isMobileLayout && styles.imageMobile]}
                                                 />
                                                 <Text style={[styles.leftTitle, isMobileLayout && styles.leftTitleMobile]}>A SQUARE TECHNOLOGIES</Text>

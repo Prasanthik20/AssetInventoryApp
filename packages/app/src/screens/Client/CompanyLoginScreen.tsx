@@ -100,8 +100,9 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                 ]}
               >
                 <Image
-                  source={require('../../assets/Asq_Logo_IV.png')}
+                  source={require('../../assets/nscllp.png')}
                   style={[styles.image, isMobileLayout && styles.imageMobile]}
+                  resizeMode="contain"
                 />
                 <Text
                   style={[
@@ -111,7 +112,7 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                 >
                   A SQUARE TECHNOLOGIES
                 </Text>
-                <Text style={styles.leftSubtitle}>SECURE ASSETFLOW</Text>
+                <Text style={styles.leftSubtitle}>SECURE ASSET MANAGEMENT</Text>
               </View>
 
               {/* Right Form Panel */}
@@ -211,7 +212,8 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
 
                 <View style={styles.platformIcons}>
                   <Text style={styles.platformText}>
-                    🌐 Web 📱 Android 🍎 iOS
+                    🌐 Web 📱 Android 
+                    {/* 🍎 iOS */}
                   </Text>
                 </View>
               </View>
@@ -266,7 +268,6 @@ const styles = StyleSheet.create({
   image: {
     width: 300,
     height: 150,
-    resizeMode: 'contain',
   },
   imageMobile: {
     width: 200,

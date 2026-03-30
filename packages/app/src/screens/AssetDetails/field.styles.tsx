@@ -36,11 +36,12 @@ export function fieldStyles(isMobileLayout: boolean) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: 'rgba(60, 60, 80, 0.6)',
+      backgroundColor: 'rgba(60, 60, 80, 1)',
       padding: 15,
     },
     backButton: {
-      padding: 5,
+      padding: 10,
+      width: 40,
     },
 
     headerTitle: {

@@ -28,7 +28,6 @@ export default async function handler(
         n.reply,
         n.status,
         n.created_at            AS "createdAt",
-        COALESCE(n."isSeenByAdmin", false) AS "isSeenByAdmin",
 
         ad.id                   AS "assetId",
         ad.name                 AS "assetName",
@@ -43,12 +42,38 @@ export default async function handler(
       LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
       LEFT JOIN "Users" s ON s."employeeId" = n."senderId"
       LEFT JOIN "Users" r ON r."employeeId" = n."receiverId"
-
-      WHERE COALESCE(n."isSeenByAdmin", false) = false
       ORDER BY n.created_at DESC;
     `;
 
-    const { rows } = await query(sql);
+    let rows: any[] = [];
+
+    try {
+      const result = await query(sql);
+      rows = result.rows;
+    } catch (error: any) {
+      const relationMissing =
+        typeof error?.message === 'string' &&
+        error.message.includes('relation "Notifications" does not exist');
+
+      if (!relationMissing) {
+        throw error;
+      }
+
+      // Fallback for deployments where notifications table is lowercase.
+      const fallbackSql = `
+        SELECT
+          n.id                  AS "notificationId",
+          n.reason,
+          n.reply,
+          n.status,
+          n.created_at          AS "createdAt"
+        FROM notifications n
+        ORDER BY n.created_at DESC;
+      `;
+
+      const fallbackResult = await query(fallbackSql);
+      rows = fallbackResult.rows;
+    }
 
     const notifications = rows.map((n) => ({
       id: n.notificationId,
@@ -58,8 +83,14 @@ export default async function handler(
       status: n.status,
       createdAt: n.createdAt,
       asset: n.assetId ? { id: n.assetId, name: n.assetName } : null,
-      sender: { employeeId: n.senderId, name: n.senderName },
-      receiver: { employeeId: n.receiverId, name: n.receiverName },
+      sender:
+        n.senderId || n.senderName
+          ? { employeeId: n.senderId, name: n.senderName }
+          : null,
+      receiver:
+        n.receiverId || n.receiverName
+          ? { employeeId: n.receiverId, name: n.receiverName }
+          : null,
     }));
 
     return res.status(200).json({ notifications });

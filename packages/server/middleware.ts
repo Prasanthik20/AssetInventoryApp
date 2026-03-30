@@ -1,57 +1,68 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const allowedOrigins = [
-  "http://localhost:8081",
-  "http://localhost:8082",
-  "http://localhost:3000",
-  "http://127.0.0.1:8081",
-  "http://127.0.0.1:8082",
-  "http://127.0.0.1:3000",
-  "https://assetmgmt.asquaretech.in"
-];
+const LOCAL_ORIGIN_REGEX = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+function normalizeOrigin(origin: string): string {
+  return origin.trim().replace(/\/$/, '');
+}
+
+function getAllowedOrigins(): Set<string> {
+  const fromEnv = [
+    process.env.FRONTEND_URL,
+    process.env.WEB_FRONTEND_URL,
+  ]
+    .filter(Boolean)
+    .map((value) => normalizeOrigin(value as string));
+
+  const defaults = [
+    'https://assetmgmt.asquaretech.in',
+    'http://localhost:3000',
+    'http://localhost:8081',
+    'http://localhost:8082',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:8081',
+    'http://127.0.0.1:8082',
+  ];
+
+  return new Set([...defaults, ...fromEnv]);
+}
 
 function isOriginAllowed(origin: string): boolean {
-  return allowedOrigins.includes(origin) || origin.includes('localhost') || origin.includes('127.0.0.1');
+  const normalized = normalizeOrigin(origin);
+  if (!normalized) return false;
+  if (LOCAL_ORIGIN_REGEX.test(normalized)) return true;
+  return getAllowedOrigins().has(normalized);
+}
+
+function applyCorsHeaders(headers: Headers, origin: string, allowOrigin: boolean): void {
+  if (allowOrigin) {
+    headers.set('Access-Control-Allow-Origin', normalizeOrigin(origin));
+  }
+  headers.set('Vary', 'Origin');
+  headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+  headers.set('Access-Control-Allow-Credentials', 'true');
+  headers.set('Access-Control-Max-Age', '86400');
 }
 
 export function middleware(req: NextRequest) {
-  const origin = req.headers.get("origin") || "";
+  const origin = req.headers.get('origin') || '';
   const isAllowed = isOriginAllowed(origin);
 
-  // Handle preflight requests first
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     const preflightHeaders = new Headers();
-    
-    if (isAllowed && origin) {
-      preflightHeaders.set("Access-Control-Allow-Origin", origin);
-    } else if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      preflightHeaders.set("Access-Control-Allow-Origin", origin);
-    }
-    
-    preflightHeaders.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH");
-    preflightHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");
-    preflightHeaders.set("Access-Control-Allow-Credentials", "true");
-    preflightHeaders.set("Access-Control-Max-Age", "86400");
-    
+    applyCorsHeaders(preflightHeaders, origin, isAllowed && Boolean(origin));
+
     return new NextResponse(null, {
       status: 204,
       headers: preflightHeaders,
     });
   }
 
-  // Handle actual requests
   const res = NextResponse.next();
 
-  if (isAllowed && origin) {
-    res.headers.set("Access-Control-Allow-Origin", origin);
-  } else if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-    res.headers.set("Access-Control-Allow-Origin", origin);
-  }
-
-  res.headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH");
-  res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");
-  res.headers.set("Access-Control-Allow-Credentials", "true");
+  applyCorsHeaders(res.headers, origin, isAllowed && Boolean(origin));
 
   return res;
 }

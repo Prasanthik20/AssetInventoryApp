@@ -91,10 +91,12 @@ ResetPassword: { token: string };
   };
 };
 
-// Azure production URL (currently has old CORS config)
-export const baseURL = "https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net"
+const PROD_API_URL = 'https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net';
+const WEB_DEV_API_URL =
+  process.env.REACT_APP_API_URL ||
+  process.env.EXPO_PUBLIC_API_URL ||
+  PROD_API_URL;
+const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
 
-// Local development URL with updated CORS
-// export const baseURL =  Platform.OS === 'web' 
-//             ? 'http://localhost:3000' 
-//             : 'http://localhost:3000';
+// Keep all app screens on the same backend in development.
+export const baseURL = __DEV__ ? DEV_API_URL : PROD_API_URL;

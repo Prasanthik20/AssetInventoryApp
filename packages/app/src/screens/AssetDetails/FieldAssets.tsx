@@ -306,7 +306,7 @@ const FieldAssets: React.FC = () => {
               onPress={() => navigation.goBack()}
               style={styles.backButton}
             >
-              <Ionicons name="arrow-back-outline" size={24} color="#fff" />
+              <Ionicons name="arrow-back-outline" size={24} color="#212121" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Field Assets</Text>
             <View style={{ width: 40 }} />
@@ -429,6 +429,7 @@ const renderStyles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  
   overdueBadge: {
     marginTop: 5,
     backgroundColor: '#ff4d4d',

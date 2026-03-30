@@ -100,7 +100,7 @@ const TotalAssetsDetails: React.FC = () => {
     const [supervisorId, setSupervisorId] = useState<number | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [isModalVisible, setModalVisible] = useState(false);
-    const assetCategories = ["Battery", "Antenna", "Rover", "Controller"];
+    const assetCategories = ['Antenna','Base', 'Battery', 'Controller','Rover'];
 
     const {
     searchText,
