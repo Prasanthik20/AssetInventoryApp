@@ -1,4 +1,5 @@
 import { StyleSheet, Platform } from 'react-native'; // Ensure this import is present
+import { globalColors } from 'src/styles/globalStyles';
 
 type DashboardViewport = {
   width: number;
@@ -17,7 +18,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
     },
     safeArea: {
       flex: 1,
-      backgroundColor: 'rgba(61, 138, 233, 0.52)',
+      backgroundColor: globalColors.backgroundSoftAlt,
     },
     assetNameContainer: { flex: 1 },
     dueDateContainer: {
@@ -66,7 +67,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
 
     rightPanel: {
       flex: 1,
-      backgroundColor: 'rgba(255,255,255,0.4)',
+      backgroundColor: globalColors.surfaceGlass,
       padding: isDesktopWeb ? 25 : 16,
     },
 
@@ -83,7 +84,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
     headerRight: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(255,255,255,0.7)',
+      backgroundColor: globalColors.surfaceGlassStrong,
       paddingVertical: 6,
       paddingHorizontal: 12,
       borderRadius: 20,
@@ -93,7 +94,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
       marginRight: 8,
       fontSize: 14,
       fontWeight: '500',
-      color: '#333',
+      color: globalColors.textBody,
     },
 
     metricsContainer: {
@@ -104,7 +105,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
     },
     metricBox: {
       width: isDesktopWeb ? '48%' : '100%',
-      backgroundColor: 'rgba(255,255,255,0.8)',
+      backgroundColor: globalColors.surfaceGlassStrong,
       borderRadius: 15,
       padding: 20,
     },
@@ -184,13 +185,13 @@ export function opratorStyles(viewport?: DashboardViewport) {
     sectionTitle: {
       fontSize: 18,
       fontWeight: 'bold',
-      color: '#3a0202',
+      color: globalColors.textTitle,
       marginBottom: 15,
     },
     subSectionTitle: {
       fontSize: 15,
       fontWeight: '700',
-      color: '#02224b',
+      color: globalColors.textSecondary,
       marginBottom: 10,
     },
     notificationsHeaderRow: {
@@ -218,7 +219,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
     assetItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(255,255,255,0.7)',
+      backgroundColor: globalColors.surfaceGlassStrong,
       borderRadius: 12,
       padding: 15,
       marginBottom: 10,
@@ -232,13 +233,13 @@ export function opratorStyles(viewport?: DashboardViewport) {
       borderRadius: 4,
     },
     replyButton: {
-      backgroundColor: '#0284c7',
+      backgroundColor: globalColors.brandBlue,
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 6,
     },
     replyButtonText: {
-      color: 'white',
+      color: globalColors.textInverse,
       fontWeight: 'bold',
       fontSize: 12,
     },
@@ -247,14 +248,14 @@ export function opratorStyles(viewport?: DashboardViewport) {
       width: 40,
       height: 40,
       borderRadius: 10,
-      backgroundColor: 'rgba(255,255,255,0.8)',
+      backgroundColor: globalColors.surfaceGlassLight,
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 15,
     },
 
-    assetName: { fontSize: 15, fontWeight: '600', color: '#2D3748' },
-    assetDueDate: { fontSize: 14, color: '#4A5568', fontWeight: '500' },
+    assetName: { fontSize: 15, fontWeight: '600', color: globalColors.textBody },
+    assetDueDate: { fontSize: 14, color: globalColors.textSecondary, fontWeight: '500' },
 
     returnButton: {
       paddingVertical: 18,
@@ -262,7 +263,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
       alignItems: 'center',
     },
     returnButtonText: {
-      color: '#fff',
+      color: globalColors.textInverse,
       fontSize: 16,
       fontWeight: 'bold',
     },
@@ -273,7 +274,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
       alignItems: 'center',
     },
     returnButtonCompactText: {
-      color: '#fff',
+      color: globalColors.textInverse,
       fontSize: 12,
       fontWeight: '700',
       letterSpacing: 0.3,
@@ -281,18 +282,18 @@ export function opratorStyles(viewport?: DashboardViewport) {
     showMoreButton: {
       marginTop: 6,
       alignSelf: 'flex-start',
-      backgroundColor: 'rgba(255,255,255,0.18)',
+      backgroundColor: globalColors.surfaceGlass,
       borderRadius: 8,
       paddingVertical: 6,
       paddingHorizontal: 10,
     },
     showMoreText: {
-      color: '#023262',
+      color: globalColors.textSecondary,
       fontSize: 12,
       fontWeight: '700',
     },
     noItemsText: {
-      color: 'rgba(255, 255, 255, 0.8)',
+      color: globalColors.textInverse,
       marginTop: 10,
       fontStyle: 'italic',
     },
@@ -313,12 +314,12 @@ export function opratorStyles(viewport?: DashboardViewport) {
     },
     notificationText: {
       fontSize: 14,
-      color: '#4A5568',
+      color: globalColors.textSecondary,
     },
     notificationReason: {
       fontSize: 15,
       fontWeight: '600',
-      color: '#1A202C',
+      color: globalColors.textPrimary,
       marginTop: 4,
     },
   });

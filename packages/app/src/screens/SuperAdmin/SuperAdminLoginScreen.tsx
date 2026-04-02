@@ -118,7 +118,7 @@ export default function LoginScreen() {
                 onPress={() => navigation.navigate("CompanyLogin" as never)}
             >
             <Text style={{ color: "#000000ff", textAlign: "center" }}>
-                Go to Company Users Login →
+                Go to Users Login →
             </Text>
           </TouchableOpacity>
 

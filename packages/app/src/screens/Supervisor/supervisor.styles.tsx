@@ -1,4 +1,5 @@
 import { StyleSheet, Platform } from 'react-native'; // Ensure this import is present
+import { globalColors } from 'src/styles/globalStyles';
 
 type DashboardViewport = {
   width: number;
@@ -14,7 +15,7 @@ export function supervisorStyles(viewport?: DashboardViewport) {
     width: '100%',
     height: '100%',
   },
-  safeArea: { flex: 1, backgroundColor: 'rgba(61, 138, 233, 0.52)' },
+  safeArea: { flex: 1, backgroundColor: globalColors.backgroundSoftAlt },
   screenScroll: {
     flex: 1,
   },
@@ -38,7 +39,7 @@ export function supervisorStyles(viewport?: DashboardViewport) {
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: globalColors.surfaceGlassLight,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -48,7 +49,7 @@ export function supervisorStyles(viewport?: DashboardViewport) {
     marginRight: 8,
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: globalColors.textBody,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -56,12 +57,12 @@ export function supervisorStyles(viewport?: DashboardViewport) {
   },
   metricBox: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: globalColors.surfaceGlass,
     borderRadius: 15,
     padding: 15,
     alignItems: 'flex-start',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderColor: globalColors.borderGlass,
   },
   metricRow: {
     display: 'flex',
@@ -75,14 +76,14 @@ export function supervisorStyles(viewport?: DashboardViewport) {
   },
   metricTitle: {
     fontSize: 14,
-    color: '#1A202C',
+    color: globalColors.textTitle,
     fontWeight: '500',
     marginTop: 8,
   },
   metricValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1A202C',
+    color: globalColors.textTitle,
     marginTop: 4,
   },
   locationMiniGrid: {
@@ -104,7 +105,7 @@ export function supervisorStyles(viewport?: DashboardViewport) {
   },
   locationMiniName: {
     fontSize: 10,
-    color: '#334155',
+    color: globalColors.textSecondary,
   },
   locationMiniCount: {
     fontSize: 12,
@@ -113,7 +114,7 @@ export function supervisorStyles(viewport?: DashboardViewport) {
   },
   locationMiniEmpty: {
     fontSize: 11,
-    color: '#64748b',
+    color: globalColors.textMuted,
   },
 
   mainContent: {
@@ -138,7 +139,7 @@ export function supervisorStyles(viewport?: DashboardViewport) {
   },
   activitySection: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: globalColors.surfaceGlass,
     borderRadius: 15,
     padding: 15,
     // Provide a bottom margin so the last item isn't covered by bottom nav
@@ -148,7 +149,7 @@ export function supervisorStyles(viewport?: DashboardViewport) {
   },
   actionsSection: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: globalColors.surfaceGlass,
     borderRadius: 15,
     padding: 15,
     marginBottom: 10, // CHANGE THIS from 80 to 0
@@ -160,14 +161,14 @@ export function supervisorStyles(viewport?: DashboardViewport) {
     fontWeight: 'bold',
     marginBottom: 10, // Reduced from 15
     marginTop: 0, // Explicitly set to 0
-    color: '#000000ff',
+    color: globalColors.textPrimary,
   },
-  noItemsText: { color: 'rgba(0, 0, 0, 0.8)', fontStyle: 'italic' },
+  noItemsText: { color: globalColors.textBody, fontStyle: 'italic' },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 15,
-    backgroundColor: 'rgba(230, 235, 255, 0.8)',
+    backgroundColor: '#E6EBFF',
     padding: 12,
     borderRadius: 10,
   },
@@ -175,12 +176,12 @@ export function supervisorStyles(viewport?: DashboardViewport) {
   activityText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#2D3748',
+    color: globalColors.textBody,
     flexWrap: 'wrap',
   },
   activitySubtext: {
     fontSize: 15,
-    color: '#1A202C',
+    color: globalColors.textPrimary,
     fontWeight: '600',
     fontStyle: 'italic',
     marginTop: 3,
@@ -204,28 +205,28 @@ export function supervisorStyles(viewport?: DashboardViewport) {
     padding: 10,
     marginHorizontal: 20,
     marginBottom: 10, // Added margin at the bottom
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    backgroundColor: globalColors.surfaceGlass,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.7)',
+    borderColor: globalColors.borderGlass,
   },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#000000ff' },
+  headerTitle: { fontSize: 24, fontWeight: 'bold', color: globalColors.textPrimary },
   bottomNavLeft: { flexDirection: 'row', alignItems: 'center' },
   bottomNavRight: { flexDirection: 'row', alignItems: 'center' },
   navItem: { flexDirection: 'row', alignItems: 'center', padding: 10 },
-  navText: { marginLeft: 8, fontSize: 14, fontWeight: '500', color: '#1A202C' },
+  navText: { marginLeft: 8, fontSize: 14, fontWeight: '500', color: globalColors.textPrimary },
 
   centeredView: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: globalColors.overlayDark,
   },
   modalBox: {
     width: '90%',
     maxWidth: 400,
-    backgroundColor: '#fff',
+    backgroundColor: globalColors.surfacePrimary,
     borderRadius: 15,
     padding: 25,
     alignItems: 'center',
@@ -233,24 +234,24 @@ export function supervisorStyles(viewport?: DashboardViewport) {
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: globalColors.textBody,
     textAlign: 'center',
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: globalColors.textSecondary,
     textAlign: 'center',
     marginTop: 10,
     marginBottom: 20,
   },
   modalButton: {
     width: '100%',
-    backgroundColor: '#4A90E2',
+    backgroundColor: globalColors.brandBlue,
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
   },
-  modalButtonText: { color: '#000000ff', fontSize: 16, fontWeight: 'bold' },
+  modalButtonText: { color: globalColors.textPrimary, fontSize: 16, fontWeight: 'bold' },
   modalCancel: { marginTop: 15, padding: 10 },
 
   actionButton: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Modal,
   Platform,
   Image,
+  Pressable,
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -65,6 +66,9 @@ const AssignAssetScreen: React.FC = () => {
 
   const [operatorModal, setOperatorModal] = useState(false);
   const [assetModal, setAssetModal] = useState(false);
+  const [assetSearchQuery, setAssetSearchQuery] = useState('');
+  const [assetCategoryFilter, setAssetCategoryFilter] = useState('All Categories');
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   const [projectName, setProjectName] = useState('');
   const [location, setLocation] = useState('');
@@ -247,6 +251,37 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
   const toAssetId = (value: unknown) => Number(value);
   const toAssetKey = (value: unknown) => String(toAssetId(value));
+
+  const assetCategories = ['All Categories', 'Antenna', 'Base', 'Battery', 'Controller', 'Rover'];
+
+  const filteredAssets = useMemo(() => {
+    const query = assetSearchQuery.trim().toLowerCase();
+    return assets.filter((asset) => {
+      const category = String(asset.category || '').toLowerCase();
+      const assetName = String(asset.assetName || '').toLowerCase();
+      const modelNumber = String(asset.modelNumber || '').toLowerCase();
+      const matchesCategory =
+        assetCategoryFilter === 'All Categories' ||
+        category.includes(assetCategoryFilter.toLowerCase()) ||
+        assetName.includes(assetCategoryFilter.toLowerCase()) ||
+        modelNumber.includes(assetCategoryFilter.toLowerCase());
+
+      if (!matchesCategory) return false;
+
+      if (!query) return true;
+
+      const serialNumber = String(asset.serialNumber || '').toLowerCase();
+      const assetId = String(asset.assetId || '').toLowerCase();
+
+      return (
+        category.includes(query) ||
+        assetName.includes(query) ||
+        modelNumber.includes(query) ||
+        serialNumber.includes(query) ||
+        assetId.includes(query)
+      );
+    });
+  }, [assets, assetSearchQuery, assetCategoryFilter]);
 
   const handleUploadBarcode = async (targetAssetId?: number | string) => {
     const hasTargetAsset =
@@ -770,17 +805,109 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
       {/* ------------------- ASSET MODAL ------------------- */}
       <Modal visible={assetModal} transparent animationType="slide">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setAssetModal(false)}
-        >
-          <View style={styles.modalContent}>
+        <Pressable style={styles.modalOverlay} onPress={() => setAssetModal(false)}>
+          <Pressable style={styles.modalContent} onPress={() => {}}>
             <Text style={styles.modalTitle}>Select Assets</Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+              <View
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#F7FAFC',
+                  borderWidth: 1,
+                  borderColor: '#CBD5E0',
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  minHeight: 42,
+                }}
+              >
+                <Feather name="search" size={16} color="#4A5568" />
+                <TextInput
+                  style={{
+                    flex: 1,
+                    fontSize: 14,
+                    color: '#1A202C',
+                    paddingVertical: 8,
+                    marginLeft: 8,
+                  }}
+                  placeholder="Search by name, serial no, or ID"
+                  value={assetSearchQuery}
+                  onChangeText={setAssetSearchQuery}
+                />
+                {assetSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setAssetSearchQuery('')}>
+                    <Ionicons name="close-circle" size={18} color="#718096" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.pickerInput,
+                  {
+                    width: 170,
+                    marginBottom: 0,
+                    paddingVertical: 10,
+                  },
+                ]}
+                onPress={() => setShowCategoryDropdown((prev) => !prev)}
+              >
+                <Text style={styles.pickerText}>{assetCategoryFilter}</Text>
+                <Ionicons
+                  name={showCategoryDropdown ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color="#333"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {showCategoryDropdown && (
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#CBD5E0',
+                  borderRadius: 10,
+                  backgroundColor: '#FFFFFF',
+                  maxHeight: 180,
+                  marginBottom: 10,
+                  paddingVertical: 6,
+                }}
+              >
+                <ScrollView nestedScrollEnabled>
+                  {assetCategories.map((category) => {
+                    const isActive = category === assetCategoryFilter;
+                    return (
+                      <TouchableOpacity
+                        key={`asset-category-${category}`}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          backgroundColor: isActive ? '#EBF8FF' : '#FFFFFF',
+                        }}
+                        onPress={() => {
+                          setAssetCategoryFilter(category);
+                          setShowCategoryDropdown(false);
+                        }}
+                      >
+                        <Text style={{ color: '#1A202C', fontWeight: isActive ? '700' : '500' }}>
+                          {category}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
             <FlatList
-              data={assets}
+              data={filteredAssets}
               keyExtractor={(item, index) => `asset-${item.assetId}-${index}`}
               renderItem={renderAssetItem}
+              ListEmptyComponent={
+                <Text style={styles.helperText}>No assets found for this search.</Text>
+              }
             />
             {/* Add a Close/Done button so the supervisor knows how to finish */}
             <TouchableOpacity
@@ -789,8 +916,8 @@ const onDueChange = (event: any, selectedDate?: Date) => {
             >
               <Text style={styles.doneButtonText}>Done ({selectedAssets.length})</Text>
             </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* ------------------- OPERATOR MODAL ------------------- */}

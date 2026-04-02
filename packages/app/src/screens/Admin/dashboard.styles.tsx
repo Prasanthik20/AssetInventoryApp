@@ -1,4 +1,5 @@
 import { StyleSheet, Platform, Dimensions } from 'react-native'; // Ensure this import is present
+import { globalColors } from 'src/styles/globalStyles';
 
 type DashboardViewport = {
   width: number;
@@ -20,6 +21,7 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   },
   safeArea: {
     flex: 1,
+    backgroundColor: globalColors.backgroundSoft,
   },
   container: {
     flex: 1,
@@ -30,12 +32,12 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   leftPanel: {
      width: isDesktopWeb ? '25%' : '100%',
     justifyContent: 'center',
-    backgroundColor: 'rgba(192, 215, 243, 0.52)',
+    backgroundColor: globalColors.backgroundSoftAlt,
     alignItems: 'center',
     padding: isShortViewport ? 14 : 20,
   },
-  leftPanelName: { fontSize: 32, fontWeight: 'bold', marginTop: 10 },
-  leftPanelRole: { fontSize: 24, color: 'gray' },
+  leftPanelName: { fontSize: 32, fontWeight: 'bold', marginTop: 10, color: globalColors.textTitle },
+  leftPanelRole: { fontSize: 24, color: globalColors.textSoft },
   leftPanelImage: {
     width: 200,
     height: 200,
@@ -45,7 +47,7 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   leftPanelTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#fff',
+    color: globalColors.textInverse,
     textAlign: 'center',
     lineHeight: 40,
   },
@@ -58,30 +60,30 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   // Right Panel & Mobile Adapters
   rightPanel: {
     flex: 1,
-     backgroundColor: isDesktopWeb ? 'rgba(61, 138, 233, 0.4)' : 'transparent',
+    backgroundColor: isDesktopWeb ? globalColors.backgroundSoft : 'transparent',
     padding: isShortViewport ? 16 : 25,
   },
   mobilePadding: { padding: 15 },
   idBadge: {
     marginTop: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: globalColors.surfaceGlass,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: globalColors.borderGlass,
   },
   idBadgeText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#2D3748',
+    color: globalColors.textBody,
     letterSpacing: 0.5,
   },
   mobileHeaderCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: globalColors.surfaceGlassLight,
     padding: 20,
     borderRadius: 20,
     marginBottom: 10,
@@ -92,8 +94,8 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   },
   mobileUserRow: { flexDirection: 'row', alignItems: 'center' },
   mobileAvatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 },
-  mobileWelcome: { fontSize: 12, color: '#718096' },
-  mobileAdminName: { fontSize: 18, fontWeight: 'bold', color: '#2D3748' },
+  mobileWelcome: { fontSize: 12, color: globalColors.textSoft },
+  mobileAdminName: { fontSize: 18, fontWeight: 'bold', color: globalColors.textBody },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -103,13 +105,13 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold', // Bolder text for better contrast
-    color: '#1A202C', // Darker text color
+    color: globalColors.textTitle, // Darker text color
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     // --- MODIFICATION: Made background semi-transparent ---
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    backgroundColor: globalColors.surfaceGlass,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -119,7 +121,7 @@ export function dashboardStyles(viewport?: DashboardViewport) {
     marginRight: 15,
     fontSize: 14,
     fontWeight: '600', // Bolder
-    color: '#2D3748', // Darker
+    color: globalColors.textBody, // Darker
   },
   // Metrics Grid
   metricsGrid: {
@@ -132,7 +134,7 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   metricBox: {
     // 23.5% width allows 4 items + spacing in one row on web
    width: isDesktopWeb ? '23.5%' : isNarrowWeb ? '100%' : '48%',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: globalColors.surfacePrimary,
     borderRadius: 20,
     padding: isShortViewport ? 14 : 20,
     marginBottom: 15,
@@ -150,18 +152,18 @@ export function dashboardStyles(viewport?: DashboardViewport) {
       alignItems: 'center',
       gap: 10,
     },
-  metricValue: { fontSize: 24, fontWeight: 'bold', color: '#1A202C' },
-  metricLabel: { fontSize: 13, color: '#718096', fontWeight: '600' },
+  metricValue: { fontSize: 24, fontWeight: 'bold', color: globalColors.textTitle },
+  metricLabel: { fontSize: 13, color: globalColors.textSoft, fontWeight: '600' },
   metricValueText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#2D3748',
+    color: globalColors.textBody,
     textAlign: 'center',
     marginTop: 8,
   },
   metricSubLabel: {
     fontSize: 11,
-    color: '#718096',
+    color: globalColors.textSoft,
     textAlign: 'center',
   },
   fieldMetricBox: {
@@ -175,9 +177,9 @@ export function dashboardStyles(viewport?: DashboardViewport) {
     width: '100%',
   },
   fieldLocationCell: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: globalColors.surfaceSoft,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: globalColors.borderSoft,
     borderRadius: 8,
     paddingVertical: 4,
     paddingHorizontal: 6,
@@ -186,7 +188,7 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   },
   fieldLocationName: {
     fontSize: 10,
-    color: '#475569',
+    color: globalColors.textSecondary,
   },
   fieldLocationCount: {
     fontSize: 12,
@@ -229,24 +231,24 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   },
   userTable: {
     // --- MODIFICATION: Made background semi-transparent ---
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: globalColors.surfaceGlassStrong,
     borderRadius: 15,
     padding: 15,
     flex: 1,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    borderColor: globalColors.borderGlass,
   },
   tableHeader: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+    borderBottomColor: globalColors.borderSoft,
     paddingBottom: 10,
     marginBottom: 10,
   },
   headerCell: {
     flex: 1,
     fontWeight: 'bold',
-    color: '#4A5568',
+    color: globalColors.textSecondary,
     fontSize: 13,
   },
   tableRow: {
@@ -257,7 +259,7 @@ export function dashboardStyles(viewport?: DashboardViewport) {
   cellText: {
     flex: 1,
     fontSize: 14,
-    color: '#2D3748',
+    color: globalColors.textBody,
   },
   actionCell: {
     flex: 1,

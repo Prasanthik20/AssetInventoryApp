@@ -1,43 +1,19 @@
 import { Platform, StyleSheet } from 'react-native';
 import { assignStyles } from './assign.styles';
+import { globalStyleTokens } from 'src/styles/globalStyles';
 
 export function fieldStyles(isMobileLayout: boolean) {
   return StyleSheet.create({
     backgroundImage: {
-      flex: 1,
-      width: '100%',
-      height: '100%',
+      ...globalStyleTokens.pageBackgroundImage,
       justifyContent: 'center',
       alignItems: 'center',
     },
-    safeArea: {
-      flex: 1,
-      width: '100%',
-      // Redundant but safe, ensures content is centered
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: 'rgba(61, 138, 233, 0.4)',
-    },
-    container: {
-      width: '90%',
-      maxWidth: 1100,
-      height: '90%',
-      backgroundColor: '#F3F4F8', // Solid light background
-      borderRadius: 25,
-      overflow: 'hidden',
-      // Softer shadow to match the image
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.1,
-      shadowRadius: 20,
-      elevation: 10,
-    },
+    safeArea: globalStyleTokens.safeAreaOverlayCentered,
+    container: globalStyleTokens.shellContainerCard,
     header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      ...globalStyleTokens.shellHeaderDark,
       backgroundColor: 'rgba(60, 60, 80, 1)',
-      padding: 15,
     },
     backButton: {
       padding: 10,

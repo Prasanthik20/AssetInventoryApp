@@ -15,7 +15,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import axios from 'axios';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
@@ -34,6 +34,7 @@ interface LocationStat {
 
 const FieldAssets: React.FC = () => {
   const navigation = useNavigation<FieldAssetsNavProp>();
+  const route = useRoute<RouteProp<RootStackParamList, 'FieldAssets'>>();
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 900;
   const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
@@ -52,6 +53,10 @@ const FieldAssets: React.FC = () => {
   // 1. New state for Category Filter
   const [selectedCategory, setSelectedCategory] = useState('');
   const assetCategories = ['Battery', 'Antenna', 'Rover', 'Controller'];
+  const selectedEmployeeId = String(route.params?.employeeId || '').trim();
+  const selectedUserName = String(route.params?.operatorName || '')
+    .trim()
+    .toLowerCase();
 
   // 1. 🔥 Corrected Overdue Logic (Moved outside or kept once)
   const isAssetOverdue = (expectedReturnDate?: string | null) => {
@@ -79,7 +84,23 @@ const FieldAssets: React.FC = () => {
   // 2. Updated Filtering Logic
   // This effect runs whenever assets, searchQuery, or selectedCategory changes
   useEffect(() => {
-    const filtered = assets.filter(asset => {
+    const userScopedAssets = assets.filter(asset => {
+      if (!selectedEmployeeId && !selectedUserName) return true;
+
+      const operatorId = String(asset.operatorId || asset.receiverId || '').trim();
+      const assigneeName = String(asset.assignedTo || '').trim().toLowerCase();
+
+      const matchesByEmployeeId = selectedEmployeeId
+        ? operatorId === selectedEmployeeId
+        : false;
+      const matchesByName = selectedUserName
+        ? assigneeName.includes(selectedUserName)
+        : false;
+
+      return matchesByEmployeeId || matchesByName;
+    });
+
+    const filtered = userScopedAssets.filter(asset => {
       const categoryMatch = selectedCategory
         ? asset.assetName
             ?.toLowerCase()
@@ -115,7 +136,7 @@ const FieldAssets: React.FC = () => {
       }));
 
     setLocationStats(locationEntries);
-  }, [searchQuery, selectedCategory, assets]);
+  }, [searchQuery, selectedCategory, assets, selectedEmployeeId, selectedUserName]);
 
   /* 🔹 Load logged-in supervisor */
   useEffect(() => {

@@ -138,6 +138,8 @@ const AssetFullDetails: React.FC = () => {
     const route = useRoute<AssetFullDetailsRouteProp>();
     const { categories, statuses } = useAssetMeta();
     const { asset } = route.params;
+    const startInEditMode = route.params?.startInEditMode;
+    const isAssignedCardEdit = Boolean(startInEditMode);
     const { width } = useWindowDimensions();
     const isDesktopWeb = Platform.OS === 'web' && width >= 900;
     const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
@@ -148,26 +150,23 @@ const AssetFullDetails: React.FC = () => {
     
     // Editable fields state
     const [assetName, setAssetName] = useState(asset?.assetName || '');
+    const [selectedCategory, setSelectedCategory] = useState(String(asset?.category || ''));
     const [modelNumber, setModelNumber] = useState(asset?.modelNumber || '');
     const [serialNumber, setSerialNumber] = useState(asset?.serialNumber || '');
     const [price, setPrice] = useState(asset?.price || '');
+    const [warrantyExpiry, setWarrantyExpiry] = useState(asset?.warrantyExpiry || '');
+    const [purchaseDate, setPurchaseDate] = useState(asset?.purchaseDate || '');
     const [location, setLocation] = useState(asset?.location || '');
     const [statusValue, setStatusValue] = useState(asset?.status || '');
-    const [assignedTo, setAssignedTo] = useState(asset?.assignedTo || '');
+    const [assignedTo, setAssignedTo] = useState(asset?.assignedTo || 'Admin Role');
     const [photoURL, setPhotoURL] = useState(asset?.photoURL || '');
     const [initialPhotoURL] = useState(asset?.photoURL || '');
     const [barcodeURL, setBarcodeURL] = useState(asset?.barcodeURL || '');
     const [initialBarcodeURL] = useState(asset?.barcodeURL || '');
     const [showStatusPicker, setShowStatusPicker] = useState(false);
-    const [showLocationPicker, setShowLocationPicker] = useState(false);
+    const [showCategoryPicker, setShowCategoryPicker] = useState(false);
     const [showAssigneePicker, setShowAssigneePicker] = useState(false);
     const [assignableUsers, setAssignableUsers] = useState<AssigneeOption[]>([]);
-    const [isPrivilegedEditor, setIsPrivilegedEditor] = useState(false);
-
-    const locationOptions = ['Office', 'Field'];
-    
-    const matchedCategory = categories.find(c => String(c.id) === String(asset.category));
-    const matchedStatus = statuses.find(s => String(s.id) === String(asset.status));
 
     useEffect(() => {
         const loadAssigneeOptions = async () => {
@@ -177,13 +176,7 @@ const AssetFullDetails: React.FC = () => {
                 const editorRole = String(
                     parsedUser?.roleName || parsedUser?.role?.roleName || '',
                 ).toLowerCase();
-                const privilegedRoles = [
-                    'admin',
-                    'superadmin',
-                    'super admin',
-                ];
-                const canEditAllEmployees = privilegedRoles.includes(editorRole);
-                setIsPrivilegedEditor(canEditAllEmployees);
+                const canEditAllEmployees = editorRole === 'admin';
 
                 const response = await axios.get(`${baseURL}/api/auth/users`);
                 const rawUsers =
@@ -194,8 +187,7 @@ const AssetFullDetails: React.FC = () => {
                         u?.role?.roleName || u?.roleName || '',
                     ).toLowerCase();
 
-                    if (canEditAllEmployees) return true;
-                    return roleName === 'operator';
+                    return roleName === 'admin';
                 });
 
                 const mappedUsers = filteredUsers.map((u: any) => {
@@ -213,6 +205,9 @@ const AssetFullDetails: React.FC = () => {
                 });
 
                 setAssignableUsers(mappedUsers);
+                if (!asset?.assignedTo && mappedUsers.length > 0) {
+                    setAssignedTo(mappedUsers[0].value);
+                }
             } catch (error) {
                 console.error('Failed to load assignee options:', error);
                 setAssignableUsers([]);
@@ -221,6 +216,12 @@ const AssetFullDetails: React.FC = () => {
 
         loadAssigneeOptions();
     }, []);
+
+    useEffect(() => {
+        if (startInEditMode) {
+            setIsEditMode(true);
+        }
+    }, [startInEditMode]);
     
     const handleImageUpload = async () => {
         try {
@@ -302,10 +303,37 @@ const AssetFullDetails: React.FC = () => {
             }
 
             const updateData: any = {};
+
+            if (isAssignedCardEdit) {
+                if (location !== asset.location) {
+                    updateData.location = location;
+                }
+
+                if (Object.keys(updateData).length === 0) {
+                    Alert.alert("No Changes", "No location update to save");
+                    setIsEditMode(false);
+                    return;
+                }
+
+                const response = await axios.put(
+                    `${baseURL}/api/assets/assetId?assetId=${asset.id}`,
+                    updateData
+                );
+
+                if (response.status === 200) {
+                    Alert.alert("Success", "Assigned asset location updated successfully");
+                    setIsEditMode(false);
+                    asset.location = location;
+                }
+                return;
+            }
             
             // Check each field for changes
             if (assetName !== asset.assetName) {
                 updateData.assetName = assetName;
+            }
+            if (selectedCategory !== String(asset.category || '')) {
+                updateData.category = selectedCategory;
             }
             if (modelNumber !== asset.modelNumber) {
                 updateData.modelNumber = modelNumber;
@@ -315,6 +343,12 @@ const AssetFullDetails: React.FC = () => {
             }
             if (price !== asset.price) {
                 updateData.price = price;
+            }
+            if (purchaseDate !== asset.purchaseDate) {
+                updateData.purchaseDate = purchaseDate;
+            }
+            if (warrantyExpiry !== asset.warrantyExpiry) {
+                updateData.warrantyExpiry = warrantyExpiry;
             }
             if (location !== asset.location) {
                 updateData.location = location;
@@ -353,9 +387,14 @@ const AssetFullDetails: React.FC = () => {
                 setIsEditMode(false);
                 // Update the asset object with new values
                 asset.assetName = assetName;
+                if (updateData.category) {
+                    asset.category = selectedCategory;
+                }
                 asset.modelNumber = modelNumber;
                 asset.serialNumber = serialNumber;
                 asset.price = price;
+                asset.purchaseDate = purchaseDate;
+                asset.warrantyExpiry = warrantyExpiry;
                 asset.location = location;
                 asset.status = statusValue;
                 asset.assignedTo = assignedTo;
@@ -377,12 +416,15 @@ const AssetFullDetails: React.FC = () => {
         if (isEditMode) {
             // Cancel edit mode - reset fields
             setAssetName(asset?.assetName || '');
+            setSelectedCategory(String(asset?.category || ''));
             setModelNumber(asset?.modelNumber || '');
             setSerialNumber(asset?.serialNumber || '');
             setPrice(asset?.price || '');
+            setWarrantyExpiry(asset?.warrantyExpiry || '');
+            setPurchaseDate(asset?.purchaseDate || '');
             setLocation(asset?.location || '');
             setStatusValue(asset?.status || '');
-            setAssignedTo(asset?.assignedTo || '');
+            setAssignedTo(asset?.assignedTo || 'Admin Role');
             setPhotoURL(asset?.photoURL || '');
             setBarcodeURL(asset?.barcodeURL || '');
         }
@@ -479,16 +521,30 @@ const AssetFullDetails: React.FC = () => {
                                         label="Asset Name" 
                                         value={assetName} 
                                         icon="truck" 
-                                        editable={isEditMode}
+                                        editable={isEditMode && !isAssignedCardEdit}
                                         onChangeText={setAssetName}
                                     />
-                                    <DisplayField label="Category" value={asset.category} icon="layers"/>
+                                    <DisplayField
+                                        label="Category"
+                                        value={selectedCategory}
+                                        icon="layers"
+                                    >
+                                        {isEditMode && !isAssignedCardEdit ? (
+                                            <FieldPicker
+                                                value={selectedCategory}
+                                                placeholder="Select Category"
+                                                onPress={() => setShowCategoryPicker(true)}
+                                            />
+                                        ) : (
+                                            <Text style={styles.valueText}>{selectedCategory || 'N/A'}</Text>
+                                        )}
+                                    </DisplayField>
                                     <DisplayField
                                         label="Status"
                                         value={statusValue || 'N/A'}
                                         icon="check-circle"
                                     >
-                                        {isEditMode ? (
+                                        {isEditMode && !isAssignedCardEdit ? (
                                             <FieldPicker
                                                 value={statusValue}
                                                 placeholder="Select Status"
@@ -502,18 +558,22 @@ const AssetFullDetails: React.FC = () => {
                                         label="Model Number" 
                                         value={modelNumber} 
                                         icon="archive" 
-                                        editable={isEditMode}
+                                        editable={isEditMode && !isAssignedCardEdit}
                                         onChangeText={setModelNumber}
                                     />
                                     <DisplayField 
                                         label="Serial Number" 
                                         value={serialNumber} 
                                         icon="hash" 
+                                        editable={isEditMode && !isAssignedCardEdit}
+                                        onChangeText={setSerialNumber}
                                     />
                                     <DisplayField 
                                         label="Price" 
                                         value={price} 
                                         icon="dollar" 
+                                        editable={isEditMode && !isAssignedCardEdit}
+                                        onChangeText={setPrice}
                                     />
                                 </View>
 
@@ -559,34 +619,34 @@ const AssetFullDetails: React.FC = () => {
                                         label="Location"
                                         value={location}
                                         icon="map-pin"
-                                    >
-                                        {isEditMode ? (
-                                            <FieldPicker
-                                                value={location}
-                                                placeholder="Select Base Station"
-                                                onPress={() => setShowLocationPicker(true)}
-                                            />
-                                        ) : (
-                                            <Text style={styles.valueText}>{location || 'N/A'}</Text>
-                                        )}
-                                    </DisplayField>
-                                    <DisplayField label="Assigned To" value={assignedTo || "N/A"} icon="user-check">
-                                        {isEditMode ? (
+                                        editable={isEditMode}
+                                        onChangeText={setLocation}
+                                    />
+                                    <DisplayField label="Assigned To" value={assignedTo || "Admin Role"} icon="user-check">
+                                        {isEditMode && !isAssignedCardEdit ? (
                                             <FieldPicker
                                                 value={assignedTo}
-                                                placeholder={
-                                                    isPrivilegedEditor
-                                                        ? 'Select Employee'
-                                                        : 'Select Operator'
-                                                }
+                                                placeholder="Select Admin"
                                                 onPress={() => setShowAssigneePicker(true)}
                                             />
                                         ) : (
-                                            <Text style={styles.valueText}>{assignedTo || 'N/A'}</Text>
+                                            <Text style={styles.valueText}>{assignedTo || 'Admin Role'}</Text>
                                         )}
                                     </DisplayField>
-                                    <DisplayField label="Warranty Expiry" value={formatDate(asset.warrantyExpiry)} icon="calendar" />
-                                    <DisplayField label="Purchase Date" value={formatDate(asset.purchaseDate)} icon="calendar" />
+                                    <DisplayField
+                                        label="Warranty Expiry"
+                                        value={warrantyExpiry}
+                                        icon="calendar"
+                                        editable={isEditMode && !isAssignedCardEdit}
+                                        onChangeText={setWarrantyExpiry}
+                                    />
+                                    <DisplayField
+                                        label="Purchase Date"
+                                        value={purchaseDate}
+                                        icon="calendar"
+                                        editable={isEditMode && !isAssignedCardEdit}
+                                        onChangeText={setPurchaseDate}
+                                    />
                                 </View>
                             </View>
                         </ScrollView>
@@ -599,7 +659,11 @@ const AssetFullDetails: React.FC = () => {
                             >
                                 <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.saveButton}>
                                     <Text style={styles.buttonText}>
-                                        {isEditMode ? 'SAVE CHANGES' : 'EDIT ASSET'}
+                                        {isEditMode
+                                            ? 'SAVE CHANGES'
+                                            : isAssignedCardEdit
+                                                ? 'EDIT ASSIGNED ASSET'
+                                                : 'EDIT ASSET'}
                                     </Text>
                                 </LinearGradient>
                             </TouchableOpacity>
@@ -652,33 +716,36 @@ const AssetFullDetails: React.FC = () => {
                     </View>
                 </Modal>
 
-                {/* Location Picker Modal */}
+                {/* Category Picker Modal */}
                 <Modal
-                    visible={showLocationPicker}
+                    visible={showCategoryPicker}
                     transparent
                     animationType="fade"
-                    onRequestClose={() => setShowLocationPicker(false)}
+                    onRequestClose={() => setShowCategoryPicker(false)}
                 >
                     <View style={styles.pickerModalBackdrop}>
                         <View style={styles.pickerModalCard}>
-                            <Text style={styles.pickerModalTitle}>Select Location</Text>
+                            <Text style={styles.pickerModalTitle}>Select Category</Text>
                             <ScrollView style={styles.pickerList}>
-                                {locationOptions.map((item, index) => (
-                                    <TouchableOpacity
-                                        key={`${item}-${index}`}
-                                        style={styles.pickerModalItem}
-                                        onPress={() => {
-                                            setLocation(item);
-                                            setShowLocationPicker(false);
-                                        }}
-                                    >
-                                        <Text style={styles.pickerModalItemText}>{item}</Text>
-                                    </TouchableOpacity>
-                                ))}
+                                {categories.map((c: any, index: number) => {
+                                    const value = String(c?.category || '');
+                                    return (
+                                        <TouchableOpacity
+                                            key={`${value}-${index}`}
+                                            style={styles.pickerModalItem}
+                                            onPress={() => {
+                                                setSelectedCategory(value);
+                                                setShowCategoryPicker(false);
+                                            }}
+                                        >
+                                            <Text style={styles.pickerModalItemText}>{value}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
                             </ScrollView>
                             <TouchableOpacity
                                 style={styles.pickerModalCloseBtn}
-                                onPress={() => setShowLocationPicker(false)}
+                                onPress={() => setShowCategoryPicker(false)}
                             >
                                 <Text style={styles.pickerModalCloseText}>Close</Text>
                             </TouchableOpacity>
@@ -696,7 +763,7 @@ const AssetFullDetails: React.FC = () => {
                     <View style={styles.pickerModalBackdrop}>
                         <View style={styles.pickerModalCard}>
                             <Text style={styles.pickerModalTitle}>
-                                {isPrivilegedEditor ? 'Select Employee' : 'Select Operator'}
+                                Select Admin
                             </Text>
                             <ScrollView style={styles.pickerList}>
                                 {assignableUsers.map((u, index) => (

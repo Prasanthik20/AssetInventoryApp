@@ -1,9 +1,10 @@
 import { Platform, StyleSheet } from 'react-native';
+import { globalStyleTokens } from 'src/styles/globalStyles';
 
 export function assetStyles(isMobileLayout: boolean) {
   return StyleSheet.create({
-    backgroundImage: { flex: 1, width: '100%', height: '100%' },
-    safeArea: { flex: 1, backgroundColor: 'rgba(61, 138, 233, 0.4)' },
+    backgroundImage: globalStyleTokens.pageBackgroundImage,
+    safeArea: globalStyleTokens.safeAreaOverlay,
     container: {
       // Renamed from 'modalCard'
       flex: 1,

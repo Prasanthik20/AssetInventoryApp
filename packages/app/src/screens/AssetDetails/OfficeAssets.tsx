@@ -16,7 +16,7 @@ const OfficeAssets: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
  // Categories requested
-  const assetCategories = ["Battery", "Antenna", "Rover", "Controller"];
+  const assetCategories = ["Base", "Battery", "Antenna", "Rover", "Controller"];
 
   // 1. Keep the hook for managing the search/filter state values
   const {

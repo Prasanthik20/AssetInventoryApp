@@ -107,13 +107,13 @@ const TotalAssetsDetails: React.FC = () => {
     setSearchText,
     selectedName,
     setSelectedName,
-    selectedSerial,
-    setSelectedSerial,
+    selectedLocation,
+    setSelectedLocation,
     selectedStatus,
     setSelectedStatus,
     filteredAssets,
     uniqueNames,
-    uniqueSerialNumbers,
+    uniqueLocations,
     uniqueStatuses,
     clearFilters,
 } = useAssetFilter(assets);
@@ -218,6 +218,9 @@ const TotalAssetsDetails: React.FC = () => {
     const renderAsset = ({ item, index }: { item: Asset, index: number }) => {
 
         const isOverdue = item.status?.toLowerCase() === 'overdue';
+        const isAssignedAsset = ['assigned', 'overdue'].includes(
+            String(item.status || '').toLowerCase(),
+        );
         if (isMobileLayout) {
             return (
                 <View style={styles.mobileCard}>
@@ -254,6 +257,20 @@ const TotalAssetsDetails: React.FC = () => {
                                 <Ionicons name="information-circle-outline" size={18} color="#fff" />
                                 <Text style={styles.actionButtonText}>Know More</Text>
                             </TouchableOpacity>
+                            {isAssignedAsset && (
+                                <TouchableOpacity
+                                    style={styles.editAssignedButton}
+                                    onPress={() =>
+                                        navigation.navigate('AssetFullDetails', {
+                                            asset: item,
+                                            startInEditMode: true,
+                                        })
+                                    }
+                                >
+                                    <Feather name="edit-2" size={16} color="#fff" />
+                                    <Text style={styles.actionButtonText}>Edit Assigned</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
                 </View>
@@ -300,6 +317,20 @@ const TotalAssetsDetails: React.FC = () => {
                         <Ionicons name="information-circle-outline" size={18} color="#fff" />
                         <Text style={styles.actionButtonText}>Know More</Text>
                     </TouchableOpacity>
+                    {isAssignedAsset && (
+                        <TouchableOpacity
+                            style={styles.editAssignedButton}
+                            onPress={() =>
+                                navigation.navigate('AssetFullDetails', {
+                                    asset: item,
+                                    startInEditMode: true,
+                                })
+                            }
+                        >
+                            <Feather name="edit-2" size={16} color="#fff" />
+                            <Text style={styles.actionButtonText}>Edit Assigned</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
         );
@@ -345,9 +376,9 @@ const TotalAssetsDetails: React.FC = () => {
                                 </View>
                                 <View style={isMobileLayout ? styles.mobileFilterSubRow : styles.desktopFilterSubRow}>
                                 <View style={styles.pickerWrapper}>
-                                    <Picker selectedValue={selectedSerial} onValueChange={setSelectedSerial} style={styles.pickerInternal}>
-                                        <Picker.Item label="All Serials" value="" />
-                                        {uniqueSerialNumbers.map((s) => <Picker.Item key={s} label={s!} value={s!} />)}
+                                    <Picker selectedValue={selectedLocation} onValueChange={setSelectedLocation} style={styles.pickerInternal}>
+                                        <Picker.Item label="All Locations" value="" />
+                                        {uniqueLocations.map((loc) => <Picker.Item key={loc} label={loc!} value={loc!} />)}
                                     </Picker>
                                 </View>
                                 <View style={styles.pickerWrapper}>
@@ -643,6 +674,14 @@ topActionRow: {
     },
     notifyButton: {
         backgroundColor: '#FF4D4D',
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+    },
+    editAssignedButton: {
+        backgroundColor: '#1F8F6A',
         flexDirection: 'row',
         alignItems: 'center',
         borderRadius: 8,

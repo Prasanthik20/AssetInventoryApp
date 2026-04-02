@@ -75,12 +75,18 @@ ResetPassword: { token: string };
     statusFilter?: string;
   } | undefined;
   OfficeAssets: undefined;
-  FieldAssets: {
-    employeeId: string;
-    operatorName: string; } | undefined;
+  FieldAssets:
+    | {
+        employeeId?: string;
+        operatorName?: string;
+      }
+    | undefined;
   AddEditAsset: undefined;
 
-  AssetFullDetails: { asset: Asset };
+  AssetFullDetails: {
+    asset: Asset;
+    startInEditMode?: boolean;
+  };
   ReturnAsset: {
     assets: Asset[];
     operatorEmployeeId: string;

@@ -4,7 +4,7 @@ import { Asset } from "src/navigation/types";
 export const useAssetFilter = (assets: Asset[]) => {
   const [searchText, setSearchText] = useState("");
   const [selectedName, setSelectedName] = useState("");
-  const [selectedSerial, setSelectedSerial] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
 
   // 🔎 Filtered Assets
@@ -12,6 +12,7 @@ export const useAssetFilter = (assets: Asset[]) => {
     return assets.filter((asset) => {
       const name = asset.assetName?.toLowerCase() || "";
       const serial = asset.serialNumber?.toLowerCase() || "";
+      const location = asset.location?.toLowerCase() || "";
       const status = asset.status?.toLowerCase() || "";
       const assignedTo = asset.assignedTo?.toLowerCase() || "";
 
@@ -22,15 +23,16 @@ export const useAssetFilter = (assets: Asset[]) => {
       const matchesSearch =
         name.includes(search) || 
         serial.includes(search) || 
+        location.includes(search) ||
         assignedTo.includes(search);
 
       // 2. Name/Category Logic (Changed from === to .includes)
       const matchesName =
         selectedName === "" || name.includes(nameFilter);
 
-      // 3. Serial Logic
-      const matchesSerial =
-        selectedSerial === "" || asset.serialNumber === selectedSerial;
+      // 3. Location Logic
+      const matchesLocation =
+        selectedLocation === "" || location === selectedLocation.toLowerCase();
 
       // 4. Status Logic
       const matchesStatus =
@@ -40,19 +42,19 @@ export const useAssetFilter = (assets: Asset[]) => {
       return (
         matchesSearch &&
         matchesName &&
-        matchesSerial &&
+        matchesLocation &&
         matchesStatus
       );
     });
-  }, [assets, searchText, selectedName, selectedSerial, selectedStatus]);
+  }, [assets, searchText, selectedName, selectedLocation, selectedStatus]);
 
   // Rest of your memoized unique values...
   const uniqueNames = useMemo(() => {
     return [...new Set(assets.map((a) => a.assetName).filter(Boolean))].sort();
   }, [assets]);
 
-  const uniqueSerialNumbers = useMemo(() => {
-    return [...new Set(assets.map((a) => a.serialNumber).filter(Boolean))].sort();
+  const uniqueLocations = useMemo(() => {
+    return [...new Set(assets.map((a) => a.location).filter(Boolean))].sort();
   }, [assets]);
 
   const uniqueStatuses = useMemo(() => {
@@ -62,7 +64,7 @@ export const useAssetFilter = (assets: Asset[]) => {
   const clearFilters = () => {
     setSearchText("");
     setSelectedName("");
-    setSelectedSerial("");
+    setSelectedLocation("");
     setSelectedStatus("");
   };
 
@@ -71,13 +73,13 @@ export const useAssetFilter = (assets: Asset[]) => {
     setSearchText,
     selectedName,
     setSelectedName,
-    selectedSerial,
-    setSelectedSerial,
+    selectedLocation,
+    setSelectedLocation,
     selectedStatus,
     setSelectedStatus,
     filteredAssets,
     uniqueNames,
-    uniqueSerialNumbers,
+    uniqueLocations,
     uniqueStatuses,
     clearFilters,
   };
