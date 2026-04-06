@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
   ImageBackground,
   Modal,
   ActivityIndicator,
-  Alert,
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
@@ -23,6 +22,7 @@ import { Picker } from '@react-native-picker/picker';
 import { baseURL, RootStackParamList } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supervisorStyles } from './supervisor.styles';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 type SupervisorDashboardNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -105,6 +105,20 @@ const SupervisorDashboard: React.FC<Props> = ({
 
   const [selectedItem, setSelectedItem] = useState<OperatorReply | null>(null);
   const [extendModalVisible, setExtendModalVisible] = useState(false); // Removed duplicate state
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setSnackbar({ visible: true, message, kind });
+    timeoutRef.current = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 3200);
+  };
 
   const metrics = [
     {
@@ -216,7 +230,7 @@ const SupervisorDashboard: React.FC<Props> = ({
         },
       );
 
-      Alert.alert('Success', response.data.extensionMessage);
+      showSnackbar(response.data.extensionMessage || 'Return date extended.', 'success');
       setExtendModalVisible(false);
 
       // Remove from UI immediately
@@ -225,9 +239,9 @@ const SupervisorDashboard: React.FC<Props> = ({
       );
     } catch (err: any) {
       console.error('Extend Return Date Error:', err);
-      Alert.alert(
-        'Error',
+      showSnackbar(
         err.response?.data?.message || 'Failed to extend return date.',
+        'error',
       );
     }
   };
@@ -254,7 +268,7 @@ const SupervisorDashboard: React.FC<Props> = ({
               <Text style={styles.headerTitle}>{user?.supervisorName}</Text>
             </View>
             <View style={styles.headerRight}>
-              <Feather name="user" size={16} color="#333" />
+              <Feather name="user" size={16} color="#A9C6E4" />
               <Text style={styles.userText}>{user?.fullName}</Text>
               {/* <Switch
               trackColor={{ false: '#E9E9EA', true: '#34C759' }}
@@ -266,7 +280,7 @@ const SupervisorDashboard: React.FC<Props> = ({
               <Feather
                 name="settings"
                 size={20}
-                color="#333"
+                color="#A9C6E4"
                 style={{ marginLeft: 5 }}
               />
 
@@ -275,7 +289,7 @@ const SupervisorDashboard: React.FC<Props> = ({
                 <Feather
                   name="log-out"
                   size={22}
-                  color="red"
+                  color="#F97373"
                   style={{ marginLeft: 10 }}
                 />
               </TouchableOpacity>
@@ -306,7 +320,7 @@ const SupervisorDashboard: React.FC<Props> = ({
                       m.navigateTo && navigation.navigate(m.navigateTo as any)
                     }
                   >
-                    <Ionicons name={m.icon as any} size={24} color="#1A202C" />
+                    <Ionicons name={m.icon as any} size={24} color="#22D3EE" />
                     <Text style={styles.metricTitle}>{m.title}</Text>
                   </TouchableOpacity>
                    <Text style={styles.metricValue}>{m.value}</Text>
@@ -346,7 +360,7 @@ const SupervisorDashboard: React.FC<Props> = ({
             {loading ? (
               <ActivityIndicator
                 size="large"
-                color="#4A55A2"
+                color="#22D3EE"
                 style={{ marginTop: 20 }}
               />
             ) : isMobileLayout ? (
@@ -450,7 +464,7 @@ const SupervisorDashboard: React.FC<Props> = ({
               <Picker
                 selectedValue={extendDays}
                 onValueChange={value => setExtendDays(value)}
-                style={{ width: '100%', height: 50 }}
+                style={{ width: '100%', height: 50, color: '#E6F3FF' }}
               >
                 {[...Array(10)].map((_, i) => (
                   <Picker.Item key={i} label={`${i + 1} Days`} value={i + 1} />
@@ -474,11 +488,18 @@ const SupervisorDashboard: React.FC<Props> = ({
                 style={styles.modalCancel}
                 onPress={() => setExtendModalVisible(false)}
               >
-                <Text style={{ color: '#555' }}>Cancel</Text>
+                <Text style={{ color: '#A9C6E4' }}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
         </Modal>
+        <AppSnackbar
+          visible={snackbar.visible}
+          message={snackbar.message}
+          kind={snackbar.kind}
+          onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+          bottom={isMobileLayout ? 16 : 20}
+        />
       </SafeAreaView>
     </ImageBackground>
   );
@@ -529,7 +550,7 @@ const QuickActionsSection = ({
         })
       }
     >
-      <View style={[styles.actionButton, { backgroundColor: '#32C8A4' }]}>
+      <View style={[styles.actionButton, { backgroundColor: '#0F766E' }]}> 
         <Ionicons
           name="swap-horizontal-outline"
           size={20}
@@ -574,7 +595,7 @@ const ActivitySection = ({
       >
         {operatorReplies.map((item: any) => (
           <View key={item.notificationId} style={styles.activityItem}>
-            <Ionicons name="chatbubbles-outline" size={24} color="#4A55A2" />
+            <Ionicons name="chatbubbles-outline" size={24} color="#22D3EE" />
             <View style={styles.activityTextContainer}>
               <Text style={styles.activityText}>
                 Reply from{' '}

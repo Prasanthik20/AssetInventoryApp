@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -10,10 +10,10 @@ import {
   SafeAreaView,
   ScrollView,
   Platform,
-  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 export default function AddCompanyScreen() {
     const navigation = useNavigation();
@@ -24,16 +24,27 @@ export default function AddCompanyScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [autoAssignAdmin, setAutoAssignAdmin] = useState(false);
   const [subscription, setSubscription] = useState("Basic");
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setSnackbar({ visible: true, message, kind });
+    timeoutRef.current = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 3000);
+  };
 
   const handleCreateCompany = () => {
     if (!companyName || !email || !password) {
-      Alert.alert("Missing Info", "Please fill all required fields!");
+      showSnackbar("Please fill all required fields!", 'error');
       return;
     }
-    Alert.alert(
-      "Company Created",
-      `✅ ${companyName} has been activated with ${subscription} plan.`
-    );
+    showSnackbar(`${companyName} has been activated with ${subscription} plan.`, 'success');
   };
 
   return (
@@ -157,6 +168,13 @@ export default function AddCompanyScreen() {
           <Text style={styles.footerText}>🌐 Web   🧑‍💼 Companies   ⚙️ Settings   🍎 iOS</Text>
         </ScrollView>
       </SafeAreaView>
+      <AppSnackbar
+        visible={snackbar.visible}
+        message={snackbar.message}
+        kind={snackbar.kind}
+        onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+        bottom={16}
+      />
     </ImageBackground>
   );
 }
@@ -166,7 +184,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%'
   },
-  container: { flex: 1,backgroundColor: "rgba(61, 138, 233, 0.4)" },
+  container: { flex: 1,backgroundColor: "globalColors.backgroundSoft" },
   scrollContainer: { padding: 20, alignItems: "center" },
   formCard: {
     width: "95%",

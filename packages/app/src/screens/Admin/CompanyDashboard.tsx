@@ -310,10 +310,10 @@ const CompanyDashboard: React.FC<Props> = ({
 
               {/* System Overview Header */}
               <View style={styles.header}>
-                <Text style={styles.headerTitle}>Analytics</Text>
+                <Text style={styles.headerTitle}>Company Analytics</Text>
                 {!isMobileLayout && (
                   <View style={styles.headerRight}>
-                    <SafeIonicons name="person-outline" size={16} color="#333" />
+                    <SafeIonicons name="person-outline" size={16} color="#A9C6E4" />
                     <Text style={styles.userText}>{user?.fullName}</Text>
                     <TouchableOpacity onPress={handleLogout}>
                       <SafeFeatherIcon name="log-out" size={24} color="#FF4D4D" />
@@ -332,7 +332,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     <SafeIonicons
                       name="settings-outline"
                       size={24}
-                      color="#6B46C1"
+                      color="#34D399"
                     />
                     <Text style={styles.metricLabel}>Total Assets</Text>
                   </TouchableOpacity>
@@ -344,7 +344,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     style={styles.metricRow}
                     onPress={() => navigation.navigate('CompanyUsersScreen')}
                   >
-                    <SafeIonicons name="people-outline" size={24} color="#6B46C1" />
+                    <SafeIonicons name="people-outline" size={24} color="#38BDF8" />
                     <Text style={styles.metricLabel}>Total Users</Text>
                   </TouchableOpacity>
                   <Text style={styles.metricValue}>{totalUsers ?? 0}</Text>
@@ -358,7 +358,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     <SafeIonicons
                       name="business-outline"
                       size={24}
-                      color="#6B46C1"
+                      color="#F59E0B"
                     />
                     <Text style={styles.metricLabel}>Office Assets</Text>
                   </TouchableOpacity>
@@ -370,7 +370,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     style={[styles.metricRow, styles.fieldMetricBox]}
                     onPress={() => navigation.navigate('FieldAssets')}
                   >
-                    <SafeIonicons name="map-outline" size={24} color="#6B46C1" />
+                    <SafeIonicons name="map-outline" size={24} color="#22D3EE" />
                     <Text style={styles.metricValue}>{fieldAssets ?? 0}</Text>
                     <Text style={styles.metricLabel}>Field Assets</Text>
                   </TouchableOpacity>
@@ -412,7 +412,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     <SafeIonicons
                       name="remove-circle-outline"
                       size={24}
-                      color="#DD6B20"
+                      color="#FB7185"
                     />
                     <Text style={styles.metricLabel}>Unassigned Assets</Text>
                   </TouchableOpacity>
@@ -431,7 +431,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     <SafeIonicons
                       name="checkmark-done-outline"
                       size={24}
-                      color="#2B6CB0"
+                      color="#34D399"
                     />
                     <Text style={styles.metricLabel}>Assigned Assets</Text>
                   </TouchableOpacity>
@@ -450,7 +450,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     <SafeIonicons
                       name="alert-circle-outline"
                       size={24}
-                      color="#C53030"
+                      color="#F97373"
                     />
                     <Text style={styles.metricLabel}>Overdue Assets</Text>
                   </TouchableOpacity>
@@ -466,7 +466,7 @@ const CompanyDashboard: React.FC<Props> = ({
                       })
                     }
                   >
-                    <SafeIonicons name="build-outline" size={24} color="#6B46C1" />
+                    <SafeIonicons name="build-outline" size={24} color="#F59E0B" />
                     <Text style={styles.metricLabel}>Under Maintenance</Text>
                   </TouchableOpacity>
                   <Text style={styles.metricValue}>
@@ -639,7 +639,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     onPress={() => navigation.navigate('AddEditAsset')}
                   >
                     <LinearGradient
-                      colors={['#4A90E2', '#2E5C8A']}
+                      colors={['#0EA5E9', '#0369A1']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}
@@ -660,7 +660,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     }
                   >
                     <LinearGradient
-                      colors={['#7C3AED', '#5B21B6']}
+                      colors={['#14B8A6', '#0F766E']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}
@@ -678,7 +678,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     onPress={() => navigation.navigate('AddCompanyUser')}
                   >
                     <LinearGradient
-                      colors={['#F59E0B', '#D97706']}
+                      colors={['#F97316', '#C2410C']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}

@@ -1,10 +1,21 @@
 import { Platform, StyleSheet } from 'react-native';
-import { globalStyleTokens } from 'src/styles/globalStyles';
+import { globalColors, globalStyleTokens } from '../../styles/globalStyles';
 
 export function assetStyles(isMobileLayout: boolean) {
+  const theme = {
+    page: '#071425',
+    panel: 'rgba(7, 24, 42, 0.78)',
+    panelStrong: 'rgba(7, 24, 42, 0.9)',
+    panelMuted: 'rgba(18, 45, 73, 0.86)',
+    border: 'rgba(159, 207, 255, 0.22)',
+    textPrimary: '#E6F3FF',
+    textSecondary: '#A9C6E4',
+    accent: '#34D399',
+  };
+
   return StyleSheet.create({
     backgroundImage: globalStyleTokens.pageBackgroundImage,
-    safeArea: globalStyleTokens.safeAreaOverlay,
+    safeArea: { ...globalStyleTokens.safeAreaOverlay, backgroundColor: theme.page },
     container: {
       // Renamed from 'modalCard'
       flex: 1,
@@ -28,7 +39,7 @@ export function assetStyles(isMobileLayout: boolean) {
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+      backgroundColor: theme.panelStrong,
       borderRadius: 10,
       justifyContent: 'center',
       alignItems: 'center',
@@ -36,16 +47,16 @@ export function assetStyles(isMobileLayout: boolean) {
     uploadPlaceholder: {
       width: 180,
       height: 180,
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: theme.panelMuted,
       borderRadius: 10,
       borderWidth: 2,
       borderStyle: 'dashed',
-      borderColor: '#fff',
+      borderColor: theme.border,
       justifyContent: 'center',
       alignItems: 'center',
     },
     uploadText: {
-      color: '#fff',
+      color: theme.textPrimary,
       marginTop: 10,
       fontSize: 14,
       fontWeight: '600',
@@ -66,21 +77,21 @@ export function assetStyles(isMobileLayout: boolean) {
       height: 150,
       resizeMode: 'cover',
       borderRadius: 10,
-      backgroundColor: '#f5f5f5',
+      backgroundColor: theme.panelMuted,
     },
     mobileUploadPlaceholder: {
       width: 150,
       height: 150,
-      backgroundColor: '#f5f5f5',
+      backgroundColor: theme.panelMuted,
       borderRadius: 10,
       borderWidth: 2,
       borderStyle: 'dashed',
-      borderColor: '#ccc',
+      borderColor: theme.border,
       justifyContent: 'center',
       alignItems: 'center',
     },
     mobileUploadText: {
-      color: '#666',
+      color: theme.textSecondary,
       marginTop: 8,
       fontSize: 13,
       fontWeight: '500',
@@ -88,33 +99,33 @@ export function assetStyles(isMobileLayout: boolean) {
     leftPanelTitle: {
       fontSize: 30,
       fontWeight: 'bold',
-      color: '#000000ff',
+      color: theme.textPrimary,
       textAlign: 'center',
     },
     leftPanelSubtitle: {
       fontSize: 13,
-      color: '#000000ff',
+      color: theme.textSecondary,
       marginTop: 10,
       opacity: 0.8,
       letterSpacing: 1,
     },
     brandName: {
       fontSize: 15,
-      color: '#000000ff',
+      color: theme.textSecondary,
       marginTop: 30,
       opacity: 0.8,
     },
     rightPanel: {
       flex: 1,
-      // If mobile, make background solid white for better readability
-      backgroundColor:
-        Platform.OS !== 'web' ? '#fff' : 'rgba(255, 255, 255, 0.4)',
+      backgroundColor: theme.panel,
       padding: 20,
       borderTopLeftRadius: Platform.OS !== 'web' ? 25 : 0, // Rounded corners for mobile
       borderTopRightRadius: Platform.OS !== 'web' ? 25 : 0,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     mobileRightPanel: {
-      backgroundColor: '#fff',
+      backgroundColor: theme.panel,
       borderTopLeftRadius: 25,
       borderTopRightRadius: 25,
     },
@@ -124,22 +135,21 @@ export function assetStyles(isMobileLayout: boolean) {
       alignItems: 'center',
       marginBottom: 15,
     },
-    headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#000000ff' }, // White text
+    headerTitle: { fontSize: 20, fontWeight: 'bold', color: theme.textPrimary },
     editBadge: {
-      backgroundColor: '#27B2C3',
+      backgroundColor: theme.accent,
       paddingVertical: 4,
       paddingHorizontal: 12,
       borderRadius: 12,
     },
     editBadgeText: {
-      color: '#fff',
+      color: '#FFFFFF',
       fontSize: 12,
       fontWeight: '600',
     },
     headerRight: {
       flexDirection: 'row',
       alignItems: 'center',
-      // backgroundColor: 'rgba(20, 2, 2, 0.7)', // Semi-transparent
       paddingVertical: 6,
       paddingHorizontal: 12,
       borderRadius: 20,
@@ -148,7 +158,7 @@ export function assetStyles(isMobileLayout: boolean) {
     backButton: {
       padding: 6,
       marginRight: 10,
-      backgroundColor: 'rgba(255,255,255,0.08)',
+      backgroundColor: theme.panelMuted,
       borderRadius: 6,
     },
     userText: {
@@ -162,15 +172,15 @@ export function assetStyles(isMobileLayout: boolean) {
     sectionTitle: {
       fontSize: 16,
       fontWeight: 'bold',
-      color: '#000000ff',
+      color: theme.textPrimary,
       marginBottom: 10,
       borderBottomWidth: 1,
-      borderBottomColor: 'rgba(255,255,255,0.3)',
+      borderBottomColor: theme.border,
       paddingBottom: 5,
     },
     valueText: {
       fontSize: 14,
-      color: '#1A202C',
+      color: theme.textPrimary,
       fontWeight: '500',
     },
     inlinePicker: {
@@ -180,17 +190,17 @@ export function assetStyles(isMobileLayout: boolean) {
     },
     inlinePickerText: {
       fontSize: 14,
-      color: '#1A202C',
+      color: theme.textPrimary,
       fontWeight: '500',
       flex: 1,
       marginRight: 8,
     },
     inlinePickerPlaceholder: {
-      color: '#6B7280',
+      color: theme.textSecondary,
     },
     pickerModalBackdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.4)',
+      backgroundColor: globalColors.overlayDark,
       justifyContent: 'center',
       alignItems: 'center',
       padding: 16,
@@ -199,7 +209,7 @@ export function assetStyles(isMobileLayout: boolean) {
       width: '100%',
       maxWidth: 420,
       maxHeight: '70%',
-      backgroundColor: '#fff',
+      backgroundColor: theme.panelStrong,
       borderRadius: 12,
       padding: 16,
     },
@@ -207,7 +217,7 @@ export function assetStyles(isMobileLayout: boolean) {
       fontSize: 16,
       fontWeight: '700',
       marginBottom: 12,
-      color: '#111827',
+      color: theme.textPrimary,
     },
     pickerList: {
       maxHeight: 320,
@@ -215,11 +225,11 @@ export function assetStyles(isMobileLayout: boolean) {
     pickerModalItem: {
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor: '#F1F5F9',
+      borderBottomColor: theme.border,
     },
     pickerModalItemText: {
       fontSize: 14,
-      color: '#1F2937',
+      color: theme.textPrimary,
     },
     pickerModalCloseBtn: {
       marginTop: 12,
@@ -227,10 +237,10 @@ export function assetStyles(isMobileLayout: boolean) {
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 8,
-      backgroundColor: '#E2E8F0',
+      backgroundColor: theme.panelMuted,
     },
     pickerModalCloseText: {
-      color: '#334155',
+      color: theme.textPrimary,
       fontWeight: '600',
     },
 
@@ -241,26 +251,26 @@ export function assetStyles(isMobileLayout: boolean) {
       width: '100%',
       height: 70,
       resizeMode: 'contain',
-      backgroundColor: 'rgba(255, 255, 255, 0.9)', // Almost solid white
+      backgroundColor: theme.panelMuted,
       padding: 5,
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: '#0f0101ff',
+      borderColor: theme.border,
     },
     barcodeUploadPlaceholder: {
       width: '100%',
       height: 70,
-      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      backgroundColor: theme.panelMuted,
       borderRadius: 8,
       borderWidth: 2,
       borderStyle: 'dashed',
-      borderColor: '#ccc',
+      borderColor: theme.border,
       justifyContent: 'center',
       alignItems: 'center',
       flexDirection: 'row',
     },
     barcodeUploadText: {
-      color: '#666',
+      color: theme.textSecondary,
       fontSize: 13,
       fontWeight: '500',
       marginLeft: 8,
@@ -269,12 +279,12 @@ export function assetStyles(isMobileLayout: boolean) {
       textAlign: 'center',
       fontSize: 14,
       fontWeight: '600',
-      color: '#000000ff',
+      color: theme.textPrimary,
     },
     currentUserText: {
       textAlign: 'center',
       fontSize: 13,
-      color: '#000000ff',
+      color: theme.textSecondary,
       marginTop: 5,
       marginBottom: 20,
     },
@@ -285,7 +295,7 @@ export function assetStyles(isMobileLayout: boolean) {
       alignItems: 'center',
       paddingTop: 15,
       borderTopWidth: 1,
-      borderTopColor: 'rgba(255, 255, 255, 0.3)',
+      borderTopColor: theme.border,
     },
     saveButton: {
       paddingVertical: 12,
@@ -297,11 +307,11 @@ export function assetStyles(isMobileLayout: boolean) {
       paddingVertical: 12,
       paddingHorizontal: 20,
       borderRadius: 10,
-      backgroundColor: '#EAEAEA',
+      backgroundColor: theme.panelMuted,
       marginLeft: 10,
       alignItems: 'center',
     },
-    buttonText: { color: '#000000ff', fontSize: 14, fontWeight: 'bold' },
+    buttonText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
   });
 }
 

@@ -1,11 +1,10 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
@@ -16,6 +15,7 @@ import { StackScreenProps } from "@react-navigation/stack";
 import axios from "axios";
 import { RootStackParamList, baseURL } from "../../navigation/types";
 import { Feather } from '@expo/vector-icons';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 type Props = StackScreenProps<RootStackParamList, "ResetPassword">;
 
@@ -30,20 +30,34 @@ export default function ResetPassword({ route, navigation }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setSnackbar({ visible: true, message, kind });
+    timeoutRef.current = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 3000);
+  };
 
   const handleResetPassword = async () => {
     if (!password || !confirmPassword) {
-      Alert.alert("Error", "Please fill all fields.");
+      showSnackbar("Please fill all fields.", 'error');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters.");
+      showSnackbar("Password must be at least 6 characters.", 'error');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match.");
+      showSnackbar("Passwords do not match.", 'error');
       return;
     }
 
@@ -63,17 +77,15 @@ export default function ResetPassword({ route, navigation }: Props) {
         }
       );
 
-      Alert.alert("Success", response.data.message || "Password reset successful!", [
-        {
-          text: "OK",
-          onPress: () => navigation.navigate("CompanyLogin"),
-        },
-      ]);
+      showSnackbar(response.data.message || "Password reset successful!", 'success');
+      setTimeout(() => {
+        navigation.navigate("CompanyLogin");
+      }, 900);
     } catch (error: any) {
       if (axios.isAxiosError(error) && error.response) {
-        Alert.alert("Error", error.response.data.message || "Reset failed.");
+        showSnackbar(error.response.data.message || "Reset failed.", 'error');
       } else {
-        Alert.alert("Error", "Server connection failed.");
+        showSnackbar("Server connection failed.", 'error');
       }
     } finally {
       setLoading(false);
@@ -148,6 +160,13 @@ export default function ResetPassword({ route, navigation }: Props) {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      <AppSnackbar
+        visible={snackbar.visible}
+        message={snackbar.message}
+        kind={snackbar.kind}
+        onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+        bottom={isMobileLayout ? 16 : 20}
+      />
     </SafeAreaView>
   );
 }

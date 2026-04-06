@@ -1,5 +1,4 @@
-import { StyleSheet, Platform } from 'react-native'; // Ensure this import is present
-import { globalColors } from 'src/styles/globalStyles';
+import { StyleSheet, Platform } from 'react-native';
 
 type DashboardViewport = {
   width: number;
@@ -10,6 +9,21 @@ export function opratorStyles(viewport?: DashboardViewport) {
   const width = viewport?.width ?? 1024;
   const isDesktopWeb = Platform.OS === 'web' && width >= 900;
 
+  const theme = {
+    page: '#071425',
+    panel: 'rgba(7, 24, 42, 0.82)',
+    panelStrong: 'rgba(7, 24, 42, 0.9)',
+    panelMuted: 'rgba(18, 45, 73, 0.86)',
+    panelSoft: 'rgba(7, 24, 42, 0.92)',
+    border: 'rgba(159, 207, 255, 0.22)',
+    textPrimary: '#E6F3FF',
+    textSecondary: '#A9C6E4',
+    accent: '#22D3EE',
+    accentSuccess: '#34D399',
+    accentWarn: '#F97373',
+    white: '#FFFFFF',
+  };
+
   return StyleSheet.create({
     backgroundImage: {
       flex: 1,
@@ -18,7 +32,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
     },
     safeArea: {
       flex: 1,
-      backgroundColor: globalColors.backgroundSoftAlt,
+      backgroundColor: theme.page,
     },
     assetNameContainer: { flex: 1 },
     dueDateContainer: {
@@ -26,18 +40,21 @@ export function opratorStyles(viewport?: DashboardViewport) {
       alignItems: 'center',
       marginLeft: 'auto',
     },
-    overdueText: { color: '#DC3545', fontWeight: 'bold' },
+    overdueText: { color: theme.accentWarn, fontWeight: 'bold' },
     notifyButton: {
       marginLeft: 10,
-      backgroundColor: '#DC3545',
+      backgroundColor: theme.accentWarn,
       borderRadius: 8,
       paddingVertical: 6,
       paddingHorizontal: 12,
     },
-    notifyButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+    notifyButtonText: { color: theme.white, fontWeight: 'bold', fontSize: 13 },
     container: {
       flex: 1,
       flexDirection: isDesktopWeb ? 'row' : 'column',
+      backgroundColor: theme.panel,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     leftPanel: {
       width: '40%',
@@ -54,37 +71,39 @@ export function opratorStyles(viewport?: DashboardViewport) {
     leftPanelTitle: {
       fontSize: 32,
       fontWeight: 'bold',
-      color: '#fff',
+      color: theme.textPrimary,
       textAlign: 'center',
       lineHeight: 40,
     },
     leftPanelSubtitle: {
       fontSize: 16,
-      color: '#E0E0FF',
+      color: theme.textSecondary,
       marginTop: 10,
       opacity: 0.8,
     },
 
     rightPanel: {
       flex: 1,
-      backgroundColor: globalColors.surfaceGlass,
-      padding: isDesktopWeb ? 25 : 16,
+      backgroundColor: theme.panel,
+      padding: isDesktopWeb ? 20 : 14,
     },
 
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginBottom: 20,
+      marginBottom: 16,
       alignItems: 'center',
       width: '100%',
-    paddingHorizontal: 20,
+      paddingHorizontal: 6,
       paddingVertical: 10,
     },
-    headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#000000ff' },
+    headerTitle: { fontSize: 20, fontWeight: 'bold', color: theme.textPrimary },
     headerRight: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: globalColors.surfaceGlassStrong,
+      backgroundColor: theme.panelMuted,
+      borderWidth: 1,
+      borderColor: theme.border,
       paddingVertical: 6,
       paddingHorizontal: 12,
       borderRadius: 20,
@@ -94,23 +113,24 @@ export function opratorStyles(viewport?: DashboardViewport) {
       marginRight: 8,
       fontSize: 14,
       fontWeight: '500',
-      color: globalColors.textBody,
+      color: theme.textSecondary,
     },
 
     metricsContainer: {
       flexDirection: isDesktopWeb ? 'row' : 'column',
       justifyContent: 'space-between',
-      marginBottom: 25,
-      gap: isDesktopWeb ? 0 : 10,
+      marginBottom: 18,
+      gap: isDesktopWeb ? 10 : 10,
     },
     metricBox: {
-      width: isDesktopWeb ? '48%' : '100%',
-      backgroundColor: globalColors.surfaceGlassStrong,
+      width: isDesktopWeb ? '49%' : '100%',
+      backgroundColor: theme.panelMuted,
       borderRadius: 15,
-      padding: 20,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     metricRow: {
-      display: 'flex',
       flexDirection: 'row',
       justifyContent: 'flex-start',
       alignItems: 'center',
@@ -120,16 +140,18 @@ export function opratorStyles(viewport?: DashboardViewport) {
       width: 40,
       height: 40,
       borderRadius: 10,
-      backgroundColor: 'rgba(59,89,184,0.1)',
+      backgroundColor: theme.panelSoft,
       justifyContent: 'center',
       alignItems: 'center',
       marginBottom: 10,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
-    metricTitle: { fontSize: 22, color: '#4A5568', fontWeight: '500' },
+    metricTitle: { fontSize: 18, color: theme.textSecondary, fontWeight: '500' },
     metricValue: {
-      fontSize: 32,
+      fontSize: 30,
       fontWeight: 'bold',
-      color: '#1A202C',
+      color: theme.textPrimary,
       marginTop: 5,
     },
     locationMetricValue: {
@@ -142,11 +164,14 @@ export function opratorStyles(viewport?: DashboardViewport) {
       flexWrap: 'wrap',
       marginTop: 8,
       justifyContent: 'space-between',
+      gap: 8,
     },
     locationCell: {
       width: '48%',
-      backgroundColor: 'rgba(59,89,184,0.08)',
+      backgroundColor: theme.panelSoft,
       borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.border,
       paddingVertical: 8,
       paddingHorizontal: 10,
       marginBottom: 8,
@@ -155,17 +180,24 @@ export function opratorStyles(viewport?: DashboardViewport) {
     },
     locationName: {
       fontSize: 12,
-      color: '#334155',
+      color: theme.textSecondary,
       fontWeight: '600',
     },
     locationCount: {
       fontSize: 18,
-      color: '#1E3A8A',
+      color: theme.accentSuccess,
       fontWeight: '800',
       marginTop: 4,
     },
 
-    assetsSection: { marginBottom: 20 },
+    assetsSection: {
+      marginBottom: 18,
+      backgroundColor: theme.panelMuted,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 14,
+    },
     dashboardTwoColumnRow: {
       flexDirection: 'column',
       gap: 16,
@@ -185,13 +217,13 @@ export function opratorStyles(viewport?: DashboardViewport) {
     sectionTitle: {
       fontSize: 18,
       fontWeight: 'bold',
-      color: globalColors.textTitle,
-      marginBottom: 15,
+      color: theme.textPrimary,
+      marginBottom: 12,
     },
     subSectionTitle: {
       fontSize: 15,
       fontWeight: '700',
-      color: globalColors.textSecondary,
+      color: theme.textSecondary,
       marginBottom: 10,
     },
     notificationsHeaderRow: {
@@ -219,27 +251,29 @@ export function opratorStyles(viewport?: DashboardViewport) {
     assetItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: globalColors.surfaceGlassStrong,
+      backgroundColor: theme.panelSoft,
       borderRadius: 12,
-      padding: 15,
+      padding: 14,
       marginBottom: 10,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     repliedText: {
       marginTop: 5,
       fontSize: 13,
-      color: '#0369a1',
-      backgroundColor: '#e0f2fe',
+      color: theme.accent,
+      backgroundColor: theme.panelSoft,
       padding: 5,
       borderRadius: 4,
     },
     replyButton: {
-      backgroundColor: globalColors.brandBlue,
+      backgroundColor: theme.accent,
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 6,
     },
     replyButtonText: {
-      color: globalColors.textInverse,
+      color: theme.white,
       fontWeight: 'bold',
       fontSize: 12,
     },
@@ -248,14 +282,16 @@ export function opratorStyles(viewport?: DashboardViewport) {
       width: 40,
       height: 40,
       borderRadius: 10,
-      backgroundColor: globalColors.surfaceGlassLight,
+      backgroundColor: theme.panelMuted,
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 15,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
 
-    assetName: { fontSize: 15, fontWeight: '600', color: globalColors.textBody },
-    assetDueDate: { fontSize: 14, color: globalColors.textSecondary, fontWeight: '500' },
+    assetName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+    assetDueDate: { fontSize: 14, color: theme.textSecondary, fontWeight: '500' },
 
     returnButton: {
       paddingVertical: 18,
@@ -263,7 +299,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
       alignItems: 'center',
     },
     returnButtonText: {
-      color: globalColors.textInverse,
+      color: theme.white,
       fontSize: 16,
       fontWeight: 'bold',
     },
@@ -274,7 +310,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
       alignItems: 'center',
     },
     returnButtonCompactText: {
-      color: globalColors.textInverse,
+      color: theme.white,
       fontSize: 12,
       fontWeight: '700',
       letterSpacing: 0.3,
@@ -282,44 +318,46 @@ export function opratorStyles(viewport?: DashboardViewport) {
     showMoreButton: {
       marginTop: 6,
       alignSelf: 'flex-start',
-      backgroundColor: globalColors.surfaceGlass,
+      backgroundColor: theme.panelSoft,
       borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.border,
       paddingVertical: 6,
       paddingHorizontal: 10,
     },
     showMoreText: {
-      color: globalColors.textSecondary,
+      color: theme.textSecondary,
       fontSize: 12,
       fontWeight: '700',
     },
     noItemsText: {
-      color: globalColors.textInverse,
+      color: theme.textSecondary,
       marginTop: 10,
       fontStyle: 'italic',
     },
     notificationItem: {
-      flexDirection: 'row', // Align icon, text, and button horizontally
-      alignItems: 'center', // Center items vertically
+      flexDirection: 'row',
+      alignItems: 'center',
       padding: 12,
       borderRadius: 12,
       marginBottom: 10,
-      backgroundColor: '#f0f9ff',
+      backgroundColor: theme.panelSoft,
       borderWidth: 1,
-      borderColor: '#bae6fd',
+      borderColor: theme.border,
     },
     notificationContent: {
-      flex: 1, // Take up remaining space so button stays on the right
+      flex: 1,
       marginLeft: 10,
       marginRight: 10,
     },
     notificationText: {
       fontSize: 14,
-      color: globalColors.textSecondary,
+      color: theme.textSecondary,
     },
     notificationReason: {
       fontSize: 15,
       fontWeight: '600',
-      color: globalColors.textPrimary,
+      color: theme.textPrimary,
       marginTop: 4,
     },
   });

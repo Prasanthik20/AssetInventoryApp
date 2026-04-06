@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, Alert, TextInput, useWindowDimensions, Modal } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, TextInput, useWindowDimensions, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -10,6 +10,8 @@ import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
 import assetStyles from './asset.styles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { globalColors } from '../../styles/globalStyles';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 
 type AssetFullDetailsRouteProp = RouteProp<
@@ -17,15 +19,15 @@ type AssetFullDetailsRouteProp = RouteProp<
     'AssetFullDetails'
 >;
 const iconMap: any = {
-    truck: <Feather name="truck" size={16} color="#222" />,
-    layers: <Feather name="layers" size={16} color="#222" />,
-    "check-circle": <Feather name="check-circle" size={16} color="#222" />,
-    archive: <MaterialCommunityIcons name="archive" size={16} color="#222" />,
-    hash: <MaterialCommunityIcons name="pound" size={16} color="#222" />,
-    dollar: <FontAwesome name="dollar" size={16} color="#222" />,
-    "map-pin": <Feather name="map-pin" size={16} color="#222" />,
-    "user-check": <Feather name="user-check" size={16} color="#222" />,
-    calendar: <Feather name="calendar" size={16} color="#222" />,
+    truck: <Feather name="truck" size={16} color="#22D3EE" />,
+    layers: <Feather name="layers" size={16} color="#22D3EE" />,
+    "check-circle": <Feather name="check-circle" size={16} color="#22D3EE" />,
+    archive: <MaterialCommunityIcons name="archive" size={16} color="#22D3EE" />,
+    hash: <MaterialCommunityIcons name="pound" size={16} color="#22D3EE" />,
+    dollar: <FontAwesome name="dollar" size={16} color="#22D3EE" />,
+    "map-pin": <Feather name="map-pin" size={16} color="#22D3EE" />,
+    "user-check": <Feather name="user-check" size={16} color="#22D3EE" />,
+    calendar: <Feather name="calendar" size={16} color="#22D3EE" />,
 };
 
 type AssigneeOption = {
@@ -47,7 +49,7 @@ const FieldPicker = ({
         <Text style={[styles.inlinePickerText, !value && styles.inlinePickerPlaceholder]}>
             {value || placeholder}
         </Text>
-        <Ionicons name="chevron-down" size={16} color="#555" />
+        <Ionicons name="chevron-down" size={16} color="#A9C6E4" />
     </TouchableOpacity>
 );
 const DisplayField = ({ label, value, icon, children, editable, onChangeText }: { 
@@ -71,7 +73,7 @@ const DisplayField = ({ label, value, icon, children, editable, onChangeText }: 
                     value={value}
                     onChangeText={onChangeText}
                     placeholder={label}
-                    placeholderTextColor="#999"
+                    placeholderTextColor="#7FA2C8"
                 />
             ) : (
                 children || <Text style={styles.valueText}>{value}</Text>
@@ -136,7 +138,7 @@ const toPersistentDataUrl = async (uri: string, mimeType?: string): Promise<stri
 const AssetFullDetails: React.FC = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<AssetFullDetailsRouteProp>();
-    const { categories, statuses } = useAssetMeta();
+    const { statuses, categories } = useAssetMeta();
     const { asset } = route.params;
     const startInEditMode = route.params?.startInEditMode;
     const isAssignedCardEdit = Boolean(startInEditMode);
@@ -167,6 +169,20 @@ const AssetFullDetails: React.FC = () => {
     const [showCategoryPicker, setShowCategoryPicker] = useState(false);
     const [showAssigneePicker, setShowAssigneePicker] = useState(false);
     const [assignableUsers, setAssignableUsers] = useState<AssigneeOption[]>([]);
+    const [snackbar, setSnackbar] = useState<{
+        visible: boolean;
+        message: string;
+        kind: 'success' | 'error' | 'info';
+    }>({ visible: false, message: '', kind: 'info' });
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        setSnackbar({ visible: true, message, kind });
+        timeoutRef.current = setTimeout(() => {
+            setSnackbar((prev) => ({ ...prev, visible: false }));
+        }, 3200);
+    };
 
     useEffect(() => {
         const loadAssigneeOptions = async () => {
@@ -228,7 +244,7 @@ const AssetFullDetails: React.FC = () => {
             const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
             
             if (!permissionResult.granted) {
-                Alert.alert("Permission Required", "Please allow access to your photo library.");
+                showSnackbar("Please allow access to your photo library.", 'error');
                 return;
             }
 
@@ -255,7 +271,7 @@ const AssetFullDetails: React.FC = () => {
             }
         } catch (error) {
             console.error("Error picking image:", error);
-            Alert.alert("Error", "Failed to select image");
+            showSnackbar("Failed to select image", 'error');
         }
     };
     
@@ -264,7 +280,7 @@ const AssetFullDetails: React.FC = () => {
             const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
             
             if (!permissionResult.granted) {
-                Alert.alert("Permission Required", "Please allow access to your photo library.");
+                showSnackbar("Please allow access to your photo library.", 'error');
                 return;
             }
 
@@ -291,14 +307,14 @@ const AssetFullDetails: React.FC = () => {
             }
         } catch (error) {
             console.error("Error picking barcode image:", error);
-            Alert.alert("Error", "Failed to select barcode image");
+            showSnackbar("Failed to select barcode image", 'error');
         }
     };
     
     const handleSaveAsset = async () => {
         try {
             if (!asset.id) {
-                Alert.alert("Error", "Asset ID is missing");
+                showSnackbar("Asset ID is missing", 'error');
                 return;
             }
 
@@ -310,7 +326,7 @@ const AssetFullDetails: React.FC = () => {
                 }
 
                 if (Object.keys(updateData).length === 0) {
-                    Alert.alert("No Changes", "No location update to save");
+                    showSnackbar("No location update to save", 'info');
                     setIsEditMode(false);
                     return;
                 }
@@ -321,7 +337,7 @@ const AssetFullDetails: React.FC = () => {
                 );
 
                 if (response.status === 200) {
-                    Alert.alert("Success", "Assigned asset location updated successfully");
+                    showSnackbar("Assigned asset location updated successfully", 'success');
                     setIsEditMode(false);
                     asset.location = location;
                 }
@@ -372,7 +388,7 @@ const AssetFullDetails: React.FC = () => {
 
             // Only send update if there are changes
             if (Object.keys(updateData).length === 0) {
-                Alert.alert("No Changes", "No updates to save");
+                showSnackbar("No updates to save", 'info');
                 setIsEditMode(false);
                 return;
             }
@@ -383,7 +399,7 @@ const AssetFullDetails: React.FC = () => {
             );
 
             if (response.status === 200) {
-                Alert.alert("Success", "Asset updated successfully");
+                showSnackbar("Asset updated successfully", 'success');
                 setIsEditMode(false);
                 // Update the asset object with new values
                 asset.assetName = assetName;
@@ -408,7 +424,7 @@ const AssetFullDetails: React.FC = () => {
         } catch (error: any) {
             console.error("Save Asset Error:", error);
             const errorMsg = error.response?.data?.message || "Failed to update asset";
-            Alert.alert("Error", errorMsg);
+            showSnackbar(errorMsg, 'error');
         }
     };
     
@@ -444,47 +460,12 @@ const AssetFullDetails: React.FC = () => {
         >
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.container}>
-                    {/* Left Decorative Panel */}
-                    {!isMobileLayout && (
-                    <LinearGradient
-                        colors={['rgba(93, 113, 200, 0.7)', 'rgba(59, 89, 184, 0.8)']}
-                        style={styles.leftPanel}
-                    >
-                         <TouchableOpacity 
-                            onPress={handleImageUpload}
-                            style={styles.imageUploadContainer}
-                            disabled={!isEditMode}
-                        >
-                            {photoURL ? (
-                                <View style={styles.imageWrapper}>
-                                    <Image
-                                        source={{ uri: photoURL }}
-                                        style={styles.leftPanelImage}
-                                    />
-                                    {isEditMode && (
-                                        <View style={styles.editOverlay}>
-                                            <Feather name="edit-2" size={24} color="#fff" />
-                                        </View>
-                                    )}
-                                </View>
-                            ) : (
-                                <View style={styles.uploadPlaceholder}>
-                                    <Feather name="upload" size={48} color="#fff" />
-                                    <Text style={styles.uploadText}>Upload Image</Text>
-                                </View>
-                            )}
-                        </TouchableOpacity> 
-                        <Text style={styles.leftPanelTitle}>ASSET DETAILS</Text>
-                        <Text style={styles.leftPanelSubtitle}>COMPREHENSIVE EQUIPMENT RECORD</Text>
-                        <Text style={styles.brandName}>ASSETFLOW PRO</Text>
-                    </LinearGradient>
-                    )}
                     {/* Right Details Panel */}
                     <View style={[styles.rightPanel, isMobileLayout && styles.mobileRightPanel]}>
                         {/* Header */}
                         <View style={styles.header}>
                             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                                <Ionicons name="arrow-back" size={24} color="#000000ff" />
+                                <Ionicons name="arrow-back" size={24} color="#E6F3FF" />
                             </TouchableOpacity>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <Text style={styles.headerTitle}>Asset Information</Text>
@@ -496,14 +477,14 @@ const AssetFullDetails: React.FC = () => {
                             </View>
                             {!isMobileLayout && (
                             <View style={styles.headerRight}>
-                                <Feather name="user" size={16} color="#333" />
+                                <Feather name="user" size={16} color="#A9C6E4" />
                                 {/* <Text style={styles.userText}>Supervisor</Text> */}
                                 {/* <Switch
                                     trackColor={{ false: "#E9E9EA", true: "#34C759" }}
                                     thumbColor={"#f4f3f4"} value={true}
                                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                                 /> */}
-                                <Feather name="settings" size={20} color="#333" style={{ marginLeft: 5 }} />
+                                <Feather name="settings" size={20} color="#A9C6E4" style={{ marginLeft: 5 }} />
                             </View>
                             )}  
                         </View>
@@ -578,26 +559,23 @@ const AssetFullDetails: React.FC = () => {
                                 </View>
 
                                 <View style={styles.formColumn}>
-                                    {/* Mobile Image Upload */}
-                                    {isMobileLayout && (
-                                        <TouchableOpacity 
-                                            onPress={handleImageUpload}
-                                            style={styles.mobileImageContainer}
-                                            disabled={!isEditMode}
-                                        >
-                                            {photoURL ? (
-                                                <Image
-                                                    source={{ uri: photoURL }}
-                                                    style={styles.mobileImage}
-                                                />
-                                            ) : (
-                                                <View style={styles.mobileUploadPlaceholder}>
-                                                    <Feather name="camera" size={32} color="#666" />
-                                                    <Text style={styles.mobileUploadText}>Add Photo</Text>
-                                                </View>
-                                            )}
-                                        </TouchableOpacity>
-                                    )}
+                                    <TouchableOpacity 
+                                        onPress={handleImageUpload}
+                                        style={styles.mobileImageContainer}
+                                        disabled={!isEditMode}
+                                    >
+                                        {photoURL ? (
+                                            <Image
+                                                source={{ uri: photoURL }}
+                                                style={styles.mobileImage}
+                                            />
+                                        ) : (
+                                            <View style={styles.mobileUploadPlaceholder}>
+                                                <Feather name="camera" size={32} color="#A9C6E4" />
+                                                <Text style={styles.mobileUploadText}>Add Photo</Text>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
                                      <Text style={styles.barcodeText}>Asset ID: {asset.barcode || 'N/A'}</Text>
                                     {/* Barcode Image with Upload */}
                                     <TouchableOpacity 
@@ -609,7 +587,7 @@ const AssetFullDetails: React.FC = () => {
                                      <Image source={{ uri: barcodeURL }} style={styles.barcodeImage} />
                                         ) : (
                                             <View style={styles.barcodeUploadPlaceholder}>
-                                                <Feather name="maximize" size={24} color="#666" />
+                                                <Feather name="maximize" size={24} color="#A9C6E4" />
                                                 <Text style={styles.barcodeUploadText}>Upload Barcode</Text>
                                             </View>
                                         )}
@@ -657,7 +635,7 @@ const AssetFullDetails: React.FC = () => {
                                 style={isMobileLayout && { flex: 1 }}
                                 onPress={isEditMode ? handleSaveAsset : handleEditToggle}
                             >
-                                <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.saveButton}>
+                                <LinearGradient colors={['#0EA5E9', '#0F766E']} style={styles.saveButton}>
                                     <Text style={styles.buttonText}>
                                         {isEditMode
                                             ? 'SAVE CHANGES'
@@ -671,7 +649,7 @@ const AssetFullDetails: React.FC = () => {
                                 style={[styles.cancelButton, isMobileLayout && { flex: 1 }]} 
                                 onPress={isEditMode ? handleEditToggle : () => navigation.goBack()}
                             >
-                                <Text style={[styles.buttonText, { color: '#555' }]}>
+                                <Text style={[styles.buttonText, { color: '#A9C6E4' }]}> 
                                     {isEditMode ? 'Cancel' : 'Go Back'}
                                 </Text>
                         </TouchableOpacity>
@@ -788,6 +766,13 @@ const AssetFullDetails: React.FC = () => {
                         </View>
                     </View>
                 </Modal>
+                <AppSnackbar
+                    visible={snackbar.visible}
+                    message={snackbar.message}
+                    kind={snackbar.kind}
+                    onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+                    bottom={isMobileLayout ? 16 : 20}
+                />
             </SafeAreaView>
         </ImageBackground>
     );
@@ -798,29 +783,29 @@ const AssetFullDetails: React.FC = () => {
 const styles = StyleSheet.create({
     fieldContainer: { marginBottom: 12 },
     labelContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: 5 },
-    label: { fontSize: 12, color: '#000000ff', fontWeight: '500' }, // Light text
+    label: { fontSize: 12, color: globalColors.textBody, fontWeight: '500' }, // Light text
     fieldIcon: { marginRight: 6 },
     valueBox: {
-        backgroundColor: 'rgba(255, 255, 255, 0.7)', // Semi-transparent
+        backgroundColor: 'rgba(18, 45, 73, 0.86)',
         borderRadius: 8,
         paddingHorizontal: 15,
         paddingVertical: 10,
         borderWidth: 1,
-        borderColor: 'rgba(14, 1, 1, 0.8)',
+        borderColor: 'rgba(159, 207, 255, 0.22)',
     },
     editableBox: {
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderColor: '#27B2C3',
+        backgroundColor: 'rgba(7, 24, 42, 0.9)',
+        borderColor: '#34D399',
         borderWidth: 2,
     },
      valueText: {
         fontSize: 14,
-        color: '#1A202C', // Dark text inside light boxes for contrast
+        color: '#E6F3FF',
         fontWeight: '500',
     },
     editableText: {
         fontSize: 14,
-        color: '#1A202C',
+        color: '#E6F3FF',
         fontWeight: '500',
         padding: 0,
         margin: 0,
@@ -832,15 +817,15 @@ const styles = StyleSheet.create({
     },
     inlinePickerText: {
         fontSize: 14,
-        color: '#1A202C',
+        color: '#E6F3FF',
         fontWeight: '500',
     },
     inlinePickerPlaceholder: {
-        color: '#6b7280',
+        color: '#A9C6E4',
     },
     pickerModalBackdrop: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.4)',
+        backgroundColor: globalColors.overlayDark,
         justifyContent: 'center',
         alignItems: 'center',
         padding: 16,
@@ -849,7 +834,7 @@ const styles = StyleSheet.create({
         width: '100%',
         maxWidth: 420,
         maxHeight: '70%',
-        backgroundColor: '#fff',
+        backgroundColor: 'rgba(7, 24, 42, 0.9)',
         borderRadius: 12,
         padding: 16,
     },
@@ -857,7 +842,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         marginBottom: 12,
-        color: '#111827',
+        color: '#E6F3FF',
     },
     pickerList: {
         maxHeight: 320,
@@ -865,11 +850,11 @@ const styles = StyleSheet.create({
     pickerModalItem: {
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#f1f5f9',
+        borderBottomColor: 'rgba(159, 207, 255, 0.22)',
     },
     pickerModalItemText: {
         fontSize: 14,
-        color: '#1f2937',
+        color: '#E6F3FF',
     },
     pickerModalCloseBtn: {
         marginTop: 12,
@@ -877,10 +862,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 8,
-        backgroundColor: '#e2e8f0',
+        backgroundColor: 'rgba(18, 45, 73, 0.86)',
     },
     pickerModalCloseText: {
-        color: '#334155',
+        color: '#E6F3FF',
         fontWeight: '600',
     },
 });

@@ -1,0 +1,43 @@
+export const colors = {
+  primary: '#3B59B8',
+  secondary: '#5A67D8',
+  accent: '#27B2C3',
+  success: '#28A745',
+  warning: '#F59E0B',
+  danger: '#DC3545',
+  background: '#F3F4F8',
+  surface: '#FFFFFF',
+  card: '#FFFFFF',
+  border: '#E2E8F0',
+  textPrimary: '#0F172A',
+  textSecondary: '#334155',
+  textMuted: '#64748B',
+  white: '#FFFFFF',
+  black: '#000000',
+  overlay: 'rgba(15, 23, 42, 0.5)',
+  overlaySoft: 'rgba(61, 138, 233, 0.4)',
+  overlayStrong: 'rgba(60, 60, 80, 0.7)',
+} as const;
+
+export const darkColors = {
+  primary: '#7AA2FF',
+  secondary: '#9AA7FF',
+  accent: '#5AD5E0',
+  success: '#4ADE80',
+  warning: '#FBBF24',
+  danger: '#F87171',
+  background: '#0F172A',
+  surface: '#111827',
+  card: '#1F2937',
+  border: '#334155',
+  textPrimary: '#F8FAFC',
+  textSecondary: '#CBD5E1',
+  textMuted: '#94A3B8',
+  white: '#FFFFFF',
+  black: '#000000',
+  overlay: 'rgba(15, 23, 42, 0.72)',
+  overlaySoft: 'rgba(15, 23, 42, 0.4)',
+  overlayStrong: 'rgba(15, 23, 42, 0.7)',
+} as const;
+
+export type ThemeColors = typeof colors;

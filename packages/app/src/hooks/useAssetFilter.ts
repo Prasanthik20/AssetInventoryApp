@@ -12,6 +12,7 @@ export const useAssetFilter = (assets: Asset[]) => {
     return assets.filter((asset) => {
       const name = asset.assetName?.toLowerCase() || "";
       const serial = asset.serialNumber?.toLowerCase() || "";
+      const category = String(asset.category || "").toLowerCase();
       const location = asset.location?.toLowerCase() || "";
       const status = asset.status?.toLowerCase() || "";
       const assignedTo = asset.assignedTo?.toLowerCase() || "";
@@ -26,9 +27,9 @@ export const useAssetFilter = (assets: Asset[]) => {
         location.includes(search) ||
         assignedTo.includes(search);
 
-      // 2. Name/Category Logic (Changed from === to .includes)
+      // 2. Category Logic
       const matchesName =
-        selectedName === "" || name.includes(nameFilter);
+        selectedName === "" || category.includes(nameFilter);
 
       // 3. Location Logic
       const matchesLocation =

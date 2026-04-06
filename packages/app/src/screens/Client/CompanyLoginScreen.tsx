@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   ImageBackground,
   StyleSheet,
   KeyboardAvoidingView,
-  Alert,
   ScrollView,
   Platform,
   useWindowDimensions,
@@ -22,6 +21,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import axios from 'axios';
 import { baseURL, RootStackParamList } from '../../navigation/types';
 import { Feather } from '@expo/vector-icons';
+import { globalColors } from '../../styles/globalStyles';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 type CompanyLoginNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -40,10 +41,24 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setSnackbar({ visible: true, message, kind });
+    timeoutRef.current = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 3000);
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password.');
+      showSnackbar('Please enter both email and password.', 'error');
       return;
     }
 
@@ -55,14 +70,14 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
 
       await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
 
-      Alert.alert('Login Successful', `Welcome!`);
+      showSnackbar('Login successful. Welcome!', 'success');
 
       setUser(response.data.user); // 🔥 This switches stack automatically
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
-        Alert.alert('Login Failed', error.response.data.message);
+        showSnackbar(error.response.data.message || 'Login failed.', 'error');
       } else {
-        Alert.alert('Connection Error', 'Could not connect to server.');
+        showSnackbar('Could not connect to server.', 'error');
       }
     }
   };
@@ -145,7 +160,7 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                 <TextInput
                   style={styles.input}
                   placeholder="Email"
-                  placeholderTextColor="#888"
+                  placeholderTextColor="#7FA2C8"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={email}
@@ -157,10 +172,10 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                     style={[
                       styles.input,
                       styles.passwordInput,
-                      { color: '#000' },
+                      { color: '#E6F3FF' },
                     ]}
                     placeholder="Password"
-                    placeholderTextColor="#888"
+                    placeholderTextColor="#7FA2C8"
                     secureTextEntry={!showPassword}
                     value={password}
                     onChangeText={setPassword}
@@ -173,7 +188,7 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                     <Feather
                       name={showPassword ? 'eye-off' : 'eye'}
                       size={18}
-                      color="#475569"
+                      color="#A9C6E4"
                     />
                   </TouchableOpacity>
                 </View>
@@ -191,7 +206,7 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                   onPress={handleLogin}
                 >
                   <LinearGradient
-                    colors={['#00c6ff', '#0072ff']}
+                    colors={['#0EA5E9', '#0F766E']}
                     style={styles.buttonGradient}
                   >
                     <Text style={styles.loginText}>LOG IN</Text>
@@ -204,7 +219,7 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                 >
                   <Text style={styles.linkText}>
                     Login as{' '}
-                    <Text style={{ fontWeight: 'bold', color: '#0072ff' }}>
+                    <Text style={{ fontWeight: 'bold', color: '#22D3EE' }}>
                       Super Admin
                     </Text>
                   </Text>
@@ -222,6 +237,13 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      <AppSnackbar
+        visible={snackbar.visible}
+        message={snackbar.message}
+        kind={snackbar.kind}
+        onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+        bottom={isMobileLayout ? 16 : 20}
+      />
     </ImageBackground>
   );
 }
@@ -235,7 +257,7 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    backgroundColor: 'rgba(61, 138, 233, 0.4)',
+    backgroundColor: '#071425',
   },
   loginContainer: {
     flexDirection: 'row',
@@ -243,9 +265,11 @@ const styles = StyleSheet.create({
     minHeight: 550,
     alignSelf: 'center',
     maxWidth: 1000,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(7, 24, 42, 0.84)',
     borderRadius: 30,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     // Add vertical margin so it doesn't touch screen edges on small phones
     marginVertical: 40,
     elevation: 10,
@@ -261,6 +285,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+    backgroundColor: 'rgba(18, 45, 73, 0.7)',
   },
   leftPanelMobile: {
     flex: 0,
@@ -275,7 +300,7 @@ const styles = StyleSheet.create({
   },
   leftTitle: {
     fontSize: 26,
-    color: '#1A202C',
+    color: '#E6F3FF',
     fontWeight: 'bold',
     textAlign: 'center',
     letterSpacing: 1,
@@ -285,13 +310,13 @@ const styles = StyleSheet.create({
   },
   leftSubtitle: {
     fontSize: 16,
-    color: '#64748b',
+    color: '#A9C6E4',
     marginTop: 8,
     fontWeight: '500',
   },
   rightPanel: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(7, 24, 42, 0.92)',
     padding: 50,
     justifyContent: 'center',
   },
@@ -313,7 +338,7 @@ const styles = StyleSheet.create({
     height: 50,
   },
   welcome: {
-    color: '#1A202C',
+    color: '#E6F3FF',
     fontSize: 24,
     fontWeight: '600',
   },
@@ -321,17 +346,18 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   signInText: {
-    color: '#4A5568',
+    color: '#A9C6E4',
     fontSize: 15,
     marginTop: 2,
   },
   input: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'rgba(18, 45, 73, 0.86)',
     borderRadius: 12,
     padding: 16,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: 'rgba(159, 207, 255, 0.22)',
+    color: '#E6F3FF',
   },
   passwordFieldContainer: {
     position: 'relative',
@@ -356,13 +382,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loginText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
   linkText: {
     textAlign: 'center',
-    color: '#4A5568',
+    color: '#A9C6E4',
     marginTop: 0,
   },
   platformIcons: {
@@ -371,7 +397,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   platformText: {
-    color: '#4A5568',
+    color: '#A9C6E4',
     fontSize: 14,
   },
   forgotPasswordContainer: {
@@ -379,7 +405,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   forgotPasswordText: {
-    color: '#0072ff',
+    color: '#22D3EE',
     fontWeight: '500',
     fontSize: 14,
   },

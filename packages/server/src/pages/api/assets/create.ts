@@ -61,76 +61,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!statusRes.rows.length) return res.status(400).json({ message: "Invalid status" });
     const statusId = statusRes.rows[0].id;
 
-    // 3. Check if asset already exists (by id, assetId, or serialNumber)
+    // 3. Create endpoint should fail if serial number already exists.
+    const serialNumberRes = await query(
+      `SELECT id FROM "Asset_Details" WHERE "serial_no" = $1 LIMIT 1`,
+      [serialNumber]
+    );
+    if (serialNumberRes.rows.length > 0) {
+      return res.status(409).json({
+        message: "Serial number already exists",
+      });
+    }
+
+    // 4. Also block if caller passes an existing id/assetId to create route.
     const existingAssetId = id || payloadAssetId;
-    let existingAsset = null;
-    
     if (existingAssetId) {
-      const existingRes = await query(
+      const existingByIdRes = await query(
         `SELECT id FROM "Asset_Details" WHERE id = $1 OR "asset_Id" = $2 LIMIT 1`,
         [existingAssetId, String(existingAssetId)]
       );
-      existingAsset = existingRes.rows[0];
-    } else {
-      const existingRes = await query(
-        `SELECT id FROM "Asset_Details" WHERE "serial_no" = $1 LIMIT 1`,
-        [serialNumber]
-      );
-      existingAsset = existingRes.rows[0];
-    }
-
-    // If asset exists, update; otherwise, insert
-    if (existingAsset) {
-      const assetId = existingAsset.id;
-      const assetIdStr = assetId.toString();
-
-      // UPDATE Asset_Details
-      await query("BEGIN", []);
-      
-      await query(
-        `UPDATE "Asset_Details" 
-        SET name = $1, "categoryId" = $2, "model_no" = $3, "serial_no" = $4, 
-            "purchase_date" = $5, "warranty_expiry" = $6, price = $7, location = $8, 
-            "status_id" = $9, "photoURL" = $10, "barcodeURL" = $11, 
-            assigned_by = $12, assigned_to = $13
-        WHERE id = $14`,
-        [
-          assetName, categoryId, modelNumber || null, serialNumber,
-          purchaseDate || null, warrantyExpiry || null, price || null, location || null,
-          statusId, photoURL || null, barcodeURL || barcode || null,
-          assignedByNum, assignedToNum, assetId
-        ]
-      );
-
-      // Update or create assignment if details provided
-      if (operatorIdNum && senderIdNum && receiverIdNum) {
-        await query(
-          `INSERT INTO "Asset_Assignments" 
-          ("assetId", "operator_employeeId", "supervisor_employeeId", "expected_return_date")
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT ("assetId") DO UPDATE 
-          SET "operator_employeeId" = $2, "supervisor_employeeId" = $3, "expected_return_date" = $4`,
-          [assetId, operatorIdNum, senderIdNum || receiverIdNum, expectedReturnDate || null]
-        );
-      }
-
-      await query("COMMIT", []);
-
-      return res.status(200).json({
-        message: "Asset updated successfully",
-        asset: {
-          id: assetId,
-          assetId: assetIdStr,
-          assetName,
-          serialNumber,
-          category,
-          status,
-          assignedBy: assignedByNum,
-          assignedTo: assignedToNum,
-          photoURL: photoURL || null,
-          barcodeURL: barcodeURL || barcode || null
-        }
+      if (existingByIdRes.rows.length > 0) {
+      return res.status(409).json({
+        message: "Asset already exists. Use edit/update flow instead.",
       });
+      }
     }
 
     // Asset doesn't exist, so INSERT new asset

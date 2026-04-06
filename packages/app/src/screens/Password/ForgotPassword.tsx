@@ -1,11 +1,10 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
     View,
     Text,
     TextInput,
     TouchableOpacity,
     StyleSheet,
-    Alert,
     Image,
     SafeAreaView,
     ActivityIndicator,
@@ -21,6 +20,7 @@ import { baseURL, RootStackParamList } from "../../navigation/types";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from '@expo/vector-icons';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 type ForgotPasswordNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -40,15 +40,29 @@ export default function ForgotPasswordScreen() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [successMessage, setSuccessMessage] = useState("");
     const [loading, setLoading] = useState(false);
+    const [snackbar, setSnackbar] = useState<{
+        visible: boolean;
+        message: string;
+        kind: 'success' | 'error' | 'info';
+    }>({ visible: false, message: '', kind: 'info' });
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        setSnackbar({ visible: true, message, kind });
+        timeoutRef.current = setTimeout(() => {
+            setSnackbar((prev) => ({ ...prev, visible: false }));
+        }, 3000);
+    };
 
     const handleChangePassword = async () => {
         if (!email || !newPassword || !confirmPassword) {
-            Alert.alert("Error", "All fields are required.");
+            showSnackbar("All fields are required.", 'error');
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            Alert.alert("Error", "Passwords do not match.");
+            showSnackbar("Passwords do not match.", 'error');
             return;
         }
 
@@ -65,18 +79,16 @@ export default function ForgotPasswordScreen() {
             );
 
             setSuccessMessage("Password updated successfully! Redirecting...");
+            showSnackbar("Password updated successfully! Redirecting...", 'success');
 
             setTimeout(() => {
                 navigation.replace("CompanyLogin");
             }, 1500);
         } catch (error: any) {
             if (axios.isAxiosError(error) && error.response) {
-                Alert.alert(
-                    "Error",
-                    error.response.data.message || "Request failed."
-                );
+                showSnackbar(error.response.data.message || "Request failed.", 'error');
             } else {
-                Alert.alert("Error", "Server connection failed.");
+                showSnackbar("Server connection failed.", 'error');
             }
         } finally {
             setLoading(false);
@@ -211,6 +223,13 @@ export default function ForgotPasswordScreen() {
                     </ScrollView>
                 </KeyboardAvoidingView>
             </SafeAreaView>
+            <AppSnackbar
+                visible={snackbar.visible}
+                message={snackbar.message}
+                kind={snackbar.kind}
+                onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+                bottom={isMobileLayout ? 16 : 20}
+            />
         </ImageBackground>
     );
 }
@@ -224,7 +243,7 @@ const styles = StyleSheet.create({
 
   safeArea: {
     flex: 1,
-    backgroundColor: "rgba(61, 138, 233, 0.4)"
+    backgroundColor: "globalColors.backgroundSoft"
   },
    loginContainer: {
        flexDirection: 'row', 

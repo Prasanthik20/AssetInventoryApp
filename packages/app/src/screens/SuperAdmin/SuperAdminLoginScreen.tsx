@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,13 +9,13 @@ import {
   ImageBackground,
   SafeAreaView,
   Platform,
-  Alert,
   useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Checkbox from "expo-checkbox";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from '@expo/vector-icons';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -26,6 +26,20 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setSnackbar({ visible: true, message, kind });
+    timeoutRef.current = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 3000);
+  };
 
   // ✅ Mock credentials
   const mockAdmin = {
@@ -39,7 +53,7 @@ export default function LoginScreen() {
     if (email === mockAdmin.email && password === mockAdmin.password) {
       navigation.navigate("SuperAdminDashboard" as never);
     } else {
-      Alert.alert("Invalid Credentials", "Please check your email or password");
+      showSnackbar("Please check your email or password", 'error');
     }
   };
 
@@ -70,7 +84,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Email"
-            placeholderTextColor="#333"
+            placeholderTextColor="#7FA2C8"
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
@@ -81,7 +95,7 @@ export default function LoginScreen() {
             <TextInput
               style={[styles.input, styles.passwordInput]}
               placeholder="Password"
-              placeholderTextColor="#333"
+              placeholderTextColor="#7FA2C8"
               secureTextEntry={!showPassword}
               value={password}
               onChangeText={setPassword}
@@ -93,19 +107,19 @@ export default function LoginScreen() {
               <Feather
                 name={showPassword ? 'eye-off' : 'eye'}
                 size={18}
-                color="#1f2937"
+                color="#A9C6E4"
               />
             </TouchableOpacity>
           </View>
 
           <View style={styles.rememberRow}>
-            <Checkbox value={remember} onValueChange={setRemember} color="#4A00E0" />
+            <Checkbox value={remember} onValueChange={setRemember} color="#22D3EE" />
             <Text style={styles.rememberText}>Remember Me</Text>
           </View>
 
           <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
             <LinearGradient
-              colors={["#00c6ff", "#0072ff"]}
+              colors={["#0EA5E9", "#0F766E"]}
               style={styles.buttonGradient}
             >
               <Text style={styles.loginText}>LOG IN</Text>
@@ -117,7 +131,7 @@ export default function LoginScreen() {
                 style={{ marginTop: 10 }}
                 onPress={() => navigation.navigate("CompanyLogin" as never)}
             >
-            <Text style={{ color: "#000000ff", textAlign: "center" }}>
+            <Text style={{ color: "#A9C6E4", textAlign: "center" }}>
                 Go to Users Login →
             </Text>
           </TouchableOpacity>
@@ -131,13 +145,19 @@ export default function LoginScreen() {
           </Text> */}
         </View>
       </SafeAreaView>
+      <AppSnackbar
+        visible={snackbar.visible}
+        message={snackbar.message}
+        kind={snackbar.kind}
+        onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+        bottom={isMobileLayout ? 16 : 20}
+      />
     </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   backgroundImage: {
-    //flex: 1,
     width: "100%",
     height: "100%",
     justifyContent: "center",
@@ -158,24 +178,28 @@ const styles = StyleSheet.create({
   },
   leftCard: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(18, 45, 73, 0.82)",
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
     padding: 25,
     margin: 10,
-    shadowColor: "#000",
+    shadowColor: "#001325",
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 6,
   },
   rightCard: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(7, 24, 42, 0.9)",
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     borderRadius: 20,
     padding: 30,
     margin: 10,
-    shadowColor: "#000",
+    shadowColor: "#001325",
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 6,
@@ -187,27 +211,29 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    color: "#000000ff",
+    color: "#E6F3FF",
     fontWeight: "bold",
   },
   subtitle: {
     fontSize: 16,
-    color: "#0f0101ff",
+    color: "#A9C6E4",
     marginTop: 5,
   },
   header: {
-    color: "#000000ff",
+    color: "#E6F3FF",
     fontSize: 22,
     fontWeight: "600",
     marginBottom: 25,
     textAlign: "center",
   },
   input: {
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(18, 45, 73, 0.86)",
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     borderRadius: 12,
     padding: 12,
     marginBottom: 15,
-    color: "#000000ff",
+    color: "#E6F3FF",
   },
   passwordFieldContainer: {
     position: 'relative',
@@ -228,7 +254,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   rememberText: {
-    color: "#000000ff",
+    color: "#A9C6E4",
     marginLeft: 8,
   },
   loginButton: {
@@ -242,7 +268,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   loginText: {
-    color: "#000000ff",
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "bold",
   },
@@ -251,7 +277,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   platformText: {
-    color: "#000000ff",
+    color: "#A9C6E4",
     fontSize: 14,
     opacity: 0.9,
   },

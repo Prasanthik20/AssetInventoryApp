@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert, Platform,ImageBackground, ScrollView, Image, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Platform,ImageBackground, ScrollView, Image, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -8,6 +8,8 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
+import { globalColors } from '../..//styles/globalStyles';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
@@ -30,10 +32,22 @@ const ReturnAssetScreen: React.FC = () => {
     const [assetBarcodeLoadingMap, setAssetBarcodeLoadingMap] = useState<Record<string, boolean>>({});
     const [photoLoading, setPhotoLoading] = useState(false);
     const [barcodeLoading, setBarcodeLoading] = useState(false);
+    const [snackbar, setSnackbar] = useState<{
+        visible: boolean;
+        message: string;
+        kind: 'success' | 'error' | 'info';
+    }>({ visible: false, message: '', kind: 'info' });
 
     const toAssetId = (value: unknown) => Number(value);
     const toAssetKey = (value: unknown) => String(toAssetId(value));
     const toAssignmentId = (value: unknown) => Number(value);
+
+    const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+        setSnackbar({ visible: true, message, kind });
+        setTimeout(() => {
+            setSnackbar((prev) => ({ ...prev, visible: false }));
+        }, 3200);
+    };
 
     // --- Modal Handler Functions ---
     const handleOpenModal = (assetName: string) => {
@@ -43,7 +57,7 @@ const ReturnAssetScreen: React.FC = () => {
     const handleCloseModal = () => setModalVisible(false);
     const handleSubmitNotification = (reason: string) => {
         console.log(`Reason for overdue asset "${selectedOverdueAsset}": ${reason}`);
-        Alert.alert("Notification Sent", "Your supervisor has been notified.");
+        showSnackbar("Your supervisor has been notified.", 'success');
         handleCloseModal();
     };
 
@@ -70,7 +84,7 @@ const ReturnAssetScreen: React.FC = () => {
 
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Camera permission is required to scan QR/barcode.');
+                showSnackbar('Camera permission is required to scan QR/barcode.', 'error');
                 if (hasTargetAsset && targetKey) {
                     setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
                 } else {
@@ -93,18 +107,18 @@ const ReturnAssetScreen: React.FC = () => {
                     const barcodeData = `data:image/jpeg;base64,${base64}`;
                     if (hasTargetAsset && targetKey) {
                         setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: barcodeData }));
-                        Alert.alert('✅ Barcode Captured', 'Captured barcode saved for selected asset.');
+                        showSnackbar('Captured barcode saved for selected asset.', 'success');
                     } else {
                         setBarcodeURL(barcodeData);
-                        Alert.alert('✅ Barcode Captured', 'Captured barcode image will be attached to the return.');
+                        showSnackbar('Captured barcode image will be attached to the return.', 'success');
                     }
                 } else {
-                    Alert.alert('Error', 'Failed to process captured image. Please try again.');
+                    showSnackbar('Failed to process captured image. Please try again.', 'error');
                 }
             }
         } catch (error) {
             console.error('Barcode camera error:', error);
-            Alert.alert('Error', 'Failed to open camera.');
+            showSnackbar('Failed to open camera.', 'error');
         } finally {
             if (hasTargetAsset && targetKey) {
                 setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
@@ -131,7 +145,7 @@ const ReturnAssetScreen: React.FC = () => {
             // Request permission
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Camera roll permission is required to upload photos.');
+                showSnackbar('Camera roll permission is required to upload photos.', 'error');
                 if (hasTargetAsset && targetKey) {
                     setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
                 } else {
@@ -157,18 +171,18 @@ const ReturnAssetScreen: React.FC = () => {
                     const photoURL = `data:image/jpeg;base64,${base64}`;
                     if (hasTargetAsset && targetKey) {
                         setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: photoURL }));
-                        Alert.alert('✅ Photo Selected', 'Photo saved for selected asset.');
+                        showSnackbar('Photo saved for selected asset.', 'success');
                     } else {
                         setPhoto(photoURL);
-                        Alert.alert('✅ Photo Selected', 'Photo will be attached to the return.');
+                        showSnackbar('Photo will be attached to the return.', 'success');
                     }
                 } else {
-                    Alert.alert('Error', 'Failed to process image. Please try again.');
+                    showSnackbar('Failed to process image. Please try again.', 'error');
                 }
             }
         } catch (error) {
             console.error('Photo picker error:', error);
-            Alert.alert('Error', 'Failed to open image library.');
+            showSnackbar('Failed to open image library.', 'error');
         } finally {
             if (hasTargetAsset && targetKey) {
                 setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
@@ -194,7 +208,7 @@ const ReturnAssetScreen: React.FC = () => {
 
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Camera roll permission is required to upload barcode image.');
+                showSnackbar('Camera roll permission is required to upload barcode image.', 'error');
                 if (hasTargetAsset && targetKey) {
                     setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
                 } else {
@@ -218,18 +232,18 @@ const ReturnAssetScreen: React.FC = () => {
                     const barcodeData = `data:image/jpeg;base64,${base64}`;
                     if (hasTargetAsset && targetKey) {
                         setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: barcodeData }));
-                        Alert.alert('✅ Barcode Selected', 'Barcode saved for selected asset.');
+                        showSnackbar('Barcode saved for selected asset.', 'success');
                     } else {
                         setBarcodeURL(barcodeData);
-                        Alert.alert('✅ Barcode Selected', 'Barcode image will be attached to the return.');
+                        showSnackbar('Barcode image will be attached to the return.', 'success');
                     }
                 } else {
-                    Alert.alert('Error', 'Failed to process barcode image. Please try again.');
+                    showSnackbar('Failed to process barcode image. Please try again.', 'error');
                 }
             }
         } catch (error) {
             console.error('Barcode picker error:', error);
-            Alert.alert('Error', 'Failed to open image library.');
+            showSnackbar('Failed to open image library.', 'error');
         } finally {
             if (hasTargetAsset && targetKey) {
                 setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
@@ -275,12 +289,12 @@ const ReturnAssetScreen: React.FC = () => {
 
     const handleReturn = async () => {
         if (!employeeId || isNaN(employeeId)) {
-            Alert.alert("Error", "Invalid operator employee ID.");
+            showSnackbar("Invalid operator employee ID.", 'error');
             return;
         }
 
         if (selectedAssets.length === 0) {
-            Alert.alert("No Assets Selected", "Please select at least one asset to return.");
+            showSnackbar("Please select at least one asset to return.", 'error');
             return;
         }
 
@@ -294,10 +308,7 @@ const ReturnAssetScreen: React.FC = () => {
             );
 
             if (missing.length > 0) {
-                Alert.alert(
-                    'Media Required',
-                    'Please upload both photo and barcode for each selected asset.'
-                );
+                showSnackbar('Please upload both photo and barcode for each selected asset.', 'error');
                 return;
             }
         }
@@ -326,29 +337,16 @@ const ReturnAssetScreen: React.FC = () => {
             console.log("RETURN RESPONSE 👉", response.data);
 
             if (response.status === 200) {
-            // Alert should be triggered here
-            Alert.alert(
-                "Success ✅",
-                "Assets returned successfully",
-                [
-                    { 
-                        text: "OK", 
-                        onPress: () => {
-                            // Small delay ensures DB is updated before Dashboard re-fetches
-                            setTimeout(() => navigation.navigate("OperatorDashboard", { refresh: Date.now() }), 500);
-                        } 
-                    }
-                ]
-            );
-            navigation.goBack();
-        }
+                showSnackbar("Assets returned successfully", 'success');
+                setTimeout(
+                    () => navigation.navigate("OperatorDashboard", { refresh: Date.now() }),
+                    500,
+                );
+                navigation.goBack();
+            }
         } catch (error: any) {
             console.error("Return asset error:", error?.response?.data || error.message);
-
-            Alert.alert(
-                "Error ❌",
-                error?.response?.data?.message || "Failed to return assets."
-            );
+            showSnackbar(error?.response?.data?.message || "Failed to return assets.", 'error');
         }
     };
 
@@ -369,7 +367,7 @@ const ReturnAssetScreen: React.FC = () => {
                 <Ionicons
                     name={isSelected ? 'checkbox' : 'checkbox-outline'}
                     size={24}
-                    color={isSelected ? '#3B59B8' : '#888'}
+                    color={isSelected ? '#34D399' : '#A9C6E4'}
                     style={styles.checkboxIcon}
                 />
 
@@ -397,7 +395,7 @@ const ReturnAssetScreen: React.FC = () => {
                             <Ionicons
                                 name="notifications-outline"
                                 size={16}
-                                color="#DC3545"
+                                color="#F97373"
                             />
                         </TouchableOpacity>
                     )}
@@ -419,7 +417,7 @@ const ReturnAssetScreen: React.FC = () => {
                     {/* Header */}
                     <View style={styles.header}>
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                            <Ionicons name="arrow-back" size={24} color="#1A202C" />
+                            <Ionicons name="arrow-back" size={24} color="#E6F3FF" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Select Assets to Return</Text>
                         <View style={{ width: 40 }} />
@@ -475,10 +473,10 @@ const ReturnAssetScreen: React.FC = () => {
                                                             disabled={isPhotoLoading}
                                                         >
                                                             {isPhotoLoading ? (
-                                                                <ActivityIndicator color="#4A5568" size="small" />
+                                                                <ActivityIndicator color="#A9C6E4" size="small" />
                                                             ) : (
                                                                 <>
-                                                                    <Feather name="camera" size={20} color="#4A5568" />
+                                                                    <Feather name="camera" size={20} color="#A9C6E4" />
                                                                     <Text style={styles.uploadButtonText}>
                                                                         {currentPhoto ? '✓ Photo Uploaded' : 'Upload Photo'}
                                                                     </Text>
@@ -491,10 +489,10 @@ const ReturnAssetScreen: React.FC = () => {
                                                             disabled={isBarcodeLoading}
                                                         >
                                                             {isBarcodeLoading ? (
-                                                                <ActivityIndicator color="#4A5568" size="small" />
+                                                                <ActivityIndicator color="#A9C6E4" size="small" />
                                                             ) : (
                                                                 <>
-                                                                    <MaterialCommunityIcons name="barcode-scan" size={20} color="#4A5568" />
+                                                                    <MaterialCommunityIcons name="barcode-scan" size={20} color="#A9C6E4" />
                                                                     <Text style={styles.uploadButtonText}>
                                                                         {currentBarcode ? '✓ Barcode Uploaded' : 'Scan/Upload Barcode'}
                                                                     </Text>
@@ -515,10 +513,10 @@ const ReturnAssetScreen: React.FC = () => {
                                             disabled={photoLoading}
                                         >
                                             {photoLoading ? (
-                                                <ActivityIndicator color="#4A5568" size="small" />
+                                                <ActivityIndicator color="#A9C6E4" size="small" />
                                             ) : (
                                                 <>
-                                                    <Feather name="camera" size={20} color="#4A5568" />
+                                                    <Feather name="camera" size={20} color="#A9C6E4" />
                                                     <Text style={styles.uploadButtonText}>
                                                         {photo ? '✓ Photo Uploaded' : 'Tap to upload a photo'}
                                                     </Text>
@@ -537,7 +535,7 @@ const ReturnAssetScreen: React.FC = () => {
                                                     style={styles.removePhotoButton}
                                                     onPress={() => {
                                                         setPhoto(null);
-                                                        Alert.alert('Removed', 'Photo has been removed.');
+                                                        showSnackbar('Photo has been removed.', 'info');
                                                     }}
                                                 >
                                                     <Ionicons name="close" size={20} color="#fff" />
@@ -552,10 +550,10 @@ const ReturnAssetScreen: React.FC = () => {
                                             disabled={barcodeLoading}
                                         >
                                             {barcodeLoading ? (
-                                                <ActivityIndicator color="#4A5568" size="small" />
+                                                <ActivityIndicator color="#A9C6E4" size="small" />
                                             ) : (
                                                 <>
-                                                    <MaterialCommunityIcons name="barcode" size={20} color="#4A5568" />
+                                                    <MaterialCommunityIcons name="barcode" size={20} color="#A9C6E4" />
                                                     <Text style={styles.uploadButtonText}>
                                                         {barcodeURL ? '✓ Barcode Uploaded' : 'Tap to upload barcode image'}
                                                     </Text>
@@ -574,7 +572,7 @@ const ReturnAssetScreen: React.FC = () => {
                                                     style={styles.removePhotoButton}
                                                     onPress={() => {
                                                         setBarcodeURL(null);
-                                                        Alert.alert('Removed', 'Barcode image has been removed.');
+                                                        showSnackbar('Barcode image has been removed.', 'info');
                                                     }}
                                                 >
                                                     <Ionicons name="close" size={20} color="#fff" />
@@ -593,12 +591,12 @@ const ReturnAssetScreen: React.FC = () => {
                             style={[styles.cancelButton, isMobileLayout && { flex: 1, marginRight: 10 }]} 
                             onPress={() => navigation.goBack()}
                         >
-                            <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
+                            <Text style={[styles.buttonText, { color: '#A9C6E4' }]}>Cancel</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
                             style={isMobileLayout && { flex: 2 }} 
                             onPress={handleReturn}>
-                            <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.returnButton}>
+                            <LinearGradient colors={['#0EA5E9', '#0F766E']} style={styles.returnButton}>
                                 <Text style={styles.buttonText}>
                                     Return ({selectedAssets.length})
                                 </Text>
@@ -613,6 +611,13 @@ const ReturnAssetScreen: React.FC = () => {
                     onSubmit={handleSubmitNotification}
                     assetName={selectedOverdueAsset}
                 />
+                <AppSnackbar
+                    visible={snackbar.visible}
+                    message={snackbar.message}
+                    kind={snackbar.kind}
+                    onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+                    bottom={isMobileLayout ? 16 : 20}
+                />
             </SafeAreaView>
         </ImageBackground>
     );
@@ -625,26 +630,28 @@ const styles = StyleSheet.create({
         width: "100%",
         height: "100%",
     },
-    safeArea: { flex: 1 ,backgroundColor: "rgba(61, 138, 233, 0.4)"},
+    safeArea: { flex: 1, backgroundColor: '#071425' },
     container: {
         flex: 1,
         margin: 20,
         borderRadius: 20,
         overflow: 'hidden',
-        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+        backgroundColor: 'rgba(7, 24, 42, 0.82)',
+        borderWidth: 1,
+        borderColor: 'rgba(159, 207, 255, 0.22)',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        backgroundColor: 'rgba(7, 24, 42, 0.9)',
         paddingVertical: 15,
         paddingHorizontal: 20,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.1)'
+        borderBottomColor: 'rgba(159, 207, 255, 0.22)'
     },
     backButton: { position: 'absolute', left: 20, marginTop : 20 },
-    headerTitle: { color: '#1A202C', fontSize: 20, fontWeight: 'bold', marginTop : 20 },
+    headerTitle: { color: '#E6F3FF', fontSize: 20, fontWeight: 'bold', marginTop : 20 },
     body: { flex: 1, 
         paddingHorizontal: Platform.OS !== 'web' ? 15 : 25,
         paddingTop: 15},
@@ -652,66 +659,66 @@ const styles = StyleSheet.create({
     formColumn: { flex: 1 },
     instructions: {
         fontSize: 15,
-        color: '#4A5568',
+        color: '#A9C6E4',
         marginBottom: 15,
         textAlign: 'center',
         lineHeight: 22,
     },
     helperText: {
         fontSize: 12,
-        color: '#4A5568',
+        color: '#A9C6E4',
         marginBottom: 10,
     },
     mediaCard: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'rgba(18, 45, 73, 0.86)',
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: 'rgba(159, 207, 255, 0.22)',
         padding: 10,
         marginBottom: 10,
     },
     mediaCardTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#1A202C',
+        color: '#E6F3FF',
         marginBottom: 8,
     },
     assetRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'rgba(18, 45, 73, 0.86)',
         borderRadius: 12,
         padding: 12, // Reduced padding for mobile
         marginBottom: 10,
         elevation: 2, // Added shadow for better separation
-        shadowColor: '#000',
+        shadowColor: '#001325',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 2,
     },
     assetRowSelected: {
-        borderColor: '#4A55A2',
-        backgroundColor: '#E9EAFE',
+        borderColor: '#34D399',
+        backgroundColor: 'rgba(52, 211, 153, 0.18)',
     },
     checkboxIcon: { marginRight: 15 },
     assetInfo: { flex: 1 },
     assetName: { fontSize: 15, 
         fontWeight: '600', 
-        color: '#1A202C',
+        color: '#E6F3FF',
         flexShrink: 1 },// Prevents pushing content off screen },
     statusActionContainer: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-    assetStatus: { fontSize: 14, color: '#4A5568', fontWeight: '500' },
-    assetStatusOverdue: { color: '#DC3545', fontWeight: 'bold' },
+    assetStatus: { fontSize: 14, color: '#A9C6E4', fontWeight: '500' },
+    assetStatusOverdue: { color: '#F97373', fontWeight: 'bold' },
     notifyButton: {
         marginLeft: 10,
         padding: 5,
     },
     label: {
         fontSize: 14,
-        color: '#2D3748',
+        color: '#A9C6E4',
         marginBottom: 8,
         fontWeight: '600',
     },
@@ -719,29 +726,29 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#4A55A2',
+        backgroundColor: '#0F766E',
         borderRadius: 10,
         paddingVertical: 14,
         marginBottom: 20,
     },
-    scanButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 10 },
+    scanButtonText: { color: globalColors.surfacePrimary, fontSize: 16, fontWeight: '600', marginLeft: 10 },
     uploadButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#EDF2F7',
+        backgroundColor: 'rgba(18, 45, 73, 0.86)',
         borderRadius: 10,
         paddingVertical: 14,
         borderWidth: 1,
-        borderColor: '#CBD5E0',
+        borderColor: 'rgba(159, 207, 255, 0.22)',
     },
-    uploadButtonText: { color: '#4A5568', fontSize: 15, fontWeight: '500', marginLeft: 10 },
+    uploadButtonText: { color: '#A9C6E4', fontSize: 15, fontWeight: '500', marginLeft: 10 },
     photoPreviewContainer: {
         position: 'relative',
         marginTop: 15,
         borderRadius: 10,
         overflow: 'hidden',
-        backgroundColor: '#F0F0F0',
+        backgroundColor: 'rgba(7, 24, 42, 0.92)',
     },
     photoPreview: {
         width: '100%',
@@ -763,9 +770,9 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
         alignItems: 'center',
         padding: 15,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'rgba(7, 24, 42, 0.9)',
         borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
+        borderTopColor: 'rgba(159, 207, 255, 0.22)',
     },
     returnButton: { paddingVertical: 14, // Taller for mobile touch
         paddingHorizontal: 20, 
@@ -774,9 +781,9 @@ const styles = StyleSheet.create({
     cancelButton: { paddingVertical: 14, 
         paddingHorizontal: 20, 
         borderRadius: 10, 
-        backgroundColor: '#E2E8F0',
+        backgroundColor: 'rgba(18, 45, 73, 0.86)',
         alignItems: 'center'},
-    buttonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+    buttonText: { color: globalColors.surfacePrimary, fontSize: 14, fontWeight: 'bold' },
 });
 
 export default ReturnAssetScreen;

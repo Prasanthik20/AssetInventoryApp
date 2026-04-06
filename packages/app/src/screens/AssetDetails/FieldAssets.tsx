@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,9 @@ import {
   ImageBackground,
   FlatList,
   TouchableOpacity,
-  TextInput,
-  Alert,
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import axios from 'axios';
 import { useNavigation, useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
@@ -21,6 +18,10 @@ import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import fieldStyles from './field.styles';
+import { globalColors } from '../../styles/globalStyles';
+import useAssetMeta from '../../hooks/useAssetMeta';
+import AssetFiltersBar from 'src/components/common/AssetFiltersBar';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 type FieldAssetsNavProp = StackNavigationProp<
   RootStackParamList,
@@ -49,10 +50,27 @@ const FieldAssets: React.FC = () => {
   const [isModalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationStats, setLocationStats] = useState<LocationStat[]>([]);
+  const { categories } = useAssetMeta();
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setSnackbar({ visible: true, message, kind });
+    timeoutRef.current = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 3200);
+  };
 
   // 1. New state for Category Filter
   const [selectedCategory, setSelectedCategory] = useState('');
-  const assetCategories = ['Battery', 'Antenna', 'Rover', 'Controller'];
+  const assetCategories = categories
+    .map((item) => String(item?.category || '').trim())
+    .filter(Boolean);
   const selectedEmployeeId = String(route.params?.employeeId || '').trim();
   const selectedUserName = String(route.params?.operatorName || '')
     .trim()
@@ -102,7 +120,7 @@ const FieldAssets: React.FC = () => {
 
     const filtered = userScopedAssets.filter(asset => {
       const categoryMatch = selectedCategory
-        ? asset.assetName
+        ? String(asset.category || '')
             ?.toLowerCase()
             .includes(selectedCategory.toLowerCase())
         : true;
@@ -175,7 +193,7 @@ const FieldAssets: React.FC = () => {
       setFilteredAssets(processed);
     } catch (err) {
       console.error('Error fetching assets:', err);
-      Alert.alert('Error', 'Failed to fetch assets.');
+      showSnackbar('Failed to fetch assets.', 'error');
     } finally {
       setLoading(false);
     }
@@ -239,15 +257,15 @@ const FieldAssets: React.FC = () => {
       );
 
       if (response.status === 200 || response.status === 201) {
-        Alert.alert('Success', 'Notification sent successfully!');
+        showSnackbar('Notification sent successfully!', 'success');
         handleCloseModal();
         fetchAssets();
       }
     } catch (error: any) {
       console.error('API Error:', error.response?.data || error.message);
-      Alert.alert(
-        'Error',
+      showSnackbar(
         error.response?.data?.message || 'Failed to send notification',
+        'error',
       );
     }
   };
@@ -260,7 +278,7 @@ const FieldAssets: React.FC = () => {
         <Ionicons
           name="business-outline"
           size={24}
-          color="#3B59B8"
+          color="#34D399"
           style={renderStyles.assetIcon}
         />
         <View style={renderStyles.assetInfo}>
@@ -327,55 +345,34 @@ const FieldAssets: React.FC = () => {
               onPress={() => navigation.goBack()}
               style={styles.backButton}
             >
-              <Ionicons name="arrow-back-outline" size={24} color="#212121" />
+              <Ionicons name="arrow-back-outline" size={24} color="#E6F3FF" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Field Assets</Text>
+            <Text style={styles.headerTitle}>Assets In Fields</Text>
             <View style={{ width: 40 }} />
           </View>
           {/* 3. Side-by-Side Search and Filter Row */}
-          <View
-            style={[
-              renderStyles.controlsRow,
-              isMobileLayout && {
-                flexDirection: 'column',
-                alignItems: 'stretch',
-              },
-            ]}
-          >
-            <View style={renderStyles.searchContainerInRow}>
-              <Feather name="search" size={18} color="#888" />
-              <TextInput
-                placeholder="Search..."
-                placeholderTextColor="#888"
-                style={renderStyles.searchInputInRow}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
-
-            <View
-              style={[
-                renderStyles.dropdownContainer,
-                isMobileLayout && { width: '100%' },
-              ]}
-            >
-              <Picker
-                selectedValue={selectedCategory}
-                onValueChange={itemValue => setSelectedCategory(itemValue)}
-                style={renderStyles.picker}
-              >
-                <Picker.Item label="All Assets" value="" />
-                {assetCategories.map(cat => (
-                  <Picker.Item key={cat} label={cat} value={cat} />
-                ))}
-              </Picker>
-            </View>
-          </View>
+          <AssetFiltersBar
+            isMobileLayout={isMobileLayout}
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search..."
+            showCategory
+            categoryValue={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            categoryOptions={assetCategories}
+            categoryAllLabel="All Assets"
+            containerStyle={renderStyles.controlsRow}
+            searchContainerStyle={renderStyles.searchContainerInRow}
+            searchInputStyle={renderStyles.searchInputInRow}
+            filtersContainerStyle={[renderStyles.dropdownContainer, isMobileLayout && { width: '100%' }]}
+            pickerWrapperStyle={renderStyles.dropdownContainer}
+            pickerStyle={renderStyles.picker}
+          />
 
           <View style={renderStyles.locationStatsCard}>
             <View style={renderStyles.locationStatsHeader}>
               <View style={renderStyles.locationStatsIconBg}>
-                <Feather name="map-pin" size={16} color="#3B59B8" />
+                <Feather name="map-pin" size={16} color="#22D3EE" />
               </View>
               <Text style={renderStyles.locationStatsTitle}>
                 Assets By Location
@@ -422,6 +419,13 @@ const FieldAssets: React.FC = () => {
               assetName={selectedAsset.assetName}
             />
           )}
+          <AppSnackbar
+            visible={snackbar.visible}
+            message={snackbar.message}
+            kind={snackbar.kind}
+            onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+            bottom={isMobileLayout ? 16 : 20}
+          />
         </View>
       </SafeAreaView>
     </ImageBackground>
@@ -438,22 +442,22 @@ const renderStyles = StyleSheet.create({
   assetName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#E6F3FF',
   },
   assetSubtext: {
     fontSize: 13,
-    color: '#777',
+    color: '#A9C6E4',
     marginTop: 2,
   },
   assetValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: globalColors.textBody,
   },
   
   overdueBadge: {
     marginTop: 5,
-    backgroundColor: '#ff4d4d',
+    backgroundColor: globalColors.brandRed,
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 3,
@@ -461,13 +465,13 @@ const renderStyles = StyleSheet.create({
   },
 
   overdueText: {
-    color: '#fff',
+    color: globalColors.surfacePrimary,
     fontSize: 12,
     fontWeight: '700',
   },
 
   notifyBtn: {
-    backgroundColor: '#3B59B8',
+    backgroundColor: globalColors.brandPrimary,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -476,15 +480,15 @@ const renderStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 8,
-    paddingVertical: 6, // Smaller padding
-    paddingHorizontal: 10, // Smaller padding
-    shadowColor: '#000',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    shadowColor: globalColors.overlayDark,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
   notifyButton: {
-    backgroundColor: '#FF4D4D',
+    backgroundColor: '#F97373',
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 8,
@@ -492,7 +496,7 @@ const renderStyles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   actionButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: 'bold',
     marginLeft: 5,
@@ -500,7 +504,7 @@ const renderStyles = StyleSheet.create({
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 15,
     paddingVertical: 10,
     gap: 10,
   },
@@ -508,31 +512,33 @@ const renderStyles = StyleSheet.create({
     flex: 2,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(18, 45, 73, 0.86)',
     borderRadius: 10,
     paddingHorizontal: 12,
     height: 45,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(159, 207, 255, 0.22)',
   },
   searchInputInRow: {
     flex: 1,
     marginLeft: 8,
     fontSize: 14,
+    color: '#E6F3FF',
   },
   dropdownContainer: {
     flex: 1.2,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(18, 45, 73, 0.86)',
     borderRadius: 10,
     height: 45,
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     overflow: 'hidden',
   },
   picker: {
     width: '100%',
     height: 45,
+    color: '#E6F3FF',
   },
   searchInput: {
     flex: 1,
@@ -545,12 +551,12 @@ const renderStyles = StyleSheet.create({
     paddingBottom: 20,
   },
   locationStatsCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 20,
+    backgroundColor: 'rgba(18, 45, 73, 0.86)',
+    marginHorizontal: 15,
     marginBottom: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     padding: 12,
   },
   locationStatsHeader: {
@@ -562,7 +568,7 @@ const renderStyles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#eef2ff',
+    backgroundColor: 'rgba(7, 24, 42, 0.92)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -570,11 +576,11 @@ const renderStyles = StyleSheet.create({
   locationStatsTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#1f2937',
+    color: '#E6F3FF',
   },
   locationStatsEmpty: {
     fontSize: 13,
-    color: '#6b7280',
+    color: '#A9C6E4',
   },
   locationGrid: {
     flexDirection: 'row',
@@ -585,28 +591,28 @@ const renderStyles = StyleSheet.create({
     minWidth: 110,
     maxWidth: 160,
     flexGrow: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'rgba(7, 24, 42, 0.92)',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
   locationName: {
     fontSize: 12,
-    color: '#4b5563',
+    color: '#A9C6E4',
     marginBottom: 4,
   },
   locationCount: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1d4ed8',
+    color: '#34D399',
   },
   emptyText: {
     textAlign: 'center',
-    marginTop: 100, // Pushes it down so it's not hidden behind the search bar
+    marginTop: 90,
     fontSize: 16,
-    color: '#888',
+    color: '#A9C6E4',
     fontWeight: '500',
     fontStyle: 'italic',
   },

@@ -1,27 +1,28 @@
-import React, { useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
     View,
     Text,
     StyleSheet,
-    Alert,
     SafeAreaView,
     ImageBackground,
     FlatList,
     TouchableOpacity,
-    TextInput,
     ActivityIndicator,
     Platform,
     useWindowDimensions,
 } from "react-native";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
-import { Picker } from "@react-native-picker/picker";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
 import axios from "axios";
 import { useAssetFilter } from "src/hooks/useAssetFilter";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { globalColors, globalStyleTokens } from "../../styles/globalStyles";
+import useAssetMeta from '../../hooks/useAssetMeta';
+import AssetFiltersBar from 'src/components/common/AssetFiltersBar';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 type AssetsDetailsNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -41,22 +42,22 @@ const StatusBadge = ({
 }) => {
     // This is now a more flexible, data-driven approach
     const getStatusStyle = () => {
-        let backgroundColor = '#F8F9FA';
-        let borderColor = '#6C757D';
-        let textColor = '#495057';
+        let backgroundColor = 'rgba(148, 163, 184, 0.18)';
+        let borderColor = '#94A3B8';
+        let textColor = '#E2E8F0';
 
         switch (status?.toLowerCase()) {
             case 'assigned':
-                backgroundColor = '#E6F3FF'; borderColor = '#007BFF'; textColor = '#0056b3';
+                backgroundColor = 'rgba(34, 211, 238, 0.18)'; borderColor = '#22D3EE'; textColor = '#A5F3FC';
                 break;
             case 'overdue':
-                backgroundColor = '#FDEDED'; borderColor = '#DC3545'; textColor = '#a71d2a';
+                backgroundColor = 'rgba(249, 115, 115, 0.18)'; borderColor = '#F97373'; textColor = '#FECACA';
                 break;
             case 'returned':
-                backgroundColor = '#E9F7EF'; borderColor = '#28A745'; textColor = '#1c7430';
+                backgroundColor = 'rgba(52, 211, 153, 0.18)'; borderColor = '#34D399'; textColor = '#A7F3D0';
                 break;
             case 'unassigned':
-                backgroundColor = '#F8F9FA'; borderColor = '#6C757D'; textColor = '#495057';
+                backgroundColor = 'rgba(148, 163, 184, 0.18)'; borderColor = '#94A3B8'; textColor = '#E2E8F0';
                 break;
         }
 
@@ -98,9 +99,19 @@ const TotalAssetsDetails: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const [supervisorId, setSupervisorId] = useState<number | null>(null);
+    const [supervisorName, setSupervisorName] = useState<string>('');
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [isModalVisible, setModalVisible] = useState(false);
-    const assetCategories = ['Antenna','Base', 'Battery', 'Controller','Rover'];
+    const [snackbar, setSnackbar] = useState<{
+        visible: boolean;
+        message: string;
+        kind: 'success' | 'error' | 'info';
+    }>({ visible: false, message: '', kind: 'info' });
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const { categories } = useAssetMeta();
+    const assetCategories = categories
+        .map((item) => String(item?.category || '').trim())
+        .filter(Boolean);
 
     const {
     searchText,
@@ -132,6 +143,7 @@ const TotalAssetsDetails: React.FC = () => {
             if (user) {
                 const parsed = JSON.parse(user);
                 setSupervisorId(Number(parsed.employeeId));
+                setSupervisorName(parsed.fullName || parsed.name || '');
             }
         };
         loadUser();
@@ -176,6 +188,14 @@ const TotalAssetsDetails: React.FC = () => {
         setSelectedAsset(null);
     };
 
+    const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        setSnackbar({ visible: true, message, kind });
+        timeoutRef.current = setTimeout(() => {
+            setSnackbar((prev) => ({ ...prev, visible: false }));
+        }, 3200);
+    };
+
     /* 🔹 Send notification */
     const handleSubmitNotification = async (reason: string) => {
         if (!selectedAsset) return;
@@ -198,21 +218,20 @@ const TotalAssetsDetails: React.FC = () => {
             );
 
             if (response.status === 200 || response.status === 201) {
-                Alert.alert("Success", "Notification sent successfully!");
+                showSnackbar("Notification sent successfully!", 'success');
                 handleCloseModal();
                 fetchAssets();
             }
         } catch (error: any) {
             console.error("API Error:", error.response?.data || error.message);
-            Alert.alert("Error", error.response?.data?.message || "Failed to send notification");
+            showSnackbar(error.response?.data?.message || "Failed to send notification", 'error');
         }
     };
 
     // Replace filteredAssets in your FlatList with this:
     const finalDisplayAssets = filteredAssets.filter((asset) => {
         if (!selectedName) return true;
-        // This ensures "Antenna" matches "Antenna 01", "Antenna 02", etc.
-        return asset.assetName?.toLowerCase().includes(selectedName.toLowerCase());
+        return String(asset.category || '').toLowerCase().includes(selectedName.toLowerCase());
     });
     // --- RENDER FUNCTION IS NOW SEPARATE AND CLEAN ---
     const renderAsset = ({ item, index }: { item: Asset, index: number }) => {
@@ -232,7 +251,7 @@ const TotalAssetsDetails: React.FC = () => {
                             <Text style={styles.assetName}>{item.assetName}</Text>
                         </View>
                         <View style={styles.mobileBarcodeContainer}>
-                            <MaterialCommunityIcons name="barcode" size={32} color="#666" />
+                            <MaterialCommunityIcons name="barcode" size={32} color="#A9C6E4" />
                             <Text style={styles.mobileBarcodeText}> S/N: {item.serialNumber}</Text>
                         </View>
                     </View>
@@ -244,6 +263,20 @@ const TotalAssetsDetails: React.FC = () => {
                             location={item.location} 
                         />
                         <View style={{ flexDirection: 'row', gap: 10 }}>
+                            {!isAssignedAsset && (
+                                <TouchableOpacity
+                                    style={styles.assignAssetButton}
+                                    onPress={() =>
+                                        navigation.navigate('AssignAsset', {
+                                            supervisor_employeeId: String(supervisorId),
+                                            supervisorName: supervisorName,
+                                        })
+                                    }
+                                >
+                                    <MaterialCommunityIcons name="plus-circle" size={16} color="#fff" />
+                                    <Text style={styles.actionButtonText}>Assign</Text>
+                                </TouchableOpacity>
+                            )}
                             {isOverdue && (
                                 <TouchableOpacity style={styles.notifyButton} onPress={() => handleOpenModal(item)}>
                                     <Ionicons name="notifications" size={16} color="#fff" />
@@ -291,7 +324,7 @@ const TotalAssetsDetails: React.FC = () => {
                 </View>
 
                 <View style={[styles.cellBarcode, { flex: 2, alignItems: 'center' }]}>
-                    <MaterialCommunityIcons name="barcode" size={40} color="#666" />
+                    <MaterialCommunityIcons name="barcode" size={40} color="#A9C6E4" />
                     <Text style={styles.mobileBarcodeText}>S/N: {item.serialNumber}</Text>
                 </View>
 
@@ -304,6 +337,20 @@ const TotalAssetsDetails: React.FC = () => {
                 </View>
 
                 <View style={[styles.cellAction, { flex: 1.5, flexDirection: 'row', gap: 10, justifyContent: 'center' }]}>
+                    {!isAssignedAsset && (
+                        <TouchableOpacity
+                            style={styles.assignAssetButton}
+                            onPress={() =>
+                                navigation.navigate('AssignAsset', {
+                                    supervisor_employeeId: String(supervisorId),
+                                    supervisorName: supervisorName,
+                                })
+                            }
+                        >
+                            <MaterialCommunityIcons name="plus-circle" size={16} color="#fff" />
+                            <Text style={styles.actionButtonText}>Assign</Text>
+                        </TouchableOpacity>
+                    )}
                     {isOverdue && (
                         <TouchableOpacity style={styles.notifyButton} onPress={() => handleOpenModal(item)}>
                             <Ionicons name="notifications" size={16} color="#fff" />
@@ -349,47 +396,30 @@ const TotalAssetsDetails: React.FC = () => {
                     
                     {/* BODY MUST BE flex: 1 */}
                     <View style={styles.body}>
-                        <View style={[styles.topActionRow, isMobileLayout && { flexDirection: 'column' }]}>
-                            <View style={styles.searchContainer}>
-                                <Feather name="search" size={18} color="#666" style={styles.searchIcon} />
-                                <TextInput 
-                                    placeholder="Search by name, barcode..." 
-                                    placeholderTextColor="#888" 
-                                    style={styles.searchInput}
-                                    value={searchText}
-                                    onChangeText={setSearchText}
-                                />  
-                            </View>
-
-                           <View style={isMobileLayout ? styles.mobileFilterContainer : styles.filterGroup}>
-                               <View style={styles.pickerWrapper}>
-                                    <Picker
-                                        selectedValue={selectedName}
-                                        onValueChange={setSelectedName}
-                                        style={styles.pickerInternal}
-                                    >
-                                        <Picker.Item label="All Categories" value="" />
-                                        {assetCategories.map((cat) => (
-                                            <Picker.Item key={cat} label={cat} value={cat} />
-                                        ))}
-                                    </Picker>
-                                </View>
-                                <View style={isMobileLayout ? styles.mobileFilterSubRow : styles.desktopFilterSubRow}>
-                                <View style={styles.pickerWrapper}>
-                                    <Picker selectedValue={selectedLocation} onValueChange={setSelectedLocation} style={styles.pickerInternal}>
-                                        <Picker.Item label="All Locations" value="" />
-                                        {uniqueLocations.map((loc) => <Picker.Item key={loc} label={loc!} value={loc!} />)}
-                                    </Picker>
-                                </View>
-                                <View style={styles.pickerWrapper}>
-                                    <Picker selectedValue={selectedStatus} onValueChange={setSelectedStatus} style={styles.pickerInternal}>
-                                        <Picker.Item label="All Status" value="" />
-                                        {uniqueStatuses.map((st) => <Picker.Item key={st} label={st!} value={st!} />)}
-                                    </Picker>
-                                </View>
-                            </View>
-                        </View>
-                    </View>
+                        <AssetFiltersBar
+                            isMobileLayout={isMobileLayout}
+                            searchValue={searchText}
+                            onSearchChange={setSearchText}
+                            searchPlaceholder="Search by name, barcode..."
+                            showCategory
+                            categoryValue={selectedName}
+                            onCategoryChange={setSelectedName}
+                            categoryOptions={assetCategories}
+                            showLocation
+                            locationValue={selectedLocation}
+                            onLocationChange={setSelectedLocation}
+                            locationOptions={uniqueLocations}
+                            showStatus
+                            statusValue={selectedStatus}
+                            onStatusChange={setSelectedStatus}
+                            statusOptions={uniqueStatuses}
+                            containerStyle={styles.topActionRow}
+                            searchContainerStyle={styles.searchContainer}
+                            searchInputStyle={styles.searchInput}
+                            filtersContainerStyle={isMobileLayout ? styles.mobileFilterContainer : styles.filterGroup}
+                            pickerWrapperStyle={styles.pickerWrapper}
+                            pickerStyle={styles.pickerInternal}
+                        />
 
                         {!isMobileLayout && (
                             <View style={styles.tableHeader}>
@@ -419,6 +449,13 @@ const TotalAssetsDetails: React.FC = () => {
                         assetName={selectedAsset.assetName}
                     />
                 )}
+                <AppSnackbar
+                    visible={snackbar.visible}
+                    message={snackbar.message}
+                    kind={snackbar.kind}
+                    onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+                    bottom={isMobileLayout ? 16 : 20}
+                />
             </SafeAreaView>
         </ImageBackground>
     );
@@ -427,23 +464,20 @@ const TotalAssetsDetails: React.FC = () => {
 
 // --- STYLES MODIFIED FOR FULL-SCREEN "FROSTED GLASS" LAYOUT ---
 const styles = StyleSheet.create({
-    backgroundImage: {
-        flex: 1,
-        width: "100%",
-        height: "100%",
-    },
-    safeArea: { flex: 1, backgroundColor: "rgba(61, 138, 233, 0.4)" },
+    backgroundImage: globalStyleTokens.pageBackgroundImage,
+    safeArea: { flex: 1, backgroundColor: '#071425' },
     // Container is now the full screen
     container: {
         flex: 1,
-        // The background is now semi-transparent to show the image behind it
-        backgroundColor: 'rgba(255, 255, 255, 0.4)',
+        backgroundColor: 'rgba(7, 24, 42, 0.82)',
+        borderWidth: 1,
+        borderColor: 'rgba(159, 207, 255, 0.22)',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         // Made header semi-transparent as well
-        backgroundColor: 'rgba(60, 60, 80, 0.7)',
+        backgroundColor: 'rgba(7, 24, 42, 0.9)',
         paddingVertical: 15,
         paddingHorizontal: 20,
         // No border radius needed for a full-width header
@@ -451,7 +485,7 @@ const styles = StyleSheet.create({
     searchInput: {
         flex: 1,
         fontSize: 14,
-        color: '#333',
+        color: '#E6F3FF',
         ...Platform.select({
         web: {
             outlineStyle: 'none',
@@ -460,7 +494,7 @@ const styles = StyleSheet.create({
     }),
     },
     backButton: { marginRight: 20, marginTop: 25 },
-    headerTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: 'bold', marginTop: 25 },
+    headerTitle: { color: '#E6F3FF', fontSize: 20, fontWeight: 'bold', marginTop: 25 },
     body: { flex :1 ,paddingHorizontal: 15, padding: 20 },
     searchIcon: { marginRight: 10 },
     tableHeader: {
@@ -470,7 +504,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         paddingBottom: 10,
         borderBottomWidth: 2,
-        borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+        borderBottomColor: 'rgba(159, 207, 255, 0.22)',
     },
     
         filterRow: {
@@ -484,17 +518,18 @@ topActionRow: {
         gap: 12,
         marginBottom: 20,
         width: '100%',
+    alignItems: 'stretch',
     },
     searchContainer: {
         flex: 1.5,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'rgba(18, 45, 73, 0.86)',
         borderRadius: 8,
         paddingHorizontal: 12,
         height: 48, // Fixed height for all top elements
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.1)',
+        borderColor: 'rgba(159, 207, 255, 0.22)',
     },
     mobileFilterContainer: {
       flexDirection: 'column',
@@ -516,22 +551,22 @@ topActionRow: {
     },
     pickerWrapper: {
         flex: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        borderRadius: 8,
+        backgroundColor: 'rgba(18, 45, 73, 0.92)',
+        borderRadius: 10,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.1)',
-        height: 42,
+        borderColor: 'rgba(159, 207, 255, 0.28)',
+        minHeight: 46,
         justifyContent: 'center',
-        overflow: 'hidden', // Clips the default picker border
+        overflow: 'hidden',
     },
     pickerInternal: {
         width: '100%',
         height: '100%',
         backgroundColor: 'transparent',
         borderWidth: 0,
-        fontSize: 13,
-        color: '#444',
-        paddingHorizontal: 8,
+        fontSize: 14,
+        color: '#E6F3FF',
+        paddingHorizontal: 10,
         cursor: 'pointer',
         ...Platform.select({
         web: {
@@ -543,25 +578,25 @@ topActionRow: {
     headerCell: {
         fontSize: 14,
         fontWeight: 'bold',
-        color: '#1A202C', // Darker text for better contrast
+        color: '#E6F3FF',
     },
     assetRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+        backgroundColor: 'rgba(18, 45, 73, 0.86)',
         borderRadius: 10,
         paddingVertical: 10,
         paddingHorizontal: 15,
         marginBottom: 10,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.9)',
+        borderColor: 'rgba(159, 207, 255, 0.22)',
     },
     cellSNo: { width: 50, 
     alignItems: 'center', 
     justifyContent: 'center' },
     cellAssetName: {  marginRight: 10 },
-    assetName: { fontSize: 15, fontWeight: 'bold', color: '#1A202C' },
-    assetSubtext: { fontSize: 12, color: '#4A5568', marginTop: 2 },
+    assetName: { fontSize: 15, fontWeight: 'bold', color: '#E6F3FF' },
+    assetSubtext: { fontSize: 12, color: '#A9C6E4', marginTop: 2 },
     cellBarcode: {  flex: 2, 
         alignItems: 'center',
         justifyContent: 'center', },
@@ -574,7 +609,7 @@ topActionRow: {
     },
     statusText: { fontSize: 13, fontWeight: 'bold' },
     statusSubtext: { fontSize: 11, marginTop: 2 },
-    knowMoreText: { color: '#fff', fontSize: 13, fontWeight: '600', marginRight: 5 },
+    knowMoreText: { color: globalColors.surfacePrimary, fontSize: 13, fontWeight: '600', marginRight: 5 },
     cellAction: {
         // flex: 1.5, // Give more space for two buttons
         justifyContent: 'center',
@@ -591,7 +626,7 @@ topActionRow: {
         borderRadius: 8,
         paddingVertical: 6, // Smaller padding
         paddingHorizontal: 10, // Smaller padding
-        shadowColor: '#000',
+        shadowColor: globalColors.overlayDark,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 2,
@@ -600,30 +635,30 @@ topActionRow: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#3C4048', // A dark background
+        backgroundColor: 'rgba(7, 24, 42, 0.95)',
     },
     loadingText: {
         marginTop: 10,
         fontSize: 16,
-        color: '#FFFFFF',
+        color: globalColors.textInverse,
     },
     errorText: {
         fontSize: 18,
-        color: '#DC3545',
+        color: globalColors.brandRed,
         textAlign: 'center',
         paddingHorizontal: 20,
     },
     mobileCard: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'rgba(18, 45, 73, 0.86)',
         borderRadius: 12,
         padding: 15,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        borderColor: 'rgba(159, 207, 255, 0.22)',
         // Shadow for Android
         elevation: 3,
         // Shadow for iOS
-        shadowColor: '#000',
+        shadowColor: globalColors.overlayDark,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
@@ -632,12 +667,12 @@ topActionRow: {
         flexDirection: 'row',
         alignItems: 'center',
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        borderBottomColor: 'rgba(159, 207, 255, 0.22)',
         paddingBottom: 10,
         marginBottom: 10,
     },
     indexBadge: {
-        backgroundColor: '#3B59B8',
+        backgroundColor: globalColors.brandPrimary,
         width: 24,
         height: 24,
         borderRadius: 12,
@@ -645,16 +680,16 @@ topActionRow: {
         alignItems: 'center',
         marginRight: 10,
     },
-    indexText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+    indexText: { color: globalColors.surfacePrimary, fontSize: 12, fontWeight: 'bold' },
     mobileBarcodeContainer: {
         flexDirection: 'column',
         alignItems: 'center',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: 'rgba(7, 24, 42, 0.92)',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 6,
     },
-    mobileBarcodeText: { fontSize: 12, color: '#666', marginLeft: 4, fontWeight: '600' },
+    mobileBarcodeText: { fontSize: 12, color: '#A9C6E4', marginLeft: 4, fontWeight: '600' },
     mobileCardBody: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -667,13 +702,13 @@ topActionRow: {
     knowMoreButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#5A67D8',
+        backgroundColor: globalColors.brandIndigo,
         borderRadius: 8,
         paddingVertical: 8,
         paddingHorizontal: 12,
     },
     notifyButton: {
-        backgroundColor: '#FF4D4D',
+        backgroundColor: globalColors.brandRed,
         flexDirection: 'row',
         alignItems: 'center',
         borderRadius: 8,
@@ -681,7 +716,15 @@ topActionRow: {
         paddingHorizontal: 12,
     },
     editAssignedButton: {
-        backgroundColor: '#1F8F6A',
+        backgroundColor: globalColors.brandGreen,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+    },
+    assignAssetButton: {
+        backgroundColor: globalColors.brandBlue,
         flexDirection: 'row',
         alignItems: 'center',
         borderRadius: 8,
@@ -689,7 +732,7 @@ topActionRow: {
         paddingHorizontal: 12,
     },
     actionButtonText: {
-        color: '#fff',
+        color: globalColors.surfacePrimary,
         fontSize: 13,
         fontWeight: 'bold',
         marginLeft: 5,

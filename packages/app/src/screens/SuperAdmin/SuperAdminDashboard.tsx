@@ -63,7 +63,7 @@ export default function SuperAdminDashboard() {
           <View style={[styles.headerRow, isMobileLayout && { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
             <Text style={styles.headerTitle}>Super Admin Dashboard</Text>
             <View style={styles.adminBadge}>
-              <Ionicons name="person-circle-outline" size={20} color="#fff" />
+              <Ionicons name="person-circle-outline" size={20} color="#A9C6E4" />
               <Text style={styles.adminText}>Super Admin</Text>
             </View>
           </View>
@@ -71,22 +71,22 @@ export default function SuperAdminDashboard() {
           {/* Top Stats */}
           <View style={styles.statsRow}>
             <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-              <MaterialIcons name="business" size={26} color="#fff" />
+              <MaterialIcons name="business" size={26} color="#22D3EE" />
               <Text style={styles.statNumber}>25</Text>
               <Text style={styles.statLabel}>Total Companies</Text>
             </View>
             <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-              <Ionicons name="checkmark-done" size={26} color="#fff" />
+              <Ionicons name="checkmark-done" size={26} color="#34D399" />
               <Text style={styles.statNumber}>22</Text>
               <Text style={styles.statLabel}>Active Subscriptions</Text>
             </View>
             <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-              <Ionicons name="time-outline" size={26} color="#fff" />
+              <Ionicons name="time-outline" size={26} color="#F59E0B" />
               <Text style={styles.statNumber}>3</Text>
               <Text style={styles.statLabel}>Pending Onboarding</Text>
             </View>
             <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-              <Ionicons name="cash-outline" size={26} color="#fff" />
+              <Ionicons name="cash-outline" size={26} color="#22D3EE" />
               <Text style={styles.statNumber}>5.2M</Text>
               <Text style={styles.statLabel}>Platform Assets</Text>
             </View>
@@ -115,7 +115,7 @@ export default function SuperAdminDashboard() {
           <TouchableOpacity style={styles.actionPrimary}
                 onPress={() => navigation.navigate("AddCompany" as never)}
                 >
-          <LinearGradient colors={["#00c6ff", "#0072ff"]}
+              <LinearGradient colors={["#0EA5E9", "#0F766E"]}
                 style={styles.gradientButton}
                 >
           <Text style={styles.actionBtnText}>Add New Company</Text>
@@ -123,7 +123,7 @@ export default function SuperAdminDashboard() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionSecondary}>
-          <LinearGradient colors={["#ff758c", "#ff7eb3"]}
+              <LinearGradient colors={["#3B82F6", "#1D4ED8"]}
                  style={styles.gradientButton}
                 >
           <Text style={styles.actionBtnText}>Manage Subscriptions</Text>
@@ -149,23 +149,22 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%",
     height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
   },
   scrollContainer: {
-    paddingVertical: 40,
-    alignItems: "center",
+    paddingVertical: 20,
+    paddingHorizontal: 12,
   },
   dashboardContainer: {
-    width: Platform.OS === "web" ? "85%" : "95%",
-    backgroundColor: "rgba(255,255,255,0.15)",
+    width: Platform.OS === "web" ? "100%" : "100%",
+    backgroundColor: "rgba(7, 24, 42, 0.82)",
     borderRadius: 25,
     padding: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
+    shadowColor: "#001325",
+    shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 10,
-    //backdropFilter: "blur(10px)",
   },
   headerRow: {
     flexDirection: "row",
@@ -174,20 +173,22 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   headerTitle: {
-    color: "#000000ff",
+    color: "#E6F3FF",
     fontSize: 22,
     fontWeight: "700",
   },
   adminBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(18, 45, 73, 0.86)",
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 10,
   },
   adminText: {
-    color: "#000000ff",
+    color: "#A9C6E4",
     marginLeft: 5,
     fontSize: 14,
   },
@@ -199,20 +200,22 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flexBasis: "48%",
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(18, 45, 73, 0.86)",
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     borderRadius: 15,
     alignItems: "center",
     padding: 15,
     marginBottom: 10,
   },
   statNumber: {
-    color: "#000000ff",
+    color: "#E6F3FF",
     fontSize: 24,
     fontWeight: "700",
     marginTop: 5,
   },
   statLabel: {
-    color: "#000000ff",
+    color: "#A9C6E4",
     fontSize: 13,
     marginTop: 3,
     textAlign: "center",
@@ -221,7 +224,7 @@ const styles = StyleSheet.create({
     marginVertical: 15,
   },
   sectionTitle: {
-    color: "#000000ff",
+    color: "#E6F3FF",
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 10,
@@ -229,14 +232,16 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(18, 45, 73, 0.86)",
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     paddingVertical: 8,
     borderRadius: 10,
     marginBottom: 6,
   },
   tableHeaderText: {
     flex: 1,
-    color: "#000000ff",
+    color: "#E6F3FF",
     fontWeight: "bold",
     fontSize: 13,
     textAlign: "center",
@@ -244,14 +249,16 @@ const styles = StyleSheet.create({
   tableRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(7, 24, 42, 0.92)",
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     paddingVertical: 10,
     marginBottom: 4,
     borderRadius: 8,
   },
   tableCell: {
     flex: 1,
-    color: "#000000ff",
+    color: "#A9C6E4",
     textAlign: "center",
     fontSize: 13,
   },
@@ -261,13 +268,15 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   actionButton: {
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(18, 45, 73, 0.86)",
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   actionText: {
-    color: "#000000ff",
+    color: "#E6F3FF",
     fontSize: 12,
   },
   actionsContainer: {
@@ -289,7 +298,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   actionBtnText: {
-    color: "#000000ff",
+    color: "#FFFFFF",
     fontWeight: "bold",
     fontSize: 14,
   },
@@ -298,7 +307,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     marginTop: 10,
     paddingTop: 10,
-    borderTopColor: "rgba(255,255,255,0.2)",
+    borderTopColor: "rgba(159, 207, 255, 0.22)",
     borderTopWidth: 1,
   },
 });

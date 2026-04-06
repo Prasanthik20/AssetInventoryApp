@@ -12,6 +12,9 @@
     "jsEngine": "hermes",
     "android": {
       "package": "com.anonymous.assetinventoryapp"
+    },
+    "ios": {
+      "bundleIdentifier": "com.anonymous.assetinventoryapp"
     }
   }
 }

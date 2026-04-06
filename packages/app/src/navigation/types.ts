@@ -102,7 +102,7 @@ const WEB_DEV_API_URL =
   process.env.REACT_APP_API_URL ||
   process.env.EXPO_PUBLIC_API_URL ||
   PROD_API_URL;
-const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
+// const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
 
 // Keep all app screens on the same backend in development.
-export const baseURL = __DEV__ ? DEV_API_URL : PROD_API_URL;
+export const baseURL = __DEV__ ? WEB_DEV_API_URL : PROD_API_URL;

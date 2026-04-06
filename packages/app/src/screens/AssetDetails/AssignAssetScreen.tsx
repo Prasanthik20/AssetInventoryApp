@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Modal,
   Platform,
@@ -27,6 +26,9 @@ import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import assignStyles from './assign.styles';
+import { globalColors } from '../../styles/globalStyles';
+import useAssetMeta from '../../hooks/useAssetMeta';
+import AssetFiltersBar from 'src/components/common/AssetFiltersBar';
 
 type AssignAssetNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -68,7 +70,6 @@ const AssignAssetScreen: React.FC = () => {
   const [assetModal, setAssetModal] = useState(false);
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
   const [assetCategoryFilter, setAssetCategoryFilter] = useState('All Categories');
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   const [projectName, setProjectName] = useState('');
   const [location, setLocation] = useState('');
@@ -86,6 +87,31 @@ const AssignAssetScreen: React.FC = () => {
 
   const [showAssignedPicker, setShowAssignedPicker] = useState(false);
   const [showDuePicker, setShowDuePicker] = useState(false);
+  const { categories } = useAssetMeta();
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+  const snackbarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    if (snackbarTimeoutRef.current) {
+      clearTimeout(snackbarTimeoutRef.current);
+    }
+    setSnackbar({ visible: true, message, kind });
+    snackbarTimeoutRef.current = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 3200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (snackbarTimeoutRef.current) {
+        clearTimeout(snackbarTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // -------------------- FETCH ASSETS --------------------
   useEffect(() => {
@@ -156,45 +182,74 @@ const AssignAssetScreen: React.FC = () => {
   }, []);
 
   // -------------------- ASSIGN HANDLER --------------------
-  const handleAssign = async () => {
+  const isValidDateString = (value: string) => {
+    if (!value) return false;
+    const parsed = new Date(value);
+    return !Number.isNaN(parsed.getTime());
+  };
+
+  const validateAssignmentForm = () => {
+    const normalizedProjectName = projectName.trim();
+    const normalizedLocation = location.trim();
+
     if (selectedAssets.length === 0) {
-      Alert.alert('Error', 'Please select at least one asset');
-      return;
-    }
-    if (!selectedOperator) {
-      Alert.alert('Error', 'Please select assignee');
-      return;
+      showSnackbar('Please select at least one asset.', 'error');
+      return false;
     }
 
-    if (!dueDate) {
-      Alert.alert('Error', 'Please select expected return date');
-      return;
+    if (!selectedOperator) {
+      showSnackbar('Please select an assignee.', 'error');
+      return false;
+    }
+
+    if (!selectedOperator?.employeeId) {
+      showSnackbar('Selected assignee is invalid. Please select again.', 'error');
+      return false;
+    }
+
+    if (!normalizedProjectName) {
+      showSnackbar('Project name is required.', 'error');
+      return false;
+    }
+
+    if (!normalizedLocation) {
+      showSnackbar('Destination / site location is required.', 'error');
+      return false;
+    }
+
+    if (!assignedDate || !isValidDateString(assignedDate)) {
+      showSnackbar('Please select a valid assigned date.', 'error');
+      return false;
+    }
+
+    if (!dueDate || !isValidDateString(dueDate)) {
+      showSnackbar('Please select a valid expected return date.', 'error');
+      return false;
+    }
+
+    if (new Date(dueDate).getTime() < new Date(assignedDate).getTime()) {
+      showSnackbar('Expected return date must be on or after assigned date.', 'error');
+      return false;
     }
 
     if (selectedAssets.length > 1) {
-      console.log('🔍 Validating multi-select media...');
-      console.log('assetPhotoMap:', assetPhotoMap);
-      console.log('assetBarcodeMap:', assetBarcodeMap);
-      
-      const missingMediaAssets = selectedAssets.filter(
-        (asset) => {
-          const key = toAssetKey(asset.assetId);
-          const hasPhoto = !!assetPhotoMap[key];
-          const hasBarcode = !!assetBarcodeMap[key];
-          console.log(`Asset ${key}: photo=${hasPhoto}, barcode=${hasBarcode}`);
-          return !hasPhoto || !hasBarcode;
-        }
-      );
+      const missingMediaAssets = selectedAssets.filter((asset) => {
+        const key = toAssetKey(asset.assetId);
+        return !assetPhotoMap[key] || !assetBarcodeMap[key];
+      });
 
       if (missingMediaAssets.length > 0) {
-        console.log('❌ Missing media for:', missingMediaAssets.map(a => toAssetKey(a.assetId)));
-        Alert.alert(
-          'Media Required',
-          'Please upload both photo and barcode for each selected asset.'
-        );
-        return;
+        showSnackbar('Please upload both photo and barcode for each selected asset.', 'error');
+        return false;
       }
-      console.log('✅ All media present for multi-select');
+    }
+
+    return true;
+  };
+
+  const handleAssign = async () => {
+    if (!validateAssignmentForm()) {
+      return;
     }
 
     try {
@@ -218,20 +273,25 @@ const AssignAssetScreen: React.FC = () => {
         assetIds: selectedAssetIds,
         operator_employeeId: selectedOperator.employeeId,
         supervisor_employeeId: supervisor_employeeId,
-        project_name: projectName,
-        destination: location,
+        project_name: projectName.trim(),
+        destination: location.trim(),
         assigned_date: assignedDate,
         expected_return_date: dueDate,
-        notes,
+        notes: notes.trim(),
         assetMedia,
         ...(photo && { photoURL: photo }), // Include photo if available
         ...(barcodeURL && { barcodeURL }),
       });
 
-      Alert.alert('Success', `${selectedAssets.length} Assets assigned!`);
+      showSnackbar(`${selectedAssets.length} Assets assigned!`, 'success');
       navigation.goBack();
-    } catch (err) {
-      Alert.alert('Error', 'Failed to assign assets');
+    } catch (err: any) {
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'Failed to assign assets';
+      console.error('Assign asset failed:', err?.response?.data || err);
+      showSnackbar(errorMessage, 'error');
     }
   };
 
@@ -252,7 +312,9 @@ const onDueChange = (event: any, selectedDate?: Date) => {
   const toAssetId = (value: unknown) => Number(value);
   const toAssetKey = (value: unknown) => String(toAssetId(value));
 
-  const assetCategories = ['All Categories', 'Antenna', 'Base', 'Battery', 'Controller', 'Rover'];
+  const assetCategories = categories
+    .map((item) => String(item?.category || '').trim())
+    .filter(Boolean);
 
   const filteredAssets = useMemo(() => {
     const query = assetSearchQuery.trim().toLowerCase();
@@ -299,7 +361,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Media library permission is required to upload barcode image.');
+        showSnackbar('Media library permission is required to upload barcode image.', 'error');
         return;
       }
 
@@ -322,18 +384,18 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               console.log('🔍 Barcode uploaded for asset:', targetKey, '| Map:', updated);
               return updated;
             });
-            Alert.alert('✅ Barcode Selected', 'Barcode saved for selected asset.');
+            showSnackbar('Barcode saved for selected asset.', 'success');
           } else {
             setBarcodeURL(barcodeData);
-            Alert.alert('✅ Barcode Selected', 'Barcode image will be attached to the assignment.');
+            showSnackbar('Barcode image will be attached to the assignment.', 'success');
           }
         } else {
-          Alert.alert('Error', 'Failed to process barcode image. Please try again.');
+          showSnackbar('Failed to process barcode image. Please try again.', 'error');
         }
       }
     } catch (error) {
       console.error('Barcode picker error:', error);
-      Alert.alert('Error', 'Failed to open image library.');
+      showSnackbar('Failed to open image library.', 'error');
     } finally {
       if (hasTargetAsset && targetKey) {
         setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
@@ -360,7 +422,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Camera roll permission is required to upload photos.');
+        showSnackbar('Camera roll permission is required to upload photos.', 'error');
         if (hasTargetAsset && targetKey) {
           setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
         } else {
@@ -390,18 +452,18 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               console.log('🔍 Photo uploaded for asset:', targetKey, '| Map:', updated);
               return updated;
             });
-            Alert.alert('✅ Photo Selected', 'Photo saved for selected asset.');
+            showSnackbar('Photo saved for selected asset.', 'success');
           } else {
             setPhoto(photoURL);
-            Alert.alert('✅ Photo Selected', 'Photo will be attached to the assignment.');
+            showSnackbar('Photo will be attached to the assignment.', 'success');
           }
         } else {
-          Alert.alert('Error', 'Failed to process image. Please try again.');
+          showSnackbar('Failed to process image. Please try again.', 'error');
         }
       }
     } catch (error) {
       console.error('Photo picker error:', error);
-      Alert.alert('Error', 'Failed to open image library.');
+      showSnackbar('Failed to open image library.', 'error');
     } finally {
       if (hasTargetAsset && targetKey) {
         setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
@@ -441,19 +503,19 @@ const onDueChange = (event: any, selectedDate?: Date) => {
     <TouchableOpacity
       style={[
         styles.assetRow,
-        isSelected && { backgroundColor: '#D0F0FD', borderColor: '#3B59B8', borderWidth: 1 },
+        isSelected && { backgroundColor: 'rgba(52, 211, 153, 0.16)', borderColor: '#34D399', borderWidth: 1 },
       ]}
       onPress={() => toggleAssetSelection(item)}
     >
       <Ionicons
         name={isSelected ? "checkbox" : "square-outline"}
         size={24}
-        color="#3B59B8"
+        color="#34D399"
       />
       <View style={{ marginLeft: 10 }}>
-        <Text style={{ fontWeight: '600' }}>{item.assetName}</Text>
+        <Text style={{ fontWeight: '600', color: '#E6F3FF' }}>{item.assetName}</Text>
         {/* Show Serial Number or Barcode so they aren't identical */}
-        <Text style={{ fontSize: 12, color: '#777' }}>
+        <Text style={{ fontSize: 12, color: '#A9C6E4' }}>
           S/N: {item.serialNumber || 'N/A'} | ID: {item.assetId}
         </Text>
       </View>
@@ -463,8 +525,8 @@ const onDueChange = (event: any, selectedDate?: Date) => {
   if (loading) {
     return (
       <View style={styles.centeredView}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
-        <Text style={{ color: '#fff', marginTop: 10 }}>Loading Assets...</Text>
+        <ActivityIndicator size="large" color={globalColors.surfacePrimary} />
+        <Text style={{ color: globalColors.surfacePrimary, marginTop: 10 }}>Loading Assets...</Text>
       </View>
     );
   }
@@ -478,11 +540,11 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       blurRadius={10}
     >
       <SafeAreaView style={styles.safeArea}>
-        <View style={[styles.container, isMobileLayout && { margin: 0, borderRadius: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)' }]}>
+        <View style={[styles.container, isMobileLayout && { margin: 0, borderRadius: 0, backgroundColor: 'rgba(7, 24, 42, 0.92)' }]}>
           {/* HEADER */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#1A202C" />
+              <Ionicons name="arrow-back" size={24} color="#E6F3FF" />
             </TouchableOpacity>
 
             <Text style={styles.headerTitle}>Assign Asset</Text>
@@ -512,12 +574,12 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                 {/* ASSET DROPDOWN */}
                 <Text style={styles.label}>Selected Assets ({selectedAssets.length})</Text>
                 <TouchableOpacity style={styles.pickerInput} onPress={() => setAssetModal(true)}>
-                  <Text style={styles.pickerText}>
+                  <Text style={[styles.pickerText, { color: '#E6F3FF' }]}>
                     {selectedAssets.length > 0
                       ? selectedAssets.map(a => a.assetName).join(', ')
                       : 'Select Assets'}
                   </Text>
-                  <Ionicons name="add-circle-outline" size={20} color="#333" />
+                  <Ionicons name="add-circle-outline" size={20} color="#A9C6E4" />
                 </TouchableOpacity>
 
                 {/* OPERATOR DROPDOWN */}
@@ -530,13 +592,13 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                 >
                   <Text style={styles.pickerText}>{selectedOperator ? `${selectedOperator.fullName}
                    (${selectedOperator.employeeId})` : (canAssignToSupervisor ? 'Select Employee' : 'Select Operator')}</Text>
-                  <Ionicons name="chevron-down" size={20} color="#333" />
+                  <Ionicons name="chevron-down" size={20} color="#A9C6E4" />
                 </TouchableOpacity>
 
                 {/* PROJECT */}
                 <Text style={styles.label}>Project Name</Text>
                 <View style={styles.inputGroup}>
-                  <Feather name="briefcase" size={18} color="#555" style={styles.inputIcon} />
+                  <Feather name="briefcase" size={18} color="#A9C6E4" style={styles.inputIcon} />
                   <TextInput
                     style={styles.textInput}
                     placeholder="e.g., Highway Expansion Project"
@@ -548,7 +610,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                 {/* LOCATION */}
                 <Text style={styles.label}>Destination / Site Location</Text>
                 <View style={styles.inputGroup}>
-                  <Feather name="map-pin" size={18} color="#555" style={styles.inputIcon} />
+                  <Feather name="map-pin" size={18} color="#A9C6E4" style={styles.inputIcon} />
                   <TextInput
                     style={styles.textInput}
                     placeholder="e.g., Downtown Site, Block A"
@@ -583,7 +645,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                       height: 44,
                       padding: "10px",
                       borderRadius: 8,
-                      border: "1px solid #ccc",
+                      border: "1px solid rgba(159, 207, 255, 0.22)",
                       fontSize: 14,
                     }}
                   />
@@ -593,7 +655,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                       style={styles.inputGroup}
                       onPress={() => setShowAssignedPicker(true)}
                     >
-                      <Feather name="calendar" size={18} color="#555" style={styles.inputIcon} />
+                      <Feather name="calendar" size={18} color="#A9C6E4" style={styles.inputIcon} />
                       <TextInput
                         style={styles.textInput}
                         value={assignedDate}
@@ -625,7 +687,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                       height: 44,
                       padding: "10px",
                       borderRadius: 8,
-                      border: "1px solid #ccc",
+                      border: "1px solid rgba(159, 207, 255, 0.22)",
                       fontSize: 14,
                     }}
                   />
@@ -635,7 +697,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                       style={styles.inputGroup}
                       onPress={() => setShowDuePicker(true)}
                     >
-                      <Feather name="calendar" size={18} color="#555" style={styles.inputIcon} />
+                      <Feather name="calendar" size={18} color="#A9C6E4" style={styles.inputIcon} />
                       <TextInput
                         style={styles.textInput}
                         value={dueDate}
@@ -674,10 +736,10 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                             disabled={isPhotoLoading}
                           >
                             {isPhotoLoading ? (
-                              <ActivityIndicator color="#4A5568" size="small" />
+                              <ActivityIndicator color="#A9C6E4" size="small" />
                             ) : (
                               <>
-                                <Feather name="camera" size={20} color="#4A5568" />
+                                <Feather name="camera" size={20} color="#A9C6E4" />
                                 <Text style={styles.uploadButtonText}>
                                   {currentPhoto ? '✓ Photo Uploaded' : 'Upload Photo'}
                                 </Text>
@@ -690,10 +752,10 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                             disabled={isBarcodeLoading}
                           >
                             {isBarcodeLoading ? (
-                              <ActivityIndicator color="#4A5568" size="small" />
+                              <ActivityIndicator color="#A9C6E4" size="small" />
                             ) : (
                               <>
-                                <MaterialCommunityIcons name="barcode" size={20} color="#4A5568" />
+                                <MaterialCommunityIcons name="barcode" size={20} color="#A9C6E4" />
                                 <Text style={styles.uploadButtonText}>
                                   {currentBarcode ? '✓ Barcode Uploaded' : 'Scan/Upload Barcode'}
                                 </Text>
@@ -713,10 +775,10 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                       disabled={photoLoading}
                     >
                       {photoLoading ? (
-                        <ActivityIndicator color="#4A5568" size="small" />
+                        <ActivityIndicator color="#A9C6E4" size="small" />
                       ) : (
                         <>
-                          <Feather name="camera" size={20} color="#4A5568" />
+                          <Feather name="camera" size={20} color="#A9C6E4" />
                           <Text style={styles.uploadButtonText}>
                             {photo ? '✓ Photo Uploaded' : 'Tap to upload a photo'}
                           </Text>
@@ -735,7 +797,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                           style={styles.removePhotoButton}
                           onPress={() => {
                             setPhoto(null);
-                            Alert.alert('Removed', 'Photo has been removed.');
+                            showSnackbar('Photo has been removed.', 'info');
                           }}
                         >
                           <Ionicons name="close" size={20} color="#fff" />
@@ -750,10 +812,10 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                       disabled={barcodeLoading}
                     >
                       {barcodeLoading ? (
-                        <ActivityIndicator color="#4A5568" size="small" />
+                        <ActivityIndicator color="#A9C6E4" size="small" />
                       ) : (
                         <>
-                          <MaterialCommunityIcons name="barcode" size={20} color="#4A5568" />
+                          <MaterialCommunityIcons name="barcode" size={20} color="#A9C6E4" />
                           <Text style={styles.uploadButtonText}>
                             {barcodeURL ? '✓ Barcode Uploaded' : 'Tap to upload barcode image'}
                           </Text>
@@ -772,7 +834,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                           style={styles.removePhotoButton}
                           onPress={() => {
                             setBarcodeURL(null);
-                            Alert.alert('Removed', 'Barcode image has been removed.');
+                            showSnackbar('Barcode image has been removed.', 'info');
                           }}
                         >
                           <Ionicons name="close" size={20} color="#fff" />
@@ -791,11 +853,11 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           isMobileLayout && { justifyContent: 'center', paddingBottom: 30 }
         ]}>
             <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
-              <Text style={[styles.buttonText, { color: '#333' }]}>Cancel</Text>
+              <Text style={[styles.buttonText, { color: '#A9C6E4' }]}>Cancel</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={handleAssign}>
-              <LinearGradient colors={['#27B2C3', '#40D69B']} style={styles.assignButton}>
+              <LinearGradient colors={['#0EA5E9', '#0F766E']} style={styles.assignButton}>
                 <Text style={styles.buttonText}>Assign Asset</Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -809,97 +871,33 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           <Pressable style={styles.modalContent} onPress={() => {}}>
             <Text style={styles.modalTitle}>Select Assets</Text>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
-              <View
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: '#F7FAFC',
-                  borderWidth: 1,
-                  borderColor: '#CBD5E0',
-                  borderRadius: 10,
-                  paddingHorizontal: 10,
-                  minHeight: 42,
-                }}
-              >
-                <Feather name="search" size={16} color="#4A5568" />
-                <TextInput
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    color: '#1A202C',
-                    paddingVertical: 8,
-                    marginLeft: 8,
-                  }}
-                  placeholder="Search by name, serial no, or ID"
-                  value={assetSearchQuery}
-                  onChangeText={setAssetSearchQuery}
-                />
-                {assetSearchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setAssetSearchQuery('')}>
-                    <Ionicons name="close-circle" size={18} color="#718096" />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.pickerInput,
-                  {
-                    width: 170,
-                    marginBottom: 0,
-                    paddingVertical: 10,
-                  },
-                ]}
-                onPress={() => setShowCategoryDropdown((prev) => !prev)}
-              >
-                <Text style={styles.pickerText}>{assetCategoryFilter}</Text>
-                <Ionicons
-                  name={showCategoryDropdown ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color="#333"
-                />
-              </TouchableOpacity>
-            </View>
-
-            {showCategoryDropdown && (
-              <View
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#CBD5E0',
-                  borderRadius: 10,
-                  backgroundColor: '#FFFFFF',
-                  maxHeight: 180,
-                  marginBottom: 10,
-                  paddingVertical: 6,
-                }}
-              >
-                <ScrollView nestedScrollEnabled>
-                  {assetCategories.map((category) => {
-                    const isActive = category === assetCategoryFilter;
-                    return (
-                      <TouchableOpacity
-                        key={`asset-category-${category}`}
-                        style={{
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          backgroundColor: isActive ? '#EBF8FF' : '#FFFFFF',
-                        }}
-                        onPress={() => {
-                          setAssetCategoryFilter(category);
-                          setShowCategoryDropdown(false);
-                        }}
-                      >
-                        <Text style={{ color: '#1A202C', fontWeight: isActive ? '700' : '500' }}>
-                          {category}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
+            <AssetFiltersBar
+              searchValue={assetSearchQuery}
+              onSearchChange={setAssetSearchQuery}
+              searchPlaceholder="Search by name, serial no, or ID"
+              showCategory
+              categoryValue={assetCategoryFilter === 'All Categories' ? '' : assetCategoryFilter}
+              onCategoryChange={(value) =>
+                setAssetCategoryFilter(value ? value : 'All Categories')
+              }
+              categoryOptions={assetCategories.filter((category) => category !== 'All Categories')}
+              categoryAllLabel="All Categories"
+              containerStyle={{ marginBottom: 12 }}
+              searchContainerStyle={{
+                backgroundColor: 'rgba(18, 45, 73, 0.86)',
+                borderColor: 'rgba(159, 207, 255, 0.22)',
+                minHeight: 42,
+              }}
+              pickerWrapperStyle={{
+                marginBottom: 0,
+                minHeight: 42,
+                borderColor: 'rgba(159, 207, 255, 0.22)',
+              }}
+              pickerStyle={{
+                fontSize: 14,
+                color: '#E6F3FF',
+              }}
+            />
 
             <FlatList
               data={filteredAssets}
@@ -941,8 +939,8 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                   setOperatorModal(false);
                 }}
               >
-                <Ionicons name="person-circle-outline" size={24} color="#4A55A2" />
-                <Text style={{ marginLeft: 10, fontSize: 16 }}>
+                <Ionicons name="person-circle-outline" size={24} color="#22D3EE" />
+                <Text style={{ marginLeft: 10, fontSize: 16, color: '#E6F3FF' }}>
                   {op.fullName} ({op.employeeId})
                 </Text>
               </TouchableOpacity>
@@ -951,6 +949,47 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {snackbar.visible && (
+        <View
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: isMobileLayout ? 16 : 22,
+            zIndex: 1100,
+          }}
+        >
+          <View
+            style={{
+              borderRadius: 12,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              borderWidth: 1,
+              borderColor:
+                snackbar.kind === 'success'
+                  ? 'rgba(52, 211, 153, 0.55)'
+                  : snackbar.kind === 'error'
+                    ? 'rgba(248, 113, 113, 0.6)'
+                    : 'rgba(159, 207, 255, 0.45)',
+              backgroundColor:
+                snackbar.kind === 'success'
+                  ? 'rgba(6, 78, 59, 0.96)'
+                  : snackbar.kind === 'error'
+                    ? 'rgba(127, 29, 29, 0.96)'
+                    : 'rgba(15, 23, 42, 0.96)',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Text style={{ color: '#E6F3FF', flex: 1, fontWeight: '600' }}>{snackbar.message}</Text>
+            <TouchableOpacity onPress={() => setSnackbar((prev) => ({ ...prev, visible: false }))}>
+              <Ionicons name="close" size={18} color="#E6F3FF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </ImageBackground>
   );
 };

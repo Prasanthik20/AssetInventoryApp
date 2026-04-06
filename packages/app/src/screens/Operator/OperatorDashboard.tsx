@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   SafeAreaView,
   ImageBackground,
   TouchableOpacity,
-  Alert,
   RefreshControl,
   Switch,
   FlatList,
@@ -29,6 +28,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { baseURL, RootStackParamList } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { opratorStyles } from './operator.styles';
+import AppSnackbar from 'src/components/common/AppSnackbar';
 
 type DashboardNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -107,6 +107,20 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
     assetName: '',
     onSubmit: () => {},
   });
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setSnackbar({ visible: true, message, kind });
+    timeoutRef.current = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 3200);
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -278,7 +292,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
     if (!asset || (!asset.assignedBy && !asset.assigned_by)) {
       console.error('Missing Supervisor ID. Asset data:', asset);
       console.error('Critical: No asset context found for submission');
-      Alert.alert('Error', 'Could not identify which asset to update.');
+      showSnackbar('Could not identify which asset to update.', 'error');
       return;
     }
 
@@ -304,7 +318,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
       );
 
       if (response.status === 200) {
-        Alert.alert('Success', 'Extension request sent to your supervisor.');
+        showSnackbar('Extension request sent to your supervisor.', 'success');
         handleCloseModal();
         fetchOperatorData(); // Refresh to ensure synchronization
       }
@@ -313,7 +327,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
         'Overdue send error:',
         error.response?.data || error.message,
       );
-      Alert.alert('Error', 'Failed to reach server.');
+      showSnackbar('Failed to reach server.', 'error');
     }
   };
 
@@ -326,10 +340,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
     const operatorId = user?.employeeId; // Current logged-in user
 
     if (!supervisorId || !operatorId) {
-      Alert.alert(
-        'Error',
-        'Required user information is missing. Please refresh.',
-      );
+      showSnackbar('Required user information is missing. Please refresh.', 'error');
       console.error('IDs missing:', { supervisorId, operatorId });
       return;
     }
@@ -352,12 +363,12 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
             : item,
         ),
       );
-      Alert.alert('Success', 'Reply sent successfully!');
+      showSnackbar('Reply sent successfully!', 'success');
       handleCloseModal();
       fetchOperatorData(); // Refresh to see the status change
     } catch (error: any) {
       console.error('Reply Error:', error.response?.data || error.message);
-      Alert.alert('Error', 'Could not send reply. Check server logs.');
+      showSnackbar('Could not send reply. Check server logs.', 'error');
     }
   };
 
@@ -440,8 +451,8 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={['#3B59B8']} // Android color
-                tintColor={'#3B59B8'} // iOS color
+                colors={['#22D3EE']}
+                tintColor={'#22D3EE'}
               />
             }
           >
@@ -450,13 +461,13 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
               <Text style={styles.headerTitle}>{user?.operatorName}</Text>
 
               <View style={styles.headerRight}>
-                <Feather name="user" size={16} color="#333" />
+                <Feather name="user" size={16} color="#A9C6E4" />
                 <Text style={styles.userText}>{user?.fullName}</Text>
                 <TouchableOpacity onPress={handleLogout}>
                   <Feather
                     name="log-out"
                     size={22}
-                    color="red"
+                    color="#F97373"
                     style={{ marginLeft: 10 }}
                   />
                 </TouchableOpacity>
@@ -471,7 +482,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                     <Ionicons
                       name="construct-outline"
                       size={20}
-                      color="#3B59B8"
+                      color="#22D3EE"
                     />
                   </View>
                   <Text style={styles.metricTitle}>Assigned Assets</Text>
@@ -482,7 +493,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
               <View style={styles.metricBox}>
                 <View style={styles.metricRow}>
                   <View style={styles.metricIconBg}>
-                    <Feather name="map-pin" size={18} color="#3B59B8" />
+                    <Feather name="map-pin" size={18} color="#22D3EE" />
                   </View>
                   <Text style={styles.metricTitle}>Assets By Location</Text>
                 </View>
@@ -529,7 +540,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                     }
                   >
                     <LinearGradient
-                      colors={['#27B2C3', '#40D69B']}
+                      colors={['#0EA5E9', '#0F766E']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.returnButtonCompact}
@@ -541,7 +552,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                   </TouchableOpacity>
                 </View>
                 {myAssets.length === 0 ? (
-                  <Text style={{ color: '#333', marginTop: 10 }}>
+                  <Text style={{ color: '#A9C6E4', marginTop: 10 }}>
                     No assets assigned.
                   </Text>
                 ) : (
@@ -570,7 +581,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                           <Ionicons
                             name="cube-outline"
                             size={20}
-                            color="#3B59B8"
+                            color="#22D3EE"
                           />
                         </View>
 
@@ -584,25 +595,25 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                             <Text
                               style={{
                                 fontSize: 12,
-                                color: '#4A5568',
+                                color: '#A9C6E4',
                                 fontWeight: '500',
                               }}
                             >
                               S/N:{' '}
-                              <Text style={{ color: '#1A202C' }}>
+                              <Text style={{ color: '#E6F3FF' }}>
                                 {asset.serialNo || 'N/A'}
                               </Text>
                             </Text>
                             <Text
                               style={{
                                 fontSize: 12,
-                                color: '#4A5568',
+                                color: '#A9C6E4',
                                 marginLeft: 10,
                                 fontWeight: '500',
                               }}
                             >
                               Barcode:{' '}
-                              <Text style={{ color: '#1A202C' }}>
+                              <Text style={{ color: '#E6F3FF' }}>
                                 {asset.barcode}
                               </Text>
                             </Text>
@@ -613,9 +624,9 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                             style={[
                               styles.assetDueDate,
                               isOverdue
-                                ? { color: 'red', fontWeight: 'bold' }
+                                ? { color: '#F97373', fontWeight: 'bold' }
                                 : isExtended
-                                ? { color: 'green', fontWeight: 'bold' }
+                                ? { color: '#34D399', fontWeight: 'bold' }
                                 : {},
                             ]}
                           >
@@ -700,14 +711,14 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                             !isMobileLayout && styles.replyRowItemWeb,
                             isFromSupervisor
                               ? {
-                                  backgroundColor: '#f0f9ff',
-                                  borderColor: '#bae6fd',
+                                  backgroundColor: 'rgba(14, 165, 233, 0.14)',
+                                  borderColor: 'rgba(34, 211, 238, 0.35)',
                                   borderWidth: 1,
                                 }
                               : {},
                             isResolved && {
                               opacity: 0.5,
-                              backgroundColor: '#f5f5f5',
+                              backgroundColor: 'rgba(18, 45, 73, 0.7)',
                             },
                           ]}
                         >
@@ -724,8 +735,8 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                               isResolved
                                 ? '#999'
                                 : isFromSupervisor
-                                ? '#0284c7'
-                                : '#4A55A2'
+                                ? '#22D3EE'
+                                : '#22D3EE'
                             }
                           />
 
@@ -739,7 +750,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                               {isFromSupervisor ? (
                                 <Text
                                   style={{
-                                    color: '#0369a1',
+                                    color: '#22D3EE',
                                     fontWeight: 'bold',
                                   }}
                                 >
@@ -837,14 +848,14 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                           styles.notificationItem,
                           isFromSupervisor
                             ? {
-                                backgroundColor: '#f8fafc',
-                                borderColor: '#cbd5e1',
+                                backgroundColor: 'rgba(148, 163, 184, 0.14)',
+                                borderColor: 'rgba(148, 163, 184, 0.35)',
                                 borderWidth: 1,
                               }
                             : {},
                           isResolved && {
                             opacity: 0.75,
-                            backgroundColor: '#f5f5f5',
+                            backgroundColor: 'rgba(18, 45, 73, 0.7)',
                           },
                         ]}
                       >
@@ -861,8 +872,8 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                             isResolved
                               ? '#6b7280'
                               : hasReplied
-                              ? '#16a34a'
-                              : '#4A55A2'
+                              ? '#34D399'
+                              : '#22D3EE'
                           }
                         />
 
@@ -875,7 +886,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                           >
                             {isFromSupervisor ? (
                               <Text
-                                style={{ color: '#334155', fontWeight: 'bold' }}
+                                style={{ color: '#A9C6E4', fontWeight: 'bold' }}
                               >
                                 Supervisor Update:
                               </Text>
@@ -940,6 +951,13 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
           title={modalConfig.title}
         />
       </SafeAreaView>
+      <AppSnackbar
+        visible={snackbar.visible}
+        message={snackbar.message}
+        kind={snackbar.kind}
+        onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+        bottom={isMobileLayout ? 16 : 20}
+      />
     </ImageBackground>
   );
 };

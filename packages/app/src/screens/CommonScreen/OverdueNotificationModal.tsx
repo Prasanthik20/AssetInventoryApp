@@ -6,10 +6,10 @@ import {
     Modal,
     TouchableOpacity,
     TextInput,
-    Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { globalColors } from '../../styles/globalStyles';
 
 interface Props {
     visible: boolean;
@@ -28,17 +28,22 @@ const OverdueNotificationModal: React.FC<Props> = ({
 }) => {
 
     const [reason, setReason] = useState('');
+    const [errorText, setErrorText] = useState('');
 
     // 🔥 Auto-clear input each time modal opens
     useEffect(() => {
-        if (visible) setReason('');
+        if (visible) {
+            setReason('');
+            setErrorText('');
+        }
     }, [visible]);
 
     const handleSubmit = () => {
         if (!reason.trim()) {
-            Alert.alert("Reason Required", "Please provide details.");
+            setErrorText('Please provide details.');
             return;
         }
+        setErrorText('');
         onSubmit(reason);
     };
 
@@ -77,6 +82,10 @@ const OverdueNotificationModal: React.FC<Props> = ({
                         onChangeText={setReason}
                     />
 
+                    {!!errorText && (
+                        <Text style={styles.errorText}>{errorText}</Text>
+                    )}
+
                     {/* SUBMIT BUTTON */}
                     <TouchableOpacity onPress={handleSubmit} style={styles.submitButton}>
                         <LinearGradient
@@ -104,12 +113,12 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: globalColors.overlayDark,
     },
     modalView: {
         width: '90%',
         maxWidth: 500,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: globalColors.surfacePrimary,
         borderRadius: 20,
         padding: 25,
         alignItems: 'center',
@@ -123,13 +132,13 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: '#1A202C',
+        color: globalColors.textTitle,
         marginBottom: 10,
         textAlign: 'center',
     },
     modalSubtitle: {
         fontSize: 15,
-        color: '#4A5568',
+        color: globalColors.textSecondary,
         textAlign: 'center',
         marginBottom: 20,
         lineHeight: 22,
@@ -137,15 +146,22 @@ const styles = StyleSheet.create({
     reasonInput: {
         width: '100%',
         height: 120,
-        backgroundColor: '#FFF',
+        backgroundColor: globalColors.surfacePrimary,
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#EAEAEA',
+        borderColor: globalColors.borderSoft,
         padding: 15,
         fontSize: 15,
         textAlignVertical: 'top',
         marginBottom: 20,
-        color: '#1A202C',
+        color: globalColors.textTitle,
+    },
+    errorText: {
+        color: '#F97373',
+        fontSize: 13,
+        alignSelf: 'flex-start',
+        marginTop: -10,
+        marginBottom: 12,
     },
     submitButton: {
         width: '100%',
@@ -157,7 +173,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     submitButtonText: {
-        color: '#fff',
+        color: globalColors.surfacePrimary,
         fontSize: 16,
         fontWeight: 'bold',
     },
