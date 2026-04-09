@@ -31,6 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             AND id IN (
                 SELECT "assetId" FROM "Asset_Assignments"
                 WHERE "expected_return_date" < CURRENT_DATE
+                  AND COALESCE(status, '') <> 'returned'
+                  AND "returned_date" IS NULL
             );
         `;
 
@@ -67,10 +69,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             LEFT JOIN "Users" u ON a.assigned_by = u."employeeId"
             LEFT JOIN "Users" assignee ON a.assigned_to = assignee."employeeId"
             
-            -- This subquery picks the latest assignment row for each asset
+            -- This subquery picks the latest ACTIVE assignment row for each asset
             LEFT JOIN LATERAL (
                 SELECT * FROM "Asset_Assignments"
                 WHERE "assetId" = a.id
+                  AND COALESCE(status, '') <> 'returned'
+                  AND "returned_date" IS NULL
                 ORDER BY id DESC
                 LIMIT 1
             ) aa ON TRUE

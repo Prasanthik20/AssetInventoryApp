@@ -26,28 +26,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const operatorEmployeeId = parseInt(operatorId);
 
     /**
-     * 🔥 FIXED SQL QUERY
+     * Return assignment timeline for the operator.
+     * Includes active and returned assignments so UI can render history.
      */
     const assetsQuery = `
-    SELECT DISTINCT ON (ad.id) 
+    SELECT
     aa.id AS "assignmentId",
     ad.id AS "assetId",
     ad.name AS "assetName",
     ad.serial_no as "serialNo",
     ad."asset_Id" AS "barcode",
-    COALESCE(ad."photoURL", aa."photoURL") AS "photoURL",
-    COALESCE(ad."barcodeURL", aa."barcodeURL") AS "barcodeURL",
-    ad.location AS "assetLocation",
+    COALESCE(aa."photoURL", ad."photoURL") AS "photoURL",
+    COALESCE(aa."barcodeURL", ad."barcodeURL") AS "barcodeURL",
+    COALESCE(aa.location, ad.location) AS "assetLocation",
     aa.expected_return_date AS "expectedReturnDate",
-    ad.assigned_by AS "assignedBy",
-    
-    s.status AS "Status"
+    aa.returned_date AS "returnedDate",
+    aa."supervisor_employeeId" AS "assignedBy",
+    aa.status AS "assignmentStatus",
+    ad.assigned_to AS "currentlyAssignedTo"
   FROM "Asset_Assignments" aa
   INNER JOIN "Asset_Details" ad ON ad.id = aa."assetId"
-  INNER JOIN "Status" s ON s.id = ad.status_Id
   WHERE aa."operator_employeeId" = $1
-    AND ad.assigned_to = $1   
-  ORDER BY ad.id, aa.assigned_date DESC;
+  ORDER BY aa.assigned_date DESC NULLS LAST, aa.id DESC;
     `;
 
     const assetsResult = await query(assetsQuery, [operatorEmployeeId]);
@@ -62,10 +62,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       today.setHours(0, 0, 0, 0); // 🕛 Set to start of today
 
       let isOverdue = false;
+      const assignmentStatus = String(asset.assignmentStatus || '').toLowerCase();
       if (asset.expectedReturnDate) {
         const due = new Date(asset.expectedReturnDate);
         due.setHours(0, 0, 0, 0); // 🕛 Set to start of the due day
-        isOverdue = due < today;
+        isOverdue = assignmentStatus === 'assigned' && due < today;
+      }
+
+      const isCurrentlyAssigned = Number(asset.currentlyAssignedTo) === operatorEmployeeId;
+
+      let normalizedStatus = 'Assigned';
+      if (assignmentStatus === 'returned' || !isCurrentlyAssigned) {
+        normalizedStatus = 'Returned';
+      } else if (isOverdue) {
+        normalizedStatus = 'Overdue';
       }
 
       return {
@@ -78,9 +88,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         location: asset.assetLocation,
         photoURL: asset.photoURL,
         expectedReturnDate: asset.expectedReturnDate,
+        returnedDate: asset.returnedDate,
         assignedBy: asset.assignedBy,
+        isCurrentlyAssigned,
         isOverdue,
-        status: isOverdue ? "Overdue" : "Assigned",
+        status: normalizedStatus,
       };
     });
 
@@ -103,9 +115,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     /**
      * 🔥 Final API Output
      */
+    const activeCount = processedAssets.filter((asset: any) => {
+      const status = String(asset?.status || '').toLowerCase();
+      return status === 'assigned' || status === 'overdue';
+    }).length;
+
+    const returnedCount = processedAssets.filter(
+      (asset: any) => String(asset?.status || '').toLowerCase() === 'returned',
+    ).length;
+
     const responseData = {
       operatorEmployeeId,
-      assignedCount: processedAssets.length,
+      assignedCount: activeCount,
+      returnedCount,
       location: currentLocation,
       assets: processedAssets,
     };

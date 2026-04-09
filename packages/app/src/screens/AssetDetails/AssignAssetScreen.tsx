@@ -77,8 +77,10 @@ const AssignAssetScreen: React.FC = () => {
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoBatch, setPhotoBatch] = useState<string[]>([]);
   const [barcodeURL, setBarcodeURL] = useState<string | null>(null);
   const [assetPhotoMap, setAssetPhotoMap] = useState<Record<string, string>>({});
+  const [assetPhotoBatchMap, setAssetPhotoBatchMap] = useState<Record<string, string[]>>({});
   const [assetBarcodeMap, setAssetBarcodeMap] = useState<Record<string, string>>({});
   const [assetPhotoLoadingMap, setAssetPhotoLoadingMap] = useState<Record<string, boolean>>({});
   const [assetBarcodeLoadingMap, setAssetBarcodeLoadingMap] = useState<Record<string, boolean>>({});
@@ -257,6 +259,9 @@ const AssignAssetScreen: React.FC = () => {
       const assetMedia = selectedAssetIds.map((assetId) => ({
         assetId,
         photoURL: assetPhotoMap[toAssetKey(assetId)] || photo || null,
+        photoURLs:
+          assetPhotoBatchMap[toAssetKey(assetId)] ||
+          (assetPhotoMap[toAssetKey(assetId)] ? [assetPhotoMap[toAssetKey(assetId)]] : photoBatch),
         barcodeURL: assetBarcodeMap[toAssetKey(assetId)] || barcodeURL || null,
       }));
 
@@ -280,6 +285,7 @@ const AssignAssetScreen: React.FC = () => {
         notes: notes.trim(),
         assetMedia,
         ...(photo && { photoURL: photo }), // Include photo if available
+        ...(photoBatch.length > 0 && { photoURLs: photoBatch }),
         ...(barcodeURL && { barcodeURL }),
       });
 
@@ -434,27 +440,33 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        selectionLimit: 0,
         aspect: [4, 3],
         quality: 0.8,
         base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        const base64 = asset.base64;
+        const photos = result.assets
+          .map((asset) => asset.base64)
+          .filter((value): value is string => Boolean(value))
+          .map((base64) => `data:image/jpeg;base64,${base64}`);
 
-        if (base64) {
-          const photoURL = `data:image/jpeg;base64,${base64}`;
+        if (photos.length > 0) {
+          const primaryPhoto = photos[0];
           if (hasTargetAsset && targetKey) {
             setAssetPhotoMap((prev) => {
-              const updated = { ...prev, [targetKey]: photoURL };
+              const updated = { ...prev, [targetKey]: primaryPhoto };
               console.log('🔍 Photo uploaded for asset:', targetKey, '| Map:', updated);
               return updated;
             });
+            setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
             showSnackbar('Photo saved for selected asset.', 'success');
           } else {
-            setPhoto(photoURL);
+            setPhoto(primaryPhoto);
+            setPhotoBatch(photos);
             showSnackbar('Photo will be attached to the assignment.', 'success');
           }
         } else {
@@ -481,6 +493,11 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       if (isSelected) {
         const assetKey = toAssetKey(asset.assetId);
         setAssetPhotoMap((current) => {
+          const next = { ...current };
+          delete next[assetKey];
+          return next;
+        });
+        setAssetPhotoBatchMap((current) => {
           const next = { ...current };
           delete next[assetKey];
           return next;

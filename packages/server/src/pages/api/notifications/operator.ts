@@ -49,7 +49,7 @@ export default async function handler(
       LEFT JOIN "Users" r ON r."employeeId" = n."receiverId"
 
       WHERE n."receiverId" = $1
-        AND n.status IN ('unread', 'resolved')
+        AND n.status IN ('unread', 'resolved', 'received')
       ORDER BY n.created_at DESC;
     `;
 

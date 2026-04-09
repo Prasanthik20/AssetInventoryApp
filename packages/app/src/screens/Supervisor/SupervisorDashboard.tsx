@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   ScrollView,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, Route, RouteProp } from '@react-navigation/native';
@@ -21,6 +22,7 @@ import axios from 'axios';
 import { Picker } from '@react-native-picker/picker';
 import { baseURL, RootStackParamList } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { supervisorStyles } from './supervisor.styles';
 import AppSnackbar from 'src/components/common/AppSnackbar';
 
@@ -69,12 +71,42 @@ interface Metric {
 
 interface OperatorReply {
   notificationId: number;
+  assignmentId?: number;
   operatorName: string;
   assetName: string;
   reason: string;
   reply: string;
+  status?: string;
+  senderId?: number;
+  receiverId?: number;
+  isAssignment: boolean;
 }
 
+const parseReplyPayload = (rawReply?: string | null): { message: string; proofPhotos: string[] } => {
+  if (!rawReply) return { message: '', proofPhotos: [] };
+  try {
+    const parsed = JSON.parse(rawReply);
+    if (parsed && typeof parsed === 'object') {
+      const message = typeof parsed.message === 'string' ? parsed.message : rawReply;
+      const proofPhotos = Array.isArray(parsed.proofPhotos)
+        ? parsed.proofPhotos.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0)
+        : [];
+      return { message, proofPhotos };
+    }
+    return { message: rawReply, proofPhotos: [] };
+  } catch {
+    return { message: rawReply, proofPhotos: [] };
+  }
+};
+
+const isAssignmentNotification = (reason?: string | null): boolean =>
+  String(reason || '').toLowerCase().includes('assigned to you');
+
+const isReturnPendingNotification = (reason?: string | null, reply?: string | null): boolean => {
+  const reasonText = String(reason || '').toLowerCase();
+  const replyText = String(reply || '').toLowerCase();
+  return reasonText.includes('has been returned by') || replyText.includes('pending confirmation');
+};
 interface LocationStat {
   location: string;
   count: number;
@@ -96,6 +128,7 @@ const SupervisorDashboard: React.FC<Props> = ({
     officeAssets: 0,
     fieldAssets: 0,
   });
+  const [supervisorAssignedAssets, setSupervisorAssignedAssets] = useState<any[]>([]);
   const [operatorReplies, setOperatorReplies] = useState<OperatorReply[]>([]);
   const [loading, setLoading] = useState(true); // Added loading state
   const [extendDays, setExtendDays] = useState(3);
@@ -105,6 +138,7 @@ const SupervisorDashboard: React.FC<Props> = ({
 
   const [selectedItem, setSelectedItem] = useState<OperatorReply | null>(null);
   const [extendModalVisible, setExtendModalVisible] = useState(false); // Removed duplicate state
+  const [receiptModalVisible, setReceiptModalVisible] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     visible: boolean;
     message: string;
@@ -146,12 +180,13 @@ const SupervisorDashboard: React.FC<Props> = ({
     try {
       setLoading(true);
 
-      const [metricsRes, repliesRes, assetsRes] = await Promise.all([
+      const [metricsRes, repliesRes, assetsRes, supervisorAssetsRes] = await Promise.all([
         axios.get(`${baseURL}/api/dashboard/metrics`),
         axios.get(
           `${baseURL}/api/notifications/supervisor?id=${user?.employeeId}`,
         ),
         axios.get(`${baseURL}/api/assets`),
+        axios.get(`${baseURL}/api/supervisor/assets?id=${user?.employeeId}`),
       ]);
       const rawData = Array.isArray(repliesRes.data)
         ? repliesRes.data
@@ -159,10 +194,15 @@ const SupervisorDashboard: React.FC<Props> = ({
 
       const formatted = rawData.map((n: any) => ({
         notificationId: n.notificationId,
+        assignmentId: n.assignmentId ? Number(n.assignmentId) : undefined,
         operatorName: n.operatorName || 'Unknown',
         assetName: n.assetName || 'Unknown Asset',
         reason: n.reason,
         reply: n.reply,
+        status: n.status,
+        senderId: n.senderId ?? n.sender?.employeeId,
+        receiverId: n.receiverId ?? n.receiver?.employeeId,
+        isAssignment: isAssignmentNotification(n.reason),
       }));
       console.log('Formatted Replies for State:', formatted);
 
@@ -199,6 +239,11 @@ const SupervisorDashboard: React.FC<Props> = ({
       setMetricsData(metricsRes.data);
       setOperatorReplies(formatted);
       setFieldLocationStats(locationEntries);
+      setSupervisorAssignedAssets(
+        Array.isArray((supervisorAssetsRes as any)?.data?.assets)
+          ? (supervisorAssetsRes as any).data.assets
+          : [],
+      );
     } catch (error) {
       console.log('Dashboard Data Fetch Error:', error);
       setFieldLocationStats([]);
@@ -215,9 +260,98 @@ const SupervisorDashboard: React.FC<Props> = ({
     setUser(null); // parent will show AuthStack or login screen
   };
 
+  const openReceiptModal = (item: OperatorReply) => {
+    setSelectedItem(item);
+    setReceiptModalVisible(true);
+  };
+
+  const handleConfirmReceipt = async (reason: string, proofImages?: string[]) => {
+    if (!selectedItem || !user?.employeeId) {
+      showSnackbar('Missing notification context.', 'error');
+      return;
+    }
+
+    if (!selectedItem.senderId) {
+      showSnackbar('Missing assigner information.', 'error');
+      return;
+    }
+
+    if (!proofImages || proofImages.length < 4) {
+      showSnackbar('Please attach at least 4 proof images.', 'error');
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${baseURL}/api/notifications/reply`, {
+        originalNotificationId: Number(selectedItem.notificationId),
+        replyMessage: reason,
+        senderId: Number(user.employeeId),
+        receiverId: Number(selectedItem.senderId),
+        proofPhotos: proofImages,
+      });
+
+      showSnackbar(response.data.message || 'Receipt confirmed.', 'success');
+      setReceiptModalVisible(false);
+      setOperatorReplies(prev =>
+        prev.map(item =>
+          item.notificationId === selectedItem.notificationId
+            ? {
+                ...item,
+                reply: JSON.stringify({ message: reason, proofPhotos: proofImages }),
+              }
+            : item,
+        ),
+      );
+      fetchDashboardData();
+    } catch (err: any) {
+      console.error('Receipt confirmation error:', err?.response?.data || err);
+      showSnackbar(err?.response?.data?.message || 'Failed to confirm receipt.', 'error');
+    }
+  };
+
   const openExtendModal = (item: OperatorReply) => {
     setSelectedItem(item);
     setExtendModalVisible(true);
+  };
+
+  const handleConfirmReturn = async (item: OperatorReply) => {
+    if (!user?.employeeId) {
+      showSnackbar('Missing supervisor context.', 'error');
+      return;
+    }
+
+    if (!item.assignmentId) {
+      showSnackbar('Missing assignment for return confirmation.', 'error');
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${baseURL}/api/assets/confirm-return`, {
+        notificationId: Number(item.notificationId),
+        assignmentId: Number(item.assignmentId),
+        confirmedByEmployeeId: Number(user.employeeId),
+      });
+
+      showSnackbar(response.data.message || 'Return confirmed.', 'success');
+      setOperatorReplies((prev) => prev.filter((n) => n.notificationId !== item.notificationId));
+      fetchDashboardData();
+    } catch (error: any) {
+      console.error('Confirm return error:', error?.response?.data || error);
+      showSnackbar(error?.response?.data?.message || 'Failed to confirm return.', 'error');
+    }
+  };
+
+  const hideNotification = async (notificationId: number) => {
+    try {
+      await axios.put(`${baseURL}/api/notifications/hide`, { id: Number(notificationId) });
+      setOperatorReplies((prev) =>
+        prev.filter((item) => item.notificationId !== notificationId),
+      );
+      showSnackbar('Notification marked as read.', 'success');
+    } catch (error) {
+      console.error('Supervisor hide notification error:', error);
+      showSnackbar('Failed to mark notification as read.', 'error');
+    }
   };
 
   const handleExtendDate = async (notificationId: number, days: number) => {
@@ -371,7 +505,9 @@ const SupervisorDashboard: React.FC<Props> = ({
                     isMobileLayout={isMobileLayout}
                     navigation={navigation}
                     employeeId={user?.employeeId}
+                    roleName={user?.roleName}
                     supervisorName={user?.supervisorName}
+                    supervisorAssignedAssets={supervisorAssignedAssets}
                   />
                 </View>
                 <View style={styles.mobileBlockBottom}>
@@ -380,6 +516,9 @@ const SupervisorDashboard: React.FC<Props> = ({
                     isMobileLayout={isMobileLayout}
                     operatorReplies={operatorReplies}
                     openExtendModal={openExtendModal}
+                    openReceiptModal={openReceiptModal}
+                    onConfirmReturn={handleConfirmReturn}
+                    hideNotification={hideNotification}
                   />
                 </View>
               </View>
@@ -390,20 +529,25 @@ const SupervisorDashboard: React.FC<Props> = ({
                   isMobileLayout={isDesktopWeb}
                   operatorReplies={operatorReplies}
                   openExtendModal={openExtendModal}
+                  openReceiptModal={openReceiptModal}
+                  onConfirmReturn={handleConfirmReturn}
+                  hideNotification={hideNotification}
                 />
                 <QuickActionsSection
                   styles={styles}
                   isMobileLayout={isDesktopWeb}
                   navigation={navigation}
                   employeeId={user?.employeeId}
+                  roleName={user?.roleName}
                   supervisorName={user?.supervisorName}
+                  supervisorAssignedAssets={supervisorAssignedAssets}
                 />
               </View>
             )}
           </View>
 
           {/* Bottom Navigation (desktop only) */}
-          {!isMobileLayout && (
+          {/* {!isMobileLayout && (
             <View style={styles.bottomNav}>
               <View style={styles.bottomNavLeft}>
                 <TouchableOpacity style={styles.navItem}>
@@ -413,7 +557,7 @@ const SupervisorDashboard: React.FC<Props> = ({
 
                 <TouchableOpacity style={styles.navItem}>
                   <Ionicons name="people-outline" size={20} color="#333" />
-                  <Text style={styles.navText}>Operators</Text>
+                  <Text style={styles.navText}>Supervior</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.navItem}>
@@ -442,7 +586,7 @@ const SupervisorDashboard: React.FC<Props> = ({
                 </TouchableOpacity>
               </View>
             </View>
-          )}
+          )} */}
         </ScrollView>
 
         <Modal
@@ -493,6 +637,15 @@ const SupervisorDashboard: React.FC<Props> = ({
             </View>
           </View>
         </Modal>
+        <OverdueNotificationModal
+          visible={receiptModalVisible}
+          onClose={() => setReceiptModalVisible(false)}
+          onSubmit={handleConfirmReceipt}
+          assetName={selectedItem?.assetName || 'Asset'}
+          title="Confirm Asset Receipt"
+          requireProofImages={true}
+          minProofImages={4}
+        />
         <AppSnackbar
           visible={snackbar.visible}
           message={snackbar.message}
@@ -510,7 +663,9 @@ const QuickActionsSection = ({
   styles,
   navigation,
   employeeId,
+  roleName,
   supervisorName,
+  supervisorAssignedAssets,
   isMobileLayout,
 }: any) => (
   <View
@@ -560,6 +715,61 @@ const QuickActionsSection = ({
         <Text style={styles.actionButtonText}>Assign Asset</Text>
       </View>
     </TouchableOpacity>
+    <TouchableOpacity
+      onPress={() =>
+        navigation.navigate('FieldAssets', {
+          employeeId: String(employeeId || ''),
+          operatorName: String(supervisorName || ''),
+        })
+      }
+    >
+      <View style={[styles.actionButton, { backgroundColor: '#0369A1' }]}> 
+        <Ionicons
+          name="list-outline"
+          size={20}
+          color="#fff"
+          style={styles.actionIcon}
+        />
+        <Text style={styles.actionButtonText}>My Assigned Assets</Text>
+      </View>
+    </TouchableOpacity>
+    <TouchableOpacity
+      onPress={() =>
+        navigation.navigate('ReturnAsset', {
+          assets: supervisorAssignedAssets || [],
+          supervisorEmployeeId: String(employeeId || ''),
+          returnByRole: 'supervisor',
+        })
+      }
+    >
+      <View style={[styles.actionButton, { backgroundColor: '#1E40AF' }]}> 
+        <Ionicons
+          name="return-up-back-outline"
+          size={20}
+          color="#fff"
+          style={styles.actionIcon}
+        />
+        <Text style={styles.actionButtonText}>Return Assigned Assets</Text>
+      </View>
+    </TouchableOpacity>
+    <TouchableOpacity
+      onPress={() =>
+        navigation.navigate('Reports', {
+          employeeId: String(employeeId || ''),
+          roleName: String(roleName || 'Supervisor'),
+        })
+      }
+    >
+      <View style={[styles.actionButton, { backgroundColor: '#4C1D95' }]}> 
+        <Ionicons
+          name="document-text-outline"
+          size={20}
+          color="#fff"
+          style={styles.actionIcon}
+        />
+        <Text style={styles.actionButtonText}>View Reports</Text>
+      </View>
+    </TouchableOpacity>
   </View>
 );
 
@@ -567,6 +777,9 @@ const ActivitySection = ({
   styles,
   operatorReplies,
   openExtendModal,
+  openReceiptModal,
+  onConfirmReturn,
+  hideNotification,
   isMobileLayout,
 }: any) => (
   <View
@@ -589,11 +802,20 @@ const ActivitySection = ({
       <Text style={styles.noItemsText}>No replies yet.</Text>
     ) : (
       <ScrollView
+        style={styles.activityListScroll}
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
         // This ensures the scroll area expands correctly
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={styles.activityListContent}
       >
-        {operatorReplies.map((item: any) => (
+        {operatorReplies.map((item: any) => {
+          const hasReply = !!item.reply && item.reply.trim().length > 0;
+          const isConfirmed = ['received', 'confirmed'].includes(
+            String(item.status || '').toLowerCase(),
+          );
+          const isReturnPending = isReturnPendingNotification(item.reason, item.reply);
+
+          return (
           <View key={item.notificationId} style={styles.activityItem}>
             <Ionicons name="chatbubbles-outline" size={24} color="#22D3EE" />
             <View style={styles.activityTextContainer}>
@@ -601,18 +823,56 @@ const ActivitySection = ({
                 Reply from{' '}
                 <Text style={{ fontWeight: 'bold' }}>{item.operatorName}</Text>
               </Text>
-              <Text style={styles.activitySubtext}>
-                “{item.reply || item.reason}”
+              <Text style={[styles.activitySubtext, { textTransform: 'capitalize' }]}>
+                Status: {item.status || 'unread'}
               </Text>
+              <Text style={styles.activitySubtext}>
+                “{parseReplyPayload(item.reply || item.reason).message}”
+              </Text>
+              {parseReplyPayload(item.reply).proofPhotos.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                  {parseReplyPayload(item.reply).proofPhotos.map((uri, idx) => (
+                    <Image
+                      key={`supervisor-proof-${item.notificationId}-${idx}`}
+                      source={{ uri }}
+                      style={{ width: 56, height: 56, borderRadius: 8, marginRight: 8 }}
+                    />
+                  ))}
+                </ScrollView>
+              )}
             </View>
+            {isConfirmed && !isReturnPending && (
+              <TouchableOpacity
+                onPress={() => openExtendModal(item)}
+                style={styles.extendButton}
+              >
+                <Text style={styles.extendButtonText}>Extend</Text>
+              </TouchableOpacity>
+            )}
+            {item.isAssignment && !hasReply && !isConfirmed && (
+              <TouchableOpacity
+                onPress={() => openReceiptModal(item)}
+                style={[styles.extendButton, { backgroundColor: '#0F766E', marginLeft: 8 }]}
+              >
+                <Text style={styles.extendButtonText}>Confirm Receipt</Text>
+              </TouchableOpacity>
+            )}
+            {isReturnPending && (
+              <TouchableOpacity
+                onPress={() => onConfirmReturn(item)}
+                style={[styles.extendButton, { backgroundColor: '#14532D', marginLeft: 8 }]}
+              >
+                <Text style={styles.extendButtonText}>Confirm Return</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              onPress={() => openExtendModal(item)}
-              style={styles.extendButton}
+              onPress={() => hideNotification(item.notificationId)}
+              style={[styles.extendButton, { backgroundColor: '#334155', marginLeft: 8 }]}
             >
-              <Text style={styles.extendButtonText}>Extend</Text>
+              <Text style={styles.extendButtonText}>Mark as Read</Text>
             </TouchableOpacity>
           </View>
-        ))}
+        );})}
       </ScrollView>
     )}
   </View>

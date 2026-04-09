@@ -244,6 +244,13 @@ export function opratorStyles(viewport?: DashboardViewport) {
       flexWrap: 'wrap',
       gap: 10,
     },
+    notificationsInnerScroll: {
+      maxHeight: isDesktopWeb ? 340 : 260,
+      width: '100%',
+    },
+    notificationsInnerScrollContent: {
+      paddingBottom: 4,
+    },
     replyRowItemWeb: {
       width: '100%',
     },

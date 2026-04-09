@@ -17,6 +17,7 @@ import AddCompanyScreen from "./src/screens/Client/AddCompanyScreen";
 // Admin
 import CompanyDashboard from "./src/screens/Admin/CompanyDashboard";
 import CompanyUsersScreen from "./src/screens/CommonScreen/CompanyUsersScreen";
+import ReportsScreen from "./src/screens/CommonScreen/ReportsScreen";
 import AddCompanyUser from "./src/screens/Admin/AddCompanyUser";
 
 // Supervisor
@@ -45,6 +46,18 @@ import ResetPasswordScreen from "./src/screens/Password/ResetPassword";
 function App(): React.JSX.Element {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const isPublicPath = (pathName: string): boolean => {
+    const normalized = String(pathName || '').toLowerCase();
+    return (
+      normalized === '/' ||
+      normalized === '/login' ||
+      normalized === '/add-company' ||
+      normalized === '/forgot-password' ||
+      normalized.startsWith('/reset-password') ||
+      normalized === '/superadmin/login'
+    );
+  };
 
   // Check if user is already logged in
   useEffect(() => {
@@ -84,6 +97,18 @@ function App(): React.JSX.Element {
     }
   }, []);
 
+  // On web, prevent direct refresh on protected routes after logout.
+  useEffect(() => {
+    if (loading || user || Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+
+    const currentPath = window.location.pathname;
+    if (!isPublicPath(currentPath)) {
+      window.history.replaceState({}, '', '/login');
+    }
+  }, [loading, user]);
+
   // Linking configuration so web refresh preserves the current route
   const linking = {
     prefixes: Platform.OS === 'web' && typeof window !== 'undefined'
@@ -105,6 +130,7 @@ function App(): React.JSX.Element {
         FieldAssets: 'assets/field',
         AddEditAsset: 'assets/edit',
         AssignAsset: 'assign',
+        Reports: 'reports',
         AssetFullDetails: 'assets/:asset',
         ReturnAsset: 'return',
         ForgotPassword: 'forgot-password',
@@ -263,6 +289,11 @@ function AppStack({ user, setUser }: any) {
       <Stack.Screen
         name="ReturnAsset"
         component={ReturnAssetScreen}
+      />
+
+      <Stack.Screen
+        name="Reports"
+        component={ReportsScreen}
       />
     </Stack.Navigator>
   );

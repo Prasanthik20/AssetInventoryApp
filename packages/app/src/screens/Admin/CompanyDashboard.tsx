@@ -57,6 +57,53 @@ const SafeIonicons = ({
   }
 };
 
+const isReturnPendingNotification = (
+  reason?: string | null,
+  reply?: string | null,
+  status?: string | null,
+): boolean => {
+  const reasonText = String(reason || '').toLowerCase();
+  const replyText = String(reply || '').toLowerCase();
+  const statusText = String(status || '').toLowerCase();
+
+  const isPendingStatus = statusText === 'unread' || statusText === 'replied';
+  const isPendingText =
+    reasonText.includes('has been returned by') || replyText.includes('pending confirmation');
+  const isAlreadyConfirmed =
+    statusText === 'resolved' ||
+    statusText === 'received' ||
+    reasonText.includes('return confirmed') ||
+    replyText.includes('return confirmed');
+
+  return isPendingStatus && isPendingText && !isAlreadyConfirmed;
+};
+
+const parseNotificationMessage = (rawReply?: string | null, rawReason?: string | null): string => {
+  const preferred = String(rawReply || rawReason || '').trim();
+  if (!preferred) return '-';
+
+  try {
+    const parsed = JSON.parse(preferred);
+    if (parsed && typeof parsed === 'object') {
+      if (typeof (parsed as { message?: unknown }).message === 'string') {
+        const msg = String((parsed as { message?: string }).message).trim();
+        if (msg.length > 0) return msg;
+      }
+      if (typeof (parsed as { reason?: unknown }).reason === 'string') {
+        const reason = String((parsed as { reason?: string }).reason).trim();
+        if (reason.length > 0) return reason;
+      }
+    }
+    if (typeof parsed === 'string' && parsed.trim().length > 0) {
+      return parsed.trim();
+    }
+  } catch {
+    // Keep plain non-JSON messages unchanged.
+  }
+
+  return preferred;
+};
+
 // 2. Create a specific type for this screen's navigation prop
 type Props = NativeStackScreenProps<RootStackParamList, 'CompanyDashboard'> & {
   setUser: React.Dispatch<React.SetStateAction<any>>;
@@ -156,8 +203,23 @@ const CompanyDashboard: React.FC<Props> = ({
   };
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('user');
-    setAppUser(null);
+    try {
+      await AsyncStorage.multiRemove([
+        'user',
+        'token',
+        'accessToken',
+        'refreshToken',
+      ]);
+    } catch (error) {
+      console.error('Logout storage cleanup error:', error);
+    } finally {
+      setUser(null);
+      setAppUser(null);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.history.replaceState({}, '', '/login');
+      }
+    }
   };
 
   const fetchGlobalNotifications = async () => {
@@ -240,6 +302,41 @@ const CompanyDashboard: React.FC<Props> = ({
     }
   };
 
+  const handleConfirmReturn = async (item: any) => {
+    const assignmentId = Number(item?.assignmentId);
+    const hasAssignmentId = Number.isFinite(assignmentId) && assignmentId > 0;
+    const assetId = Number(item?.asset?.id);
+    const notificationId = Number(item?.id);
+    const confirmedByEmployeeId = Number(user?.employeeId);
+
+    if (
+      !Number.isFinite(notificationId) ||
+      !Number.isFinite(confirmedByEmployeeId) ||
+      (!hasAssignmentId && !Number.isFinite(assetId))
+    ) {
+      console.error('Missing return confirmation context:', {
+        assignmentId,
+        assetId,
+        notificationId,
+        confirmedByEmployeeId,
+      });
+      return;
+    }
+
+    try {
+      await axios.post(`${baseURL}/api/assets/confirm-return`, {
+        notificationId,
+        ...(hasAssignmentId ? { assignmentId } : { assetId }),
+        confirmedByEmployeeId,
+      });
+      setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+      await fetchGlobalNotifications();
+      await fetchAssetAnalytics();
+    } catch (error) {
+      console.error('Admin confirm return error:', error);
+    }
+  };
+
   const toggleGroup = (senderName: string) => {
     setExpandedGroups(prev => {
       const newSet = new Set(prev);
@@ -260,6 +357,7 @@ const CompanyDashboard: React.FC<Props> = ({
       fetchUsers();
       fetchDashboardData();
       fetchAssetAnalytics();
+      fetchGlobalNotifications();
     }, []),
   );
 
@@ -565,58 +663,88 @@ const CompanyDashboard: React.FC<Props> = ({
                                 </TouchableOpacity>
 
                                 {/* Group Notifications */}
-                                {isExpanded &&
-                                  userNotifications.map(
-                                    (item: any, index: number) => (
-                                      <TouchableOpacity
-                                        key={
-                                          item.id || `${groupIndex}-${index}`
-                                        }
-                                        style={styles.notifLine}
-                                        onPress={() =>
-                                          hideNotification(item.id)
-                                        }
-                                        activeOpacity={0.7}
-                                      >
-                                        <View style={styles.notifMainContent}>
-                                          <View style={styles.notifHeaderRow}>
-                                            <View style={styles.tagContainer}>
-                                              <Text style={styles.roleTagText}>
-                                                {item.status}
+                                {isExpanded && (
+                                  <ScrollView
+                                    style={styles.groupNotificationsScroll}
+                                    contentContainerStyle={styles.groupNotificationsScrollContent}
+                                    nestedScrollEnabled
+                                    showsVerticalScrollIndicator
+                                  >
+                                    {userNotifications.map(
+                                      (item: any, index: number) => {
+                                        const isReturnPending = isReturnPendingNotification(item.reason, item.reply, item.status);
+                                        const displayMessage = parseNotificationMessage(item.reply, item.reason);
+
+                                        return (
+                                        <View
+                                          key={
+                                            item.id || `${groupIndex}-${index}`
+                                          }
+                                          style={styles.notifLine}
+                                        >
+                                          <View style={styles.notifMainContent}>
+                                            <View style={styles.notifHeaderRow}>
+                                              <View style={styles.tagContainer}>
+                                                <Text style={styles.roleTagText}>
+                                                  {item.status}
+                                                </Text>
+                                              </View>
+                                              <Text style={styles.notifTime}>
+                                                {item.createdAt
+                                                  ? new Date(
+                                                      item.createdAt,
+                                                    ).toLocaleDateString('en-GB')
+                                                  : ''}
                                               </Text>
                                             </View>
-                                            <Text style={styles.notifTime}>
-                                              {item.createdAt
-                                                ? new Date(
-                                                    item.createdAt,
-                                                  ).toLocaleDateString('en-GB')
-                                                : ''}
-                                            </Text>
-                                          </View>
 
-                                          <Text style={styles.assetContext}>
-                                            Asset:{' '}
+                                            <Text style={styles.assetContext}>
+                                              Asset:{' '}
+                                              <Text
+                                                style={{ fontWeight: 'bold' }}
+                                              >
+                                                {item.asset?.name || 'N/A'}
+                                              </Text>
+                                            </Text>
+
                                             <Text
-                                              style={{ fontWeight: 'bold' }}
+                                              style={styles.notifMessage}
+                                              numberOfLines={2}
                                             >
-                                              {item.asset?.name || 'N/A'}
+                                              "{displayMessage}"
                                             </Text>
-                                          </Text>
 
-                                          <Text
-                                            style={styles.notifMessage}
-                                            numberOfLines={2}
-                                          >
-                                            "{item.message}"
-                                          </Text>
+                                            {item.receiver?.name ? (
+                                              <Text style={styles.tapToHideText}>
+                                                Receiver: {item.receiver.name}
+                                              </Text>
+                                            ) : null}
 
-                                          <Text style={styles.tapToHideText}>
-                                            Tap to mark as seen
-                                          </Text>
+                                            <View style={styles.notifActionRow}>
+                                              {isReturnPending && (
+                                                <TouchableOpacity
+                                                  style={[styles.inlineActionButton, styles.confirmReturnButton]}
+                                                  onPress={() => handleConfirmReturn(item)}
+                                                  activeOpacity={0.8}
+                                                >
+                                                  <Text style={styles.inlineActionButtonText}>Confirm Return</Text>
+                                                </TouchableOpacity>
+                                              )}
+                                              <TouchableOpacity
+                                                style={styles.inlineActionButton}
+                                                onPress={() => hideNotification(item.id)}
+                                                activeOpacity={0.8}
+                                              >
+                                                <Text style={styles.inlineActionButtonText}>Mark as seen</Text>
+                                              </TouchableOpacity>
+                                            </View>
+                                          </View>
                                         </View>
-                                      </TouchableOpacity>
-                                    ),
-                                  )}
+                                      );
+                                      },
+                                    )}
+                                  </ScrollView>
+                                )}
                               </View>
                             );
                           },
@@ -689,6 +817,29 @@ const CompanyDashboard: React.FC<Props> = ({
                         color="#fff"
                       />
                       <Text style={styles.addUserButtonText}>Add New User</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() =>
+                      navigation.navigate('Reports', {
+                        employeeId: String(user?.employeeId || ''),
+                        roleName: String(user?.roleName || 'Admin'),
+                      })
+                    }
+                  >
+                    <LinearGradient
+                      colors={['#7C3AED', '#4C1D95']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.addUserButton}
+                    >
+                      <SafeIonicons
+                        name="document-text-outline"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.addUserButtonText}>View Reports</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>

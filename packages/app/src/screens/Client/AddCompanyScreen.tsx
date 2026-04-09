@@ -165,7 +165,7 @@ export default function AddCompanyScreen() {
             </View>
           </View>
 
-          <Text style={styles.footerText}>🌐 Web   🧑‍💼 Companies   ⚙️ Settings   🍎 iOS</Text>
+          {/* <Text style={styles.footerText}>🌐 Web   🧑‍💼 Companies   ⚙️ Settings   🍎 iOS</Text> */}
         </ScrollView>
       </SafeAreaView>
       <AppSnackbar

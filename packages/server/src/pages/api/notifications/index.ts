@@ -50,9 +50,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(200).json([]);
         }
 
-        const extraCondition =
-          role === "operator" ? `AND n.reply IS NULL` : "";
-
         sqlQuery = `
           SELECT
             n.id::text AS "notifId",
@@ -68,7 +65,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           LEFT JOIN "Users" s ON n."senderId" = s."employeeId"
           LEFT JOIN "Roles" r ON s."roleId" = r."roleId"
           WHERE n."receiverId" = $1
-          ${extraCondition}
           ORDER BY n."created_at" DESC;
         `;
 

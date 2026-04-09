@@ -42,6 +42,8 @@ async function getSupervisorNotifications(
     n.status,
     n.created_at            AS "createdAt",
     n."assignmentId",       -- 🔥 Need this for the PUT extend function later
+    n."senderId",
+    n."receiverId",
     ad.id                   AS "assetId",
     ad.name                 AS "assetName",
 
@@ -53,7 +55,7 @@ async function getSupervisorNotifications(
   LEFT JOIN "Users" u ON u."employeeId" = n."senderId" 
 
   WHERE n."receiverId" = $1   -- Supervisor is the Receiver of the reply
-    AND n.status IN ('unread', 'replied')  -- Only show active replies
+    AND n.status IN ('unread', 'replied', 'received')  -- Only show active replies
   ORDER BY n.created_at DESC
 `;
 

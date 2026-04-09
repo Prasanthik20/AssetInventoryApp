@@ -18,15 +18,18 @@ const ReturnAssetScreen: React.FC = () => {
     const isDesktopWeb = Platform.OS === 'web' && width >= 900;
     const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
     const route = useRoute<ReturnAssetRouteProp>();
-    const { assets, operatorEmployeeId } = route.params;
+    const { assets, operatorEmployeeId, supervisorEmployeeId, returnByRole } = route.params;
     const navigation = useNavigation<any>();
-    const employeeId = Number(operatorEmployeeId);
+    const actorRole = returnByRole === 'supervisor' ? 'supervisor' : 'operator';
+    const employeeId = Number(actorRole === 'supervisor' ? supervisorEmployeeId : operatorEmployeeId);
     const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedOverdueAsset, setSelectedOverdueAsset] = useState('');
     const [photo, setPhoto] = useState<string | null>(null);
+    const [photoBatch, setPhotoBatch] = useState<string[]>([]);
     const [barcodeURL, setBarcodeURL] = useState<string | null>(null);
     const [assetPhotoMap, setAssetPhotoMap] = useState<Record<string, string>>({});
+    const [assetPhotoBatchMap, setAssetPhotoBatchMap] = useState<Record<string, string[]>>({});
     const [assetBarcodeMap, setAssetBarcodeMap] = useState<Record<string, string>>({});
     const [assetPhotoLoadingMap, setAssetPhotoLoadingMap] = useState<Record<string, boolean>>({});
     const [assetBarcodeLoadingMap, setAssetBarcodeLoadingMap] = useState<Record<string, boolean>>({});
@@ -41,6 +44,13 @@ const ReturnAssetScreen: React.FC = () => {
     const toAssetId = (value: unknown) => Number(value);
     const toAssetKey = (value: unknown) => String(toAssetId(value));
     const toAssignmentId = (value: unknown) => Number(value);
+    const getSelectionId = (item: Asset) => {
+        const assignmentId = toAssignmentId(item.assignmentId);
+        if (!Number.isNaN(assignmentId) && assignmentId > 0) {
+            return assignmentId;
+        }
+        return toAssetId(item.assetId);
+    };
 
     const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
         setSnackbar({ visible: true, message, kind });
@@ -157,23 +167,29 @@ const ReturnAssetScreen: React.FC = () => {
             // Launch image picker
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
+                allowsEditing: false,
+                allowsMultipleSelection: true,
+                selectionLimit: 0,
                 aspect: [4, 3],
                 quality: 0.8,
                 base64: true,
             });
 
             if (!result.canceled && result.assets[0]) {
-                const asset = result.assets[0];
-                const base64 = asset.base64;
+                const photos = result.assets
+                    .map((asset) => asset.base64)
+                    .filter((value): value is string => Boolean(value))
+                    .map((base64) => `data:image/jpeg;base64,${base64}`);
 
-                if (base64) {
-                    const photoURL = `data:image/jpeg;base64,${base64}`;
+                if (photos.length > 0) {
+                    const primaryPhoto = photos[0];
                     if (hasTargetAsset && targetKey) {
-                        setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: photoURL }));
+                        setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
+                        setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
                         showSnackbar('Photo saved for selected asset.', 'success');
                     } else {
-                        setPhoto(photoURL);
+                        setPhoto(primaryPhoto);
+                        setPhotoBatch(photos);
                         showSnackbar('Photo will be attached to the return.', 'success');
                     }
                 } else {
@@ -257,10 +273,15 @@ const ReturnAssetScreen: React.FC = () => {
         setSelectedAssets(current => {
             const isSelected = current.includes(id);
             if (isSelected) {
-                const removedAsset = assets.find((asset) => toAssignmentId(asset.assignmentId) === id);
+                const removedAsset = assets.find((asset) => getSelectionId(asset) === id);
                 if (removedAsset) {
                     const assetKey = toAssetKey(removedAsset.assetId);
                     setAssetPhotoMap((prev) => {
+                        const next = { ...prev };
+                        delete next[assetKey];
+                        return next;
+                    });
+                    setAssetPhotoBatchMap((prev) => {
                         const next = { ...prev };
                         delete next[assetKey];
                         return next;
@@ -298,7 +319,7 @@ const ReturnAssetScreen: React.FC = () => {
             return;
         }
 
-        const selectedAssetRows = assets.filter((a) => selectedAssets.includes(toAssignmentId(a.assignmentId)));
+        const selectedAssetRows = assets.filter((a) => selectedAssets.includes(getSelectionId(a)));
         if (selectedAssetRows.length > 1) {
             const missing = selectedAssetRows.filter(
                 (asset) => {
@@ -316,21 +337,33 @@ const ReturnAssetScreen: React.FC = () => {
         try {
             const payload = {
                 assetIds: selectedAssetRows.map((a) => toAssetId(a.assetId)),
-                operatorEmployeeId: employeeId,
+                assignmentIds: selectedAssetRows
+                    .map((a) => toAssignmentId(a.assignmentId))
+                    .filter((id) => Number.isFinite(id) && id > 0),
+                ...(actorRole === 'supervisor'
+                    ? { supervisorEmployeeId: employeeId }
+                    : { operatorEmployeeId: employeeId }),
                 assetMedia: selectedAssetRows.map((asset) => ({
                     assetId: toAssetId(asset.assetId),
+                    assignmentId: toAssignmentId(asset.assignmentId),
                     // Send only media selected in this return flow to keep request payload small.
                     photoURL: assetPhotoMap[toAssetKey(asset.assetId)] || photo || null,
+                    photoURLs:
+                        assetPhotoBatchMap[toAssetKey(asset.assetId)] ||
+                        (assetPhotoMap[toAssetKey(asset.assetId)] ? [assetPhotoMap[toAssetKey(asset.assetId)]] : photoBatch),
                     barcodeURL: assetBarcodeMap[toAssetKey(asset.assetId)] || barcodeURL || null,
                 })),
                 ...(photo && { photoURL: photo }), // Include photo if available
+                ...(photoBatch.length > 0 && { photoURLs: photoBatch }),
                 ...(barcodeURL && { barcodeURL }),
             };
 
             console.log("RETURN PAYLOAD 👉", payload);
 
             const response = await axios.post(
-                    `${baseURL}/api/operator/returnAsset`,
+                    actorRole === 'supervisor'
+                        ? `${baseURL}/api/supervisor/returnAsset`
+                        : `${baseURL}/api/operator/returnAsset`,
                 payload
             );
 
@@ -338,10 +371,13 @@ const ReturnAssetScreen: React.FC = () => {
 
             if (response.status === 200) {
                 showSnackbar("Assets returned successfully", 'success');
-                setTimeout(
-                    () => navigation.navigate("OperatorDashboard", { refresh: Date.now() }),
-                    500,
-                );
+                setTimeout(() => {
+                    if (actorRole === 'supervisor') {
+                        navigation.navigate('SupervisorDashboard', { refresh: Date.now() } as any);
+                    } else {
+                        navigation.navigate('OperatorDashboard', { refresh: Date.now() });
+                    }
+                }, 500);
                 navigation.goBack();
             }
         } catch (error: any) {
@@ -352,7 +388,7 @@ const ReturnAssetScreen: React.FC = () => {
 
 
     const renderAssetItem = (item: Asset) => {
-        const id = toAssignmentId(item.assignmentId); // ✅ UNIQUE & SAFE
+        const id = getSelectionId(item); // ✅ Handles assignment rows and supervisor-owned assets
         if (Number.isNaN(id)) {
             return null;
         }
@@ -443,7 +479,7 @@ const ReturnAssetScreen: React.FC = () => {
                                     <FlatList
                                         data={assets}
                                         renderItem={({ item }) => renderAssetItem(item)}
-                                        keyExtractor={(item) => String(toAssignmentId(item.assignmentId))}
+                                        keyExtractor={(item) => String(getSelectionId(item))}
                                         showsVerticalScrollIndicator={false}
                                     />
                                 )}
@@ -456,7 +492,7 @@ const ReturnAssetScreen: React.FC = () => {
                                         <Text style={styles.label}>Upload Per Asset (Required for Multi-Select)</Text>
                                         <Text style={styles.helperText}>Each selected asset needs both a photo and barcode image.</Text>
                                         {assets
-                                            .filter((asset) => selectedAssets.includes(toAssignmentId(asset.assignmentId)))
+                                            .filter((asset) => selectedAssets.includes(getSelectionId(asset)))
                                             .map((asset) => {
                                                 const assetKey = toAssetKey(asset.assetId);
                                                 const currentPhoto = assetPhotoMap[assetKey] || null;

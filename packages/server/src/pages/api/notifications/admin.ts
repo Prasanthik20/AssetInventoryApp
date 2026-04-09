@@ -24,6 +24,7 @@ export default async function handler(
     const sql = `
       SELECT
         n.id                    AS "notificationId",
+        n."assignmentId"       AS "assignmentId",
         n.reason,
         n.reply,
         n.status,
@@ -77,6 +78,7 @@ export default async function handler(
 
     const notifications = rows.map((n) => ({
       id: n.notificationId,
+      assignmentId: n.assignmentId,
       message: n.reply ?? n.reason,
       reason: n.reason,
       reply: n.reply,

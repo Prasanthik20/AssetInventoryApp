@@ -193,6 +193,12 @@ export function supervisorStyles(viewport?: DashboardViewport) {
       color: theme.textPrimary,
     },
     noItemsText: { color: theme.textSecondary, fontStyle: 'italic' },
+    activityListScroll: {
+      maxHeight: isDesktopWeb ? 380 : 280,
+    },
+    activityListContent: {
+      paddingBottom: 20,
+    },
     activityItem: {
       flexDirection: 'row',
       alignItems: 'center',

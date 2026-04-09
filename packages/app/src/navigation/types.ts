@@ -89,11 +89,17 @@ ResetPassword: { token: string };
   };
   ReturnAsset: {
     assets: Asset[];
-    operatorEmployeeId: string;
+    operatorEmployeeId?: string;
+    supervisorEmployeeId?: string;
+    returnByRole?: 'operator' | 'supervisor';
   };
   AssignAsset: {
     supervisor_employeeId: string;
     supervisorName: string;
+  };
+  Reports: {
+    employeeId: string;
+    roleName: string;
   };
 };
 
@@ -105,4 +111,4 @@ const WEB_DEV_API_URL =
 // const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
 
 // Keep all app screens on the same backend in development.
-export const baseURL = __DEV__ ? WEB_DEV_API_URL : PROD_API_URL;
+export const baseURL = 'http://localhost:3000'; // __DEV__ ? WEB_DEV_API_URL : PROD_API_URL;

@@ -6,17 +6,22 @@ import {
     Modal,
     TouchableOpacity,
     TextInput,
+    ScrollView,
+    Image,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { globalColors } from '../../styles/globalStyles';
+import * as ImagePicker from 'expo-image-picker';
 
 interface Props {
     visible: boolean;
     onClose: () => void;
-    onSubmit: (reason: string) => void;
+    onSubmit: (reason: string, proofImages?: string[]) => void;
     assetName: string;
     title?: string;
+    requireProofImages?: boolean;
+    minProofImages?: number;
 }
 
 const OverdueNotificationModal: React.FC<Props> = ({
@@ -24,27 +29,76 @@ const OverdueNotificationModal: React.FC<Props> = ({
     onClose,
     onSubmit,
     assetName,
-    title
+    title,
+    requireProofImages = false,
+    minProofImages = 4,
 }) => {
 
     const [reason, setReason] = useState('');
+    const [proofImages, setProofImages] = useState<string[]>([]);
     const [errorText, setErrorText] = useState('');
 
     // 🔥 Auto-clear input each time modal opens
     useEffect(() => {
         if (visible) {
             setReason('');
+            setProofImages([]);
             setErrorText('');
         }
     }, [visible]);
+
+    const handlePickProofImages = async () => {
+        try {
+            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (permissionResult.status !== 'granted') {
+                setErrorText('Media library permission is required to attach proof images.');
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: false,
+                allowsMultipleSelection: true,
+                selectionLimit: 0,
+                quality: 0.7,
+                base64: true,
+            });
+
+            if (result.canceled) {
+                return;
+            }
+
+            const selectedImages = result.assets
+                .map((asset) => asset.base64)
+                .filter((value): value is string => Boolean(value))
+                .map((base64) => `data:image/jpeg;base64,${base64}`);
+
+            if (selectedImages.length === 0) {
+                setErrorText('Could not process selected images. Please try again.');
+                return;
+            }
+
+            setProofImages(selectedImages);
+            setErrorText('');
+        } catch (error) {
+            console.error('Proof image picker error:', error);
+            setErrorText('Failed to select proof images.');
+        }
+    };
 
     const handleSubmit = () => {
         if (!reason.trim()) {
             setErrorText('Please provide details.');
             return;
         }
+
+        if (requireProofImages && proofImages.length < minProofImages) {
+            setErrorText(`Please attach at least ${minProofImages} proof images.`);
+            return;
+        }
+
         setErrorText('');
-        onSubmit(reason);
+        onSubmit(reason, requireProofImages ? proofImages : undefined);
     };
 
     return (
@@ -81,6 +135,24 @@ const OverdueNotificationModal: React.FC<Props> = ({
                         value={reason}
                         onChangeText={setReason}
                     />
+
+                    {requireProofImages && (
+                        <View style={styles.proofContainer}>
+                            <TouchableOpacity style={styles.proofButton} onPress={handlePickProofImages}>
+                                <Text style={styles.proofButtonText}>Upload Proof Images (All Directions)</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.proofHintText}>
+                                Selected: {proofImages.length} / minimum {minProofImages}
+                            </Text>
+                            {proofImages.length > 0 && (
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                    {proofImages.map((uri, index) => (
+                                        <Image key={`proof-${index}`} source={{ uri }} style={styles.proofThumbnail} />
+                                    ))}
+                                </ScrollView>
+                            )}
+                        </View>
+                    )}
 
                     {!!errorText && (
                         <Text style={styles.errorText}>{errorText}</Text>
@@ -176,6 +248,37 @@ const styles = StyleSheet.create({
         color: globalColors.surfacePrimary,
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    proofContainer: {
+        width: '100%',
+        marginBottom: 16,
+    },
+    proofButton: {
+        width: '100%',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: globalColors.borderSoft,
+        paddingVertical: 10,
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    proofButtonText: {
+        color: globalColors.textTitle,
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    proofHintText: {
+        color: globalColors.textSecondary,
+        fontSize: 12,
+        marginBottom: 8,
+    },
+    proofThumbnail: {
+        width: 64,
+        height: 64,
+        borderRadius: 8,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: globalColors.borderSoft,
     },
 });
 

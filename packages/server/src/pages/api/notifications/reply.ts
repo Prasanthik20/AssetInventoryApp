@@ -17,10 +17,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { originalNotificationId, replyMessage, senderId , receiverId } = req.body;
+    const { originalNotificationId, replyMessage, senderId , receiverId, proofPhotos } = req.body;
 
     if (!originalNotificationId || !replyMessage || !senderId || !receiverId) {
       return res.status(400).json({ message: "Missing required fields." });
+    }
+
+    const normalizedProofPhotos = Array.isArray(proofPhotos)
+      ? proofPhotos
+          .filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
+          .map((item) => item.trim())
+      : [];
+
+    if (normalizedProofPhotos.length > 0 && normalizedProofPhotos.length < 4) {
+      return res.status(400).json({ message: "At least 4 proof images are required for assignment receipt confirmation." });
     }
 
     // Fetch original notification
@@ -35,18 +45,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { assetId, assignmentId, reason } = original.rows[0];
 
+    let storedReplyMessage = replyMessage;
+
+    if (normalizedProofPhotos.length > 0 && assignmentId) {
+      const proofPayload = {
+        kind: 'asset_receipt_confirmation',
+        message: replyMessage,
+        proofCount: normalizedProofPhotos.length,
+        proofPhotos: normalizedProofPhotos,
+      };
+
+      storedReplyMessage = JSON.stringify(proofPayload);
+
+      await query(
+        `UPDATE "Asset_Assignments"
+         SET
+           notes = CONCAT(
+             COALESCE(notes, ''),
+             CASE WHEN COALESCE(notes, '') = '' THEN '' ELSE E'\n' END,
+             '[RECEIPT_PROOF] ',
+             $2::text
+           ),
+           "photoURL" = COALESCE($3::text, "photoURL"),
+           "barcodeURL" = COALESCE($4::text, "barcodeURL")
+         WHERE id = $1`,
+        [
+          Number(assignmentId),
+          storedReplyMessage,
+          normalizedProofPhotos[0] ?? null,
+          normalizedProofPhotos[1] ?? null,
+        ],
+      );
+    }
+
     // Insert reply notification
     const insertQuery = await query(
     `INSERT INTO "Notifications" 
     ("senderId", "receiverId", "assetId", "assignmentId", "reason", "reply", "status") 
-    VALUES ($1, $2, $3, $4, $5, $6, 'replied') RETURNING *`,
-    [senderId, receiverId, assetId, assignmentId, reason, replyMessage]
+    VALUES ($1, $2, $3, $4, $5, $6, 'received') RETURNING *`,
+    [Number(senderId), Number(receiverId), assetId, assignmentId, reason, storedReplyMessage]
   );
 
-    // Mark original notification as replied
+    // Mark both sides as received so sender and receiver see the same state
     await query(
-      `UPDATE "Notifications" SET status = 'replied' WHERE id = $1`,
-      [originalNotificationId]
+      `UPDATE "Notifications" SET status = 'received' WHERE id IN ($1, $2)`,
+      [originalNotificationId, insertQuery.rows[0].id]
     );
 
     return res.status(200).json({

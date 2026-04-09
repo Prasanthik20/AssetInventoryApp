@@ -274,15 +274,19 @@ export function dashboardStyles(viewport?: DashboardViewport) {
     bottomRow: {
       flexDirection: isDesktopWeb ? 'row' : 'column',
       justifyContent: 'space-between',
+      alignItems: 'stretch',
       width: '100%',
       gap: isShortViewport ? 14 : 18,
       marginTop: 6,
     },
     feedContainer: {
-      flex: isDesktopWeb ? 3 : 1,
+      flex: isDesktopWeb ? 3 : undefined,
+      width: '100%',
+      marginBottom: isDesktopWeb ? 0 : 4,
     },
     actionsContainer: {
-      flex: isDesktopWeb ? 1 : 1,
+      flex: isDesktopWeb ? 1 : undefined,
+      width: '100%',
     },
     bottomContent: {
       flex: 1,
@@ -386,6 +390,7 @@ export function dashboardStyles(viewport?: DashboardViewport) {
       borderColor: colors.borderStrong,
       minHeight: 200,
       width: '100%',
+      overflow: 'hidden',
       shadowColor: '#001325',
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.26,
@@ -422,6 +427,12 @@ export function dashboardStyles(viewport?: DashboardViewport) {
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
       cursor: Platform.OS === 'web' ? 'pointer' : undefined,
+    },
+    groupNotificationsScroll: {
+      maxHeight: isDesktopWeb ? 360 : 260,
+    },
+    groupNotificationsScrollContent: {
+      paddingBottom: 2,
     },
     groupHeaderLeft: {
       flexDirection: 'row',
@@ -523,6 +534,31 @@ export function dashboardStyles(viewport?: DashboardViewport) {
       color: colors.accentWarm,
       marginTop: 7,
       fontWeight: '600',
+    },
+    notifActionRow: {
+      marginTop: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    inlineActionButton: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: 'rgba(30, 41, 59, 0.95)',
+      borderWidth: 1,
+      borderColor: 'rgba(148, 163, 184, 0.35)',
+    },
+    confirmReturnButton: {
+      backgroundColor: 'rgba(20, 83, 45, 0.95)',
+      borderColor: 'rgba(34, 197, 94, 0.35)',
+    },
+    inlineActionButtonText: {
+      color: '#E2E8F0',
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.2,
     },
   });
 }

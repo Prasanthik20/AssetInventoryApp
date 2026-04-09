@@ -136,9 +136,9 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.platformIcons}>
+          {/* <View style={styles.platformIcons}>
             <Text style={styles.platformText}>🌐 Web   📱 Android   🍎 iOS</Text>
-          </View>
+          </View> */}
 
           {/* <Text style={styles.mockHint}>
             Demo: admin@super.com / 12345

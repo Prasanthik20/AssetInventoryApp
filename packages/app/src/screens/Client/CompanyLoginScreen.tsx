@@ -225,12 +225,12 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                   </Text>
                 </TouchableOpacity>
 
-                <View style={styles.platformIcons}>
+                {/* <View style={styles.platformIcons}>
                   <Text style={styles.platformText}>
                     🌐 Web 📱 Android 
                     {/* 🍎 iOS */}
-                  </Text>
-                </View>
+                  {/* </Text> */}
+                {/* </View> */}
               </View>
               {/* </KeyboardAvoidingView> */}
             </View>

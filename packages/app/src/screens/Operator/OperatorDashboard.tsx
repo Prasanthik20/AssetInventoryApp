@@ -67,6 +67,28 @@ interface Notification {
   };
 }
 
+const parseReplyPayload = (rawReply?: string | null): { message: string; proofPhotos: string[] } => {
+  if (!rawReply) return { message: '', proofPhotos: [] };
+  try {
+    const parsed = JSON.parse(rawReply);
+    if (parsed && typeof parsed === 'object') {
+      const message = typeof parsed.message === 'string' ? parsed.message : rawReply;
+      const proofPhotos = Array.isArray(parsed.proofPhotos)
+        ? parsed.proofPhotos.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0)
+        : [];
+      return { message, proofPhotos };
+    }
+    return { message: rawReply, proofPhotos: [] };
+  } catch {
+    return { message: rawReply, proofPhotos: [] };
+  }
+};
+
+const isAssignmentNotification = (notification: Notification): boolean => {
+  const reason = String(notification.reason || '').toLowerCase();
+  return reason.includes('assigned to you');
+};
+
 interface LocationStat {
   location: string;
   count: number;
@@ -93,6 +115,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
   const [locationStats, setLocationStats] = useState<LocationStat[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [showAllAssets, setShowAllAssets] = useState(false);
+  const [showAllReturnedAssets, setShowAllReturnedAssets] = useState(false);
   const [showAllPendingNotifications, setShowAllPendingNotifications] =
     useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
@@ -101,11 +124,13 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
   const [modalConfig, setModalConfig] = useState<{
     title: string;
     assetName: string;
-    onSubmit: (reason: string) => void;
+    onSubmit: (reason: string, proofImages?: string[]) => void;
+    requireProofImages?: boolean;
   }>({
     title: '',
     assetName: '',
     onSubmit: () => {},
+    requireProofImages: false,
   });
   const [snackbar, setSnackbar] = useState<{
     visible: boolean;
@@ -133,11 +158,12 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     // Clear local data
     setNotifications([]);
     setMyAssets([]);
-
+ await AsyncStorage.removeItem('user');
+    // setAppUser(null);
     // Clear user → App.tsx will show AuthStack automatically
     setUser?.(null);
   };
@@ -159,37 +185,35 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
       //const data = await res.json();
 
       const rawAssets = assetsRes.data.assets || [];
-      // 🔥 DEDUPLICATION LOGIC: Keep only one entry per assetId
-      const uniqueAssetsMap = new Map();
-      rawAssets.forEach((a: any) => {
-        const id = a.assetId || a.id;
-        // If we haven't seen this asset yet, or this record is newer, add it
-        if (!uniqueAssetsMap.has(id)) {
-          uniqueAssetsMap.set(id, {
-            ...a,
-            assignedBy: a.assignedBy || a.assigned_by || a.senderId,
-            assetId: id,
-            serialNumber: a.serialNumber || a.s_n || a.serial_number, // Add this line
-          });
-        }
+      const normalizedAssets = rawAssets.map((a: any) => ({
+        ...a,
+        assignedBy: a.assignedBy || a.assigned_by || a.senderId,
+        assetId: a.assetId || a.id,
+        serialNumber: a.serialNumber || a.serialNo || a.s_n || a.serial_number,
+      }));
+
+      const activeAssets = normalizedAssets.filter((asset: any) => {
+        const normalizedStatus = String(asset?.status || '').toLowerCase();
+        return normalizedStatus === 'assigned' || normalizedStatus === 'overdue';
       });
-      const normalizedAssets = Array.from(uniqueAssetsMap.values());
-      const overdueAssets = normalizedAssets.filter((a: any) =>
+
+      const overdueAssets = activeAssets.filter((a: any) =>
+        String(a?.status || '').toLowerCase() === 'overdue' ||
         isAssetOverdue(a.expectedReturnDate),
       );
 
       // Build location-wise counts from fetched assets.
-      const locationCounts = normalizedAssets.reduce(
+      const locationCounts = activeAssets.reduce(
         (acc: Record<string, number>, asset: any) => {
           const locationKey =
             (asset?.location || 'Unknown').toString().trim() || 'Unknown';
           acc[locationKey] = (acc[locationKey] || 0) + 1;
           return acc;
         },
-        {},
+        {} as Record<string, number>,
       );
 
-      const locationEntries = Object.entries(locationCounts)
+      const locationEntries = (Object.entries(locationCounts) as [string, number][])
         .sort((a, b) => b[1] - a[1])
         .map(([location, count]) => ({
           location,
@@ -198,7 +222,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
 
       setMyAssets(normalizedAssets);
       setOverdueCount(overdueAssets.length);
-      setAssignedCount(normalizedAssets.length);
+      setAssignedCount(activeAssets.length);
       setCurrentLocation(locationEntries[0]?.location || 'N/A');
       setLocationStats(locationEntries);
       const mappedNotifications = (notificationsRes.data.notifications || [])
@@ -273,13 +297,25 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
   const handleOpenModal = (config: {
     title: string;
     assetName: string;
-    onSubmit: (reason: string) => void;
+    onSubmit: (reason: string, proofImages?: string[]) => void;
+    requireProofImages?: boolean;
   }) => {
     setModalConfig(config);
     setModalVisible(true);
   };
 
   const handleCloseModal = () => setModalVisible(false);
+
+  const hideNotification = async (id: number) => {
+    try {
+      await axios.put(`${baseURL}/api/notifications/hide`, { id });
+      setNotifications((prev) => prev.filter((item) => item.id !== id));
+      showSnackbar('Notification marked as read.', 'success');
+    } catch (error) {
+      console.error('Hide notification error:', error);
+      showSnackbar('Could not mark notification as read.', 'error');
+    }
+  };
 
   // Update the signature to accept the asset object
   const handleOverdueSubmit = async (reason: string, selectedAsset?: any) => {
@@ -334,6 +370,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
   const handleReplySubmit = async (
     replyMessage: string,
     notification: Notification,
+    proofImages?: string[],
   ) => {
     // The 'sender' of the original alert is the 'receiver' of this reply
     const supervisorId = notification.sender?.employeeId;
@@ -352,14 +389,24 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
         senderId: Number(operatorId), // Operator sending the reply
         receiverId: Number(supervisorId), // Supervisor receiving the reply
         status: 'replied', // New status
+        ...(proofImages && proofImages.length > 0 ? { proofPhotos: proofImages } : {}),
       };
 
       await axios.post(`${baseURL}/api/notifications/reply`, payload);
       // Move this item to history immediately in UI by marking it as replied.
+      const localReply = proofImages && proofImages.length > 0
+        ? JSON.stringify({
+            kind: 'asset_receipt_confirmation',
+            message: replyMessage,
+            proofCount: proofImages.length,
+            proofPhotos: proofImages,
+          })
+        : replyMessage;
+
       setNotifications(prev =>
         prev.map(item =>
           item.id === notification.id
-            ? { ...item, reply: replyMessage, status: 'replied' }
+            ? { ...item, reply: localReply, status: 'replied' }
             : item,
         ),
       );
@@ -415,10 +462,25 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
       Number(item.sender?.employeeId) !== Number(user?.employeeId);
     const hasReply = !!item.reply && item.reply.trim().length > 0;
     const isResolved = item.status === 'resolved';
-    return isFromSupervisor && !hasReply && !isResolved;
+    const isConfirmed = ['received', 'confirmed'].includes(
+      String(item.status || '').toLowerCase(),
+    );
+    return isFromSupervisor && !hasReply && !isResolved && !isConfirmed;
   });
 
-  const visibleMyAssets = showAllAssets ? myAssets : myAssets.slice(0, 5);
+  const activeAssets = myAssets.filter((asset: any) => {
+    const normalizedStatus = String(asset?.status || '').toLowerCase();
+    return normalizedStatus === 'assigned' || normalizedStatus === 'overdue';
+  });
+
+  const returnedAssets = myAssets.filter((asset: any) =>
+    String(asset?.status || '').toLowerCase() === 'returned',
+  );
+
+  const visibleMyAssets = showAllAssets ? activeAssets : activeAssets.slice(0, 5);
+  const visibleReturnedAssets = showAllReturnedAssets
+    ? returnedAssets
+    : returnedAssets.slice(0, 5);
   const visiblePendingNotifications = showAllPendingNotifications
     ? pendingReplyNotifications
     : pendingReplyNotifications.slice(0, 5);
@@ -428,7 +490,10 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
       Number(item.sender?.employeeId) !== Number(user?.employeeId);
     const hasReply = !!item.reply && item.reply.trim().length > 0;
     const isResolved = item.status === 'resolved';
-    return !isFromSupervisor || hasReply || isResolved;
+    const isConfirmed = ['received', 'confirmed'].includes(
+      String(item.status || '').toLowerCase(),
+    );
+    return !isFromSupervisor || hasReply || isResolved || isConfirmed;
   });
 
   const visibleHistoryNotifications = showAllHistory
@@ -534,7 +599,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                   <TouchableOpacity
                     onPress={() =>
                       navigation.navigate('ReturnAsset', {
-                        assets: myAssets,
+                        assets: activeAssets,
                         operatorEmployeeId: user?.employeeId,
                       })
                     }
@@ -551,7 +616,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
-                {myAssets.length === 0 ? (
+                {activeAssets.length === 0 ? (
                   <Text style={{ color: '#A9C6E4', marginTop: 10 }}>
                     No assets assigned.
                   </Text>
@@ -589,6 +654,16 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                           <Text style={styles.assetName}>
                             {asset.assetName}
                           </Text>
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: '#A9C6E4',
+                              marginTop: 2,
+                              fontStyle: 'italic',
+                            }}
+                          >
+                            Read-only details
+                          </Text>
 
                           {/* 👇 Displaying Serial Number and Barcode */}
                           <View style={{ flexDirection: 'row', marginTop: 2 }}>
@@ -618,6 +693,12 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                               </Text>
                             </Text>
                           </View>
+                          <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
+                            Location: <Text style={{ color: '#E6F3FF' }}>{asset.location || 'N/A'}</Text>
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
+                            Assigned By: <Text style={{ color: '#E6F3FF' }}>{asset.assignedBy || 'N/A'}</Text>
+                          </Text>
                         </View>
                         <View style={styles.dueDateContainer}>
                           <Text
@@ -661,7 +742,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                   })
                 )}
 
-                {myAssets.length > 5 && (
+                {activeAssets.length > 5 && (
                   <TouchableOpacity
                     style={styles.showMoreButton}
                     onPress={() => setShowAllAssets(prev => !prev)}
@@ -669,7 +750,53 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                     <Text style={styles.showMoreText}>
                       {showAllAssets
                         ? 'Show Less'
-                        : `Show More (${myAssets.length - 5} more)`}
+                        : `Show More (${activeAssets.length - 5} more)`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <Text style={[styles.subSectionTitle, { marginTop: 14 }]}>Returned History</Text>
+                {returnedAssets.length === 0 ? (
+                  <Text style={styles.noItemsText}>No returned assets yet.</Text>
+                ) : (
+                  visibleReturnedAssets.map((asset, index) => {
+                    const returnedOn = asset.returnedDate
+                      ? new Date(asset.returnedDate).toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          timeZone: 'Asia/Kolkata',
+                        })
+                      : 'N/A';
+
+                    return (
+                      <View style={styles.assetItem} key={`returned-${asset.assignmentId || index}`}>
+                        <View style={styles.assetIconBg}>
+                          <Ionicons name="checkmark-done-circle-outline" size={20} color="#34D399" />
+                        </View>
+                        <View style={styles.assetNameContainer}>
+                          <Text style={styles.assetName}>{asset.assetName}</Text>
+                          <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
+                            Returned On: <Text style={{ color: '#E6F3FF' }}>{returnedOn}</Text>
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
+                            Status: <Text style={{ color: '#34D399', fontWeight: '700' }}>{asset.status || 'Returned'}</Text>
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+
+                {returnedAssets.length > 5 && (
+                  <TouchableOpacity
+                    style={styles.showMoreButton}
+                    onPress={() => setShowAllReturnedAssets(prev => !prev)}
+                  >
+                    <Text style={styles.showMoreText}>
+                      {showAllReturnedAssets
+                        ? 'Show Less'
+                        : `Show More (${returnedAssets.length - 5} more)`}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -696,12 +823,21 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                   {pendingReplyNotifications.length === 0 ? (
                     <Text style={styles.noItemsText}>No pending replies.</Text>
                   ) : (
-                    visiblePendingNotifications.map(item => {
+                    <ScrollView
+                      style={styles.notificationsInnerScroll}
+                      contentContainerStyle={styles.notificationsInnerScrollContent}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                    >
+                    {visiblePendingNotifications.map(item => {
                       const isFromSupervisor =
                         Number(item.sender.employeeId) !==
                         Number(user?.employeeId);
                       const isResolved = item.status === 'resolved';
                       const hasReplied = !!item.reply && item.reply.length > 0;
+                      const isConfirmed = ['received', 'confirmed'].includes(
+                        String(item.status || '').toLowerCase(),
+                      );
 
                       return (
                         <View
@@ -743,6 +879,17 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                           <View style={styles.notificationContent}>
                             <Text
                               style={[
+                                styles.notificationReason,
+                                {
+                                  color: isResolved ? '#6b7280' : '#A9C6E4',
+                                  textTransform: 'capitalize',
+                                },
+                              ]}
+                            >
+                              Status: {item.status || 'unread'}
+                            </Text>
+                            <Text
+                              style={[
                                 styles.notificationText,
                                 isResolved && { color: '#999' },
                               ]}
@@ -779,33 +926,59 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                             </Text>
 
                             {hasReplied && (
-                              <Text style={styles.repliedText}>
-                                <Text style={{ fontWeight: 'bold' }}>
-                                  Message:{' '}
+                              <>
+                                <Text style={styles.repliedText}>
+                                  <Text style={{ fontWeight: 'bold' }}>
+                                    Message:{' '}
+                                  </Text>
+                                  "{parseReplyPayload(item.reply).message}"
                                 </Text>
-                                "{item.reply}"
-                              </Text>
+                                {parseReplyPayload(item.reply).proofPhotos.length > 0 && (
+                                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                                    {parseReplyPayload(item.reply).proofPhotos.map((uri, idx) => (
+                                      <Image
+                                        key={`pending-proof-${item.id}-${idx}`}
+                                        source={{ uri }}
+                                        style={{ width: 56, height: 56, borderRadius: 8, marginRight: 8 }}
+                                      />
+                                    ))}
+                                  </ScrollView>
+                                )}
+                              </>
                             )}
                           </View>
 
-                          {isFromSupervisor && !hasReplied && !isResolved && (
+                          {isFromSupervisor && !hasReplied && !isResolved && !isConfirmed && (
                             <TouchableOpacity
                               style={styles.replyButton}
                               onPress={() =>
                                 handleOpenModal({
-                                  title: `Reply to Supervisor`,
+                                  title: isAssignmentNotification(item)
+                                    ? 'Confirm Asset Receipt'
+                                    : 'Reply to Supervisor',
                                   assetName: item.asset.name,
-                                  onSubmit: replyMessage =>
-                                    handleReplySubmit(replyMessage, item),
+                                  requireProofImages: isAssignmentNotification(item),
+                                  onSubmit: (replyMessage, proofImages) =>
+                                    handleReplySubmit(replyMessage, item, proofImages),
                                 })
                               }
                             >
-                              <Text style={styles.replyButtonText}>Reply</Text>
+                              <Text style={styles.replyButtonText}>
+                                {isAssignmentNotification(item) ? 'Confirm' : 'Reply'}
+                              </Text>
                             </TouchableOpacity>
                           )}
+
+                          <TouchableOpacity
+                            style={styles.replyButton}
+                            onPress={() => hideNotification(item.id)}
+                          >
+                            <Text style={styles.replyButtonText}>Mark as Read</Text>
+                          </TouchableOpacity>
                         </View>
                       );
-                    })
+                    })}
+                    </ScrollView>
                   )}
                 </View>
 
@@ -834,7 +1007,13 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                     No history notifications.
                   </Text>
                 ) : (
-                  visibleHistoryNotifications.map(item => {
+                  <ScrollView
+                    style={styles.notificationsInnerScroll}
+                    contentContainerStyle={styles.notificationsInnerScrollContent}
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator
+                  >
+                  {visibleHistoryNotifications.map(item => {
                     const isFromSupervisor =
                       Number(item.sender.employeeId) !==
                       Number(user?.employeeId);
@@ -880,6 +1059,17 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                         <View style={styles.notificationContent}>
                           <Text
                             style={[
+                              styles.notificationReason,
+                              {
+                                color: isResolved ? '#6b7280' : '#A9C6E4',
+                                textTransform: 'capitalize',
+                              },
+                            ]}
+                          >
+                            Status: {item.status || 'unread'}
+                          </Text>
+                          <Text
+                            style={[
                               styles.notificationText,
                               isResolved && { color: '#6b7280' },
                             ]}
@@ -913,17 +1103,38 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                           </Text>
 
                           {hasReplied && (
-                            <Text style={styles.repliedText}>
-                              <Text style={{ fontWeight: 'bold' }}>
-                                Reply Sent:{' '}
+                            <>
+                              <Text style={styles.repliedText}>
+                                <Text style={{ fontWeight: 'bold' }}>
+                                  Reply Sent:{' '}
+                                </Text>
+                                "{parseReplyPayload(item.reply).message}"
                               </Text>
-                              "{item.reply}"
-                            </Text>
+                              {parseReplyPayload(item.reply).proofPhotos.length > 0 && (
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                                  {parseReplyPayload(item.reply).proofPhotos.map((uri, idx) => (
+                                    <Image
+                                      key={`history-proof-${item.id}-${idx}`}
+                                      source={{ uri }}
+                                      style={{ width: 56, height: 56, borderRadius: 8, marginRight: 8 }}
+                                    />
+                                  ))}
+                                </ScrollView>
+                              )}
+                            </>
                           )}
+
+                          <TouchableOpacity
+                            style={[styles.replyButton, { alignSelf: 'flex-start', marginTop: 8 }]}
+                            onPress={() => hideNotification(item.id)}
+                          >
+                            <Text style={styles.replyButtonText}>Mark as Read</Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
                     );
-                  })
+                  })}
+                  </ScrollView>
                 )}
 
                 {historyNotifications.length > 5 && (
@@ -949,6 +1160,8 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
           onSubmit={modalConfig.onSubmit}
           assetName={modalConfig.assetName}
           title={modalConfig.title}
+          requireProofImages={modalConfig.requireProofImages}
+          minProofImages={4}
         />
       </SafeAreaView>
       <AppSnackbar
