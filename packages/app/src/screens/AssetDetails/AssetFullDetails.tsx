@@ -8,6 +8,7 @@ import useAssetMeta from "../../hooks/useAssetMeta";
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import assetStyles from './asset.styles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { globalColors } from '../../styles/globalStyles';
@@ -153,12 +154,15 @@ const AssetFullDetails: React.FC = () => {
     // Editable fields state
     const [assetName, setAssetName] = useState(asset?.assetName || '');
     const [selectedCategory, setSelectedCategory] = useState(String(asset?.category || ''));
+    const [controllerKey, setControllerKey] = useState(String(asset?.controllerKey || ''));
     const [modelNumber, setModelNumber] = useState(asset?.modelNumber || '');
     const [serialNumber, setSerialNumber] = useState(asset?.serialNumber || '');
     const [price, setPrice] = useState(asset?.price || '');
     const [warrantyExpiry, setWarrantyExpiry] = useState(asset?.warrantyExpiry || '');
     const [purchaseDate, setPurchaseDate] = useState(asset?.purchaseDate || '');
     const [location, setLocation] = useState(asset?.location || '');
+    const [projectName, setProjectName] = useState(asset?.projectName || '');
+    const [assignedDate, setAssignedDate] = useState(asset?.assignedDate || '');
     const [statusValue, setStatusValue] = useState(asset?.status || '');
     const [assignedTo, setAssignedTo] = useState(asset?.assignedTo || 'Admin Role');
     const [photoURL, setPhotoURL] = useState(asset?.photoURL || '');
@@ -168,12 +172,14 @@ const AssetFullDetails: React.FC = () => {
     const [showStatusPicker, setShowStatusPicker] = useState(false);
     const [showCategoryPicker, setShowCategoryPicker] = useState(false);
     const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+    const [showAssignedDatePicker, setShowAssignedDatePicker] = useState(false);
     const [assignableUsers, setAssignableUsers] = useState<AssigneeOption[]>([]);
     const [snackbar, setSnackbar] = useState<{
         visible: boolean;
         message: string;
         kind: 'success' | 'error' | 'info';
     }>({ visible: false, message: '', kind: 'info' });
+    const isControllerCategory = String(selectedCategory || '').trim().toLowerCase().includes('controller');
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
@@ -238,6 +244,32 @@ const AssetFullDetails: React.FC = () => {
             setIsEditMode(true);
         }
     }, [startInEditMode]);
+
+    useEffect(() => {
+        if (!isAssignedCardEdit) return;
+
+        const loadAssignmentDetails = async () => {
+            try {
+                const response = await axios.get(`${baseURL}/api/assets/assign`, {
+                    params: {
+                        assignmentId: asset?.assignmentId,
+                        assetId: asset?.id,
+                    },
+                });
+
+                const assignment = response.data;
+                if (!assignment) return;
+
+                setProjectName(assignment.projectName || asset?.projectName || '');
+                setLocation(assignment.location || asset?.location || '');
+                setAssignedDate(assignment.assignedDate || asset?.assignedDate || '');
+            } catch (error) {
+                console.error('Failed to load assignment details:', error);
+            }
+        };
+
+        loadAssignmentDetails();
+    }, [asset?.assignmentId, asset?.id, asset?.location, asset?.projectName, asset?.assignedDate, isAssignedCardEdit]);
     
     const handleImageUpload = async () => {
         try {
@@ -321,25 +353,39 @@ const AssetFullDetails: React.FC = () => {
             const updateData: any = {};
 
             if (isAssignedCardEdit) {
+                if (projectName.trim() !== String(asset.projectName || '').trim()) {
+                    updateData.project_name = projectName.trim();
+                }
+
                 if (location !== asset.location) {
-                    updateData.location = location;
+                    updateData.destination = location;
+                }
+
+                if (assignedDate !== String(asset.assignedDate || '')) {
+                    updateData.assigned_date = assignedDate;
                 }
 
                 if (Object.keys(updateData).length === 0) {
-                    showSnackbar("No location update to save", 'info');
+                    showSnackbar("No assignment update to save", 'info');
                     setIsEditMode(false);
                     return;
                 }
 
                 const response = await axios.put(
-                    `${baseURL}/api/assets/assetId?assetId=${asset.id}`,
-                    updateData
+                    `${baseURL}/api/assets/assign`,
+                    {
+                        assignmentId: asset.assignmentId,
+                        assetId: asset.id,
+                        ...updateData,
+                    }
                 );
 
                 if (response.status === 200) {
-                    showSnackbar("Assigned asset location updated successfully", 'success');
+                    showSnackbar("Assigned asset updated successfully", 'success');
                     setIsEditMode(false);
+                    asset.projectName = projectName.trim();
                     asset.location = location;
+                    asset.assignedDate = assignedDate;
                 }
                 return;
             }
@@ -350,6 +396,14 @@ const AssetFullDetails: React.FC = () => {
             }
             if (selectedCategory !== String(asset.category || '')) {
                 updateData.category = selectedCategory;
+            }
+            if (
+                selectedCategory !== String(asset.category || '') ||
+                String(controllerKey || '').trim() !== String(asset.controllerKey || '').trim()
+            ) {
+                updateData.controllerKey = isControllerCategory
+                    ? (String(controllerKey || '').trim() || null)
+                    : null;
             }
             if (modelNumber !== asset.modelNumber) {
                 updateData.modelNumber = modelNumber;
@@ -406,6 +460,9 @@ const AssetFullDetails: React.FC = () => {
                 if (updateData.category) {
                     asset.category = selectedCategory;
                 }
+                asset.controllerKey = isControllerCategory
+                    ? (String(controllerKey || '').trim() || null)
+                    : null;
                 asset.modelNumber = modelNumber;
                 asset.serialNumber = serialNumber;
                 asset.price = price;
@@ -433,12 +490,15 @@ const AssetFullDetails: React.FC = () => {
             // Cancel edit mode - reset fields
             setAssetName(asset?.assetName || '');
             setSelectedCategory(String(asset?.category || ''));
+            setControllerKey(String(asset?.controllerKey || ''));
             setModelNumber(asset?.modelNumber || '');
             setSerialNumber(asset?.serialNumber || '');
             setPrice(asset?.price || '');
             setWarrantyExpiry(asset?.warrantyExpiry || '');
             setPurchaseDate(asset?.purchaseDate || '');
             setLocation(asset?.location || '');
+            setProjectName(asset?.projectName || '');
+            setAssignedDate(asset?.assignedDate || '');
             setStatusValue(asset?.status || '');
             setAssignedTo(asset?.assignedTo || 'Admin Role');
             setPhotoURL(asset?.photoURL || '');
@@ -520,6 +580,15 @@ const AssetFullDetails: React.FC = () => {
                                             <Text style={styles.valueText}>{selectedCategory || 'N/A'}</Text>
                                         )}
                                     </DisplayField>
+                                    {isControllerCategory && (
+                                        <DisplayField
+                                            label="Controller Key"
+                                            value={controllerKey}
+                                            icon="hash"
+                                            editable={false}
+                                            onChangeText={setControllerKey}
+                                        />
+                                    )}
                                     <DisplayField
                                         label="Status"
                                         value={statusValue || 'N/A'}
@@ -600,6 +669,82 @@ const AssetFullDetails: React.FC = () => {
                                         editable={isEditMode}
                                         onChangeText={setLocation}
                                     />
+                                    <DisplayField
+                                        label="Project Name"
+                                        value={projectName}
+                                        icon="briefcase"
+                                        editable={isEditMode && isAssignedCardEdit}
+                                        onChangeText={setProjectName}
+                                    />
+                                    <View style={{ marginBottom: 12 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: 5 }}>
+                                            {iconMap.calendar}
+                                            <Text style={{ fontSize: 12, color: '#A9C6E4', fontWeight: '500' }}>Assigned Date</Text>
+                                        </View>
+                                        <View
+                                            style={[
+                                                {
+                                                    backgroundColor: 'rgba(18, 45, 73, 0.86)',
+                                                    borderRadius: 8,
+                                                    paddingHorizontal: 15,
+                                                    paddingVertical: 10,
+                                                    borderWidth: 1,
+                                                    borderColor: 'rgba(159, 207, 255, 0.22)',
+                                                },
+                                                isEditMode && isAssignedCardEdit && {
+                                                    backgroundColor: 'rgba(7, 24, 42, 0.9)',
+                                                    borderColor: '#34D399',
+                                                    borderWidth: 2,
+                                                },
+                                            ]}
+                                        >
+                                            {isEditMode && isAssignedCardEdit ? (
+                                                Platform.OS === 'web' ? (
+                                                    <input
+                                                        type="date"
+                                                        value={assignedDate}
+                                                        onChange={(e) => setAssignedDate(e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: 44,
+                                                            padding: '10px',
+                                                            borderRadius: 8,
+                                                            border: '1px solid rgba(159, 207, 255, 0.22)',
+                                                            background: 'transparent',
+                                                            color: '#E6F3FF',
+                                                            fontSize: 14,
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <>
+                                                        <TouchableOpacity
+                                                            style={styles.inlinePicker}
+                                                            onPress={() => setShowAssignedDatePicker(true)}
+                                                        >
+                                                            <Text style={[styles.inlinePickerText, !assignedDate && styles.inlinePickerPlaceholder]}>
+                                                                {assignedDate || 'Select Date'}
+                                                            </Text>
+                                                            <Ionicons name="chevron-down" size={16} color="#A9C6E4" />
+                                                        </TouchableOpacity>
+                                                        {showAssignedDatePicker && (
+                                                            <DateTimePicker
+                                                                value={assignedDate ? new Date(assignedDate) : new Date()}
+                                                                mode="date"
+                                                                onChange={(event, selectedDate) => {
+                                                                    setShowAssignedDatePicker(false);
+                                                                    if (selectedDate) {
+                                                                        setAssignedDate(selectedDate.toISOString().split('T')[0]);
+                                                                    }
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </>
+                                                )
+                                            ) : (
+                                                <Text style={styles.valueText}>{assignedDate || 'N/A'}</Text>
+                                            )}
+                                        </View>
+                                    </View>
                                     <DisplayField label="Assigned To" value={assignedTo || "Admin Role"} icon="user-check">
                                         {isEditMode && !isAssignedCardEdit ? (
                                             <FieldPicker
@@ -713,6 +858,9 @@ const AssetFullDetails: React.FC = () => {
                                             style={styles.pickerModalItem}
                                             onPress={() => {
                                                 setSelectedCategory(value);
+                                                if (String(value || '').trim().toLowerCase() !== 'controller') {
+                                                    setControllerKey('');
+                                                }
                                                 setShowCategoryPicker(false);
                                             }}
                                         >

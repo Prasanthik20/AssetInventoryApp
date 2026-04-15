@@ -19,6 +19,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         res.status(200).end();
         return;
     }
+    if (req.method === 'GET') {
+        return getAssignment(req, res);
+    }
+    if (req.method === 'PUT') {
+        return updateAssignment(req, res);
+    }
     if (req.method !== 'POST') return res.status(405).json({ message: "Method not allowed" });
 
     try {
@@ -132,6 +138,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             operator_employeeId,
             supervisor_employeeId,
             assigned_date,
+            assignedDate,
             expected_return_date,
             project_name,
             destination,
@@ -143,6 +150,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const incomingOperatorId = Number(operator_employeeId);
         const incomingSupervisorId = Number(supervisor_employeeId);
+        const normalizedAssignedDate =
+            typeof assigned_date === 'string' && assigned_date.trim()
+                ? assigned_date.trim()
+                : typeof assignedDate === 'string' && assignedDate.trim()
+                    ? assignedDate.trim()
+                    : new Date().toISOString().split('T')[0];
 
         const resolveEmployeeId = async (incomingId: number, roleLabel: 'assignee' | 'assigner'): Promise<number> => {
             if (!Number.isFinite(incomingId)) {
@@ -309,7 +322,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     senderId,
                     project_name,
                     destination,
-                    assigned_date,
+                    normalizedAssignedDate,
                     expected_return_date,
                     notes,
                     dbPhotoURL ?? null,
@@ -354,11 +367,178 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json({ 
             message: `${normalizedAssetIds.length} Assets assigned successfully`,
             assignedTo: receiverId,
+            assignedDate: normalizedAssignedDate,
             mediaSummary: assignmentMediaSummary,
         });
 
     } catch (error) {
         console.error("Assign Asset API Error:", error);
         return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+async function getAssignment(req: NextApiRequest, res: NextApiResponse) {
+    try {
+        const assignmentId = Number(req.query.assignmentId);
+        const assetId = Number(req.query.assetId);
+
+        let sql = `
+            SELECT
+                aa.id,
+                aa."assetId",
+                aa."projectName",
+                aa.location,
+                aa.assigned_date,
+                aa.expected_return_date,
+                aa.notes,
+                aa.status,
+                aa."operator_employeeId",
+                aa."supervisor_employeeId",
+                uo."fullName" AS "operatorName",
+                us."fullName" AS "supervisorName"
+            FROM "Asset_Assignments" aa
+            LEFT JOIN "Users" uo ON uo."employeeId" = aa."operator_employeeId"
+            LEFT JOIN "Users" us ON us."employeeId" = aa."supervisor_employeeId"
+        `;
+
+        const params: number[] = [];
+
+        if (Number.isFinite(assignmentId)) {
+            params.push(assignmentId);
+            sql += ` WHERE aa.id = $1 `;
+        } else if (Number.isFinite(assetId)) {
+            params.push(assetId);
+            sql += ` WHERE aa."assetId" = $1 ORDER BY aa.id DESC LIMIT 1 `;
+        } else {
+            return res.status(400).json({ message: 'assignmentId or assetId is required' });
+        }
+
+        if (Number.isFinite(assignmentId)) {
+            sql += ` LIMIT 1 `;
+        }
+
+        const result = await query(sql, params);
+
+        if (!result.rows.length) {
+            return res.status(404).json({ message: 'Assignment not found' });
+        }
+
+        const row = result.rows[0];
+        const formatDate = (value: string | null) =>
+            value ? new Date(value).toISOString().split('T')[0] : null;
+
+        return res.status(200).json({
+            assignmentId: row.id,
+            assetId: row.assetId,
+            projectName: row.projectName || null,
+            location: row.location || null,
+            assignedDate: formatDate(row.assigned_date),
+            expectedReturnDate: formatDate(row.expected_return_date),
+            notes: row.notes || null,
+            status: row.status || null,
+            operatorEmployeeId: row.operator_employeeId || null,
+            supervisorEmployeeId: row.supervisor_employeeId || null,
+            operatorName: row.operatorName || null,
+            supervisorName: row.supervisorName || null,
+        });
+    } catch (error: any) {
+        console.error('Get assignment error:', error);
+        return res.status(500).json({ message: error.message || 'Internal server error' });
+    }
+}
+
+async function updateAssignment(req: NextApiRequest, res: NextApiResponse) {
+    try {
+        const {
+            assignmentId,
+            assetId,
+            project_name,
+            destination,
+            assigned_date,
+            expected_return_date,
+            notes,
+        } = req.body;
+
+        const resolvedAssignmentId = Number(assignmentId);
+        if (!Number.isFinite(resolvedAssignmentId)) {
+            return res.status(400).json({ message: 'assignmentId is required' });
+        }
+
+        const updates: string[] = [];
+        const values: any[] = [];
+        let paramIndex = 1;
+
+        if (project_name !== undefined) {
+            updates.push(`"projectName" = $${paramIndex++}`);
+            values.push(project_name || null);
+        }
+
+        if (destination !== undefined) {
+            updates.push(`location = $${paramIndex++}`);
+            values.push(destination || null);
+        }
+
+        if (assigned_date !== undefined) {
+            updates.push(`assigned_date = $${paramIndex++}`);
+            values.push(assigned_date || null);
+        }
+
+        if (expected_return_date !== undefined) {
+            updates.push(`expected_return_date = $${paramIndex++}`);
+            values.push(expected_return_date || null);
+        }
+
+        if (notes !== undefined) {
+            updates.push(`notes = $${paramIndex++}`);
+            values.push(notes || null);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ message: 'No fields to update' });
+        }
+
+        values.push(resolvedAssignmentId);
+
+        const result = await query(
+            `UPDATE "Asset_Assignments"
+             SET ${updates.join(', ')}
+             WHERE id = $${paramIndex}
+             RETURNING id, "assetId", "projectName", location, assigned_date, expected_return_date`,
+            values,
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({ message: 'Assignment not found' });
+        }
+
+        const updatedAssignment = result.rows[0];
+
+        if (destination !== undefined) {
+            const resolvedAssetId = Number(assetId || updatedAssignment.assetId);
+            if (Number.isFinite(resolvedAssetId)) {
+                await query(
+                    `UPDATE "Asset_Details"
+                     SET location = $1
+                     WHERE id = $2`,
+                    [destination || null, resolvedAssetId],
+                );
+            }
+        }
+
+        const formatDate = (value: string | null) =>
+            value ? new Date(value).toISOString().split('T')[0] : null;
+
+        return res.status(200).json({
+            message: 'Assignment updated successfully',
+            assignmentId: updatedAssignment.id,
+            assetId: updatedAssignment.assetId,
+            projectName: updatedAssignment.projectName || null,
+            location: updatedAssignment.location || null,
+            assignedDate: formatDate(updatedAssignment.assigned_date),
+            expectedReturnDate: formatDate(updatedAssignment.expected_return_date),
+        });
+    } catch (error: any) {
+        console.error('Update assignment error:', error);
+        return res.status(500).json({ message: error.message || 'Internal server error' });
     }
 }

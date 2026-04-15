@@ -44,6 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 a.id,
                 a.name AS "assetName",
                 a."asset_Id" AS "barcode",
+                a."controller_key" AS "controllerKey",
                 COALESCE(a."barcodeURL", aa."barcodeURL") AS "barcodeURL",
                 a."serial_no" AS "serialNumber",
                 a.location,
@@ -59,6 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 
                 -- Lateral join ensures we only get the single most recent assignment record
                 aa.id AS "assignmentId",
+                aa."projectName" AS "projectName",
                 aa.expected_return_date AS "expectedReturnDate",
                 aa."operator_employeeId" AS "operatorId",
                 aa."supervisor_employeeId" AS "senderId"
@@ -88,6 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             id: asset.id,
             assetName: asset.assetName,
             barcode: asset.barcode,
+            controllerKey: asset.controllerKey || null,
             serialNumber: asset.serialNumber,
             category: asset.category,
             status: asset.status,
@@ -100,6 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             photoURL: asset.photoURL || null,
             barcodeURL: asset.barcodeURL || null,
             expectedReturnDate: asset.expectedReturnDate || null,
+            projectName: asset.projectName || null,
             assignmentId: asset.assignmentId || null,
             operatorId: asset.operatorId || null,
             senderId: asset.senderId || null,

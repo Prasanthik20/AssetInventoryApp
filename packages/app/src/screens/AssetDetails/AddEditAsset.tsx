@@ -109,6 +109,7 @@ const AddEditAsset: React.FC = () => {
     id: 0,
     assetName: "",
     category: categories?.[0]?.category || "",
+    controllerKey: "",
     status: statuses?.[0]?.status || "Unassigned",
     location: "Office",
     modelNumber: "",
@@ -123,6 +124,7 @@ const AddEditAsset: React.FC = () => {
   });
 
   const [assetData, setAssetData] = useState<Omit<Asset, 'assetId'>>(getInitialAssetData);
+  const isControllerCategory = String(assetData.category || '').trim().toLowerCase().includes('controller');
 
   useEffect(() => {
     if (categories?.length || statuses?.length) {
@@ -133,6 +135,12 @@ const AddEditAsset: React.FC = () => {
       }));
     }
   }, [categories, statuses]);
+
+  useEffect(() => {
+    if (!isControllerCategory && assetData.controllerKey) {
+      setAssetData((prev) => ({ ...prev, controllerKey: '' }));
+    }
+  }, [assetData.controllerKey, isControllerCategory]);
 
   const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
     if (snackbarTimeoutRef.current) {
@@ -320,6 +328,9 @@ const AddEditAsset: React.FC = () => {
         ...assetData,
         assetName: String(assetData.assetName || '').trim(),
         category: String(assetData.category || '').trim(),
+        controllerKey: isControllerCategory
+          ? (String(assetData.controllerKey || '').trim() || null)
+          : null,
         status: String(assetData.status || '').trim(),
         serialNumber: String(assetData.serialNumber || '').trim(),
         location: String(assetData.location || '').trim(),
@@ -402,6 +413,22 @@ const AddEditAsset: React.FC = () => {
                     <Text style={styles.pickerText}>{assetData.category || "Select Category"}</Text>
                     <Ionicons name="layers-outline" size={18} color="#22D3EE" />
                   </TouchableOpacity>
+
+                  {isControllerCategory && (
+                    <>
+                      <Text style={styles.label}>Controller Key</Text>
+                      <View style={styles.inputGroup}>
+                        <Feather name="key" size={16} color="#22D3EE" style={styles.inputIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="Controller Key"
+                          placeholderTextColor="#999"
+                          value={String(assetData.controllerKey || '')}
+                          onChangeText={v => handleInputChange('controllerKey', v)}
+                        />
+                      </View>
+                    </>
+                  )}
 
                   <Text style={styles.label}>Status</Text>
                   <TouchableOpacity style={styles.pickerInput} onPress={() => setShowStatusPicker(true)}>
@@ -553,6 +580,9 @@ const AddEditAsset: React.FC = () => {
           styles={styles}
           onSelect={(item: any) => {
             handleInputChange('category', item.category);
+            if (!String(item?.category || '').trim().toLowerCase().includes('controller')) {
+              handleInputChange('controllerKey', '');
+            }
             setShowCategoryPicker(false);
           }}
           onClose={() => setShowCategoryPicker(false)}

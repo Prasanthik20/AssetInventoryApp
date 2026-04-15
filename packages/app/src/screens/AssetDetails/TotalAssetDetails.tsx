@@ -87,6 +87,19 @@ const StatusBadge = ({
     );
 };
 
+const formatDate = (value?: string | null) => {
+    if (!value) return 'N/A';
+
+    const parsedDate = new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) return 'N/A';
+
+    return parsedDate.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+};
+
 const TotalAssetsDetails: React.FC = () => {
     const navigation = useNavigation<AssetsDetailsNavigationProp>();
     const route = useRoute<RouteProp<RootStackParamList, 'TotalAssetDetails'>>();
@@ -262,7 +275,15 @@ const TotalAssetsDetails: React.FC = () => {
                             assignedTo={item.assignedTo}
                             location={item.location} 
                         />
-                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <View style={styles.mobileDateGroup}>
+                            <Text style={styles.mobileDateLabel}>Expected Due Date</Text>
+                            <Text style={styles.mobileDateValue}>{formatDate(item.expectedReturnDate)}</Text>
+                            <Text style={[styles.mobileDateLabel, { marginTop: 6 }]}>Assigned Date</Text>
+                            <Text style={styles.mobileDateValue}>{formatDate(item.assignedDate)}</Text>
+                            <Text style={[styles.mobileDateLabel, { marginTop: 6 }]}>Assigned By</Text>
+                            <Text style={styles.mobileDateValue}>{item.assignedBy || '—'}</Text>
+                        </View>
+                        <View style={styles.mobileActionButtons}>
                             {!isAssignedAsset && (
                                 <TouchableOpacity
                                     style={styles.assignAssetButton}
@@ -294,9 +315,10 @@ const TotalAssetsDetails: React.FC = () => {
                                 <TouchableOpacity
                                     style={styles.editAssignedButton}
                                     onPress={() =>
-                                        navigation.navigate('AssetFullDetails', {
-                                            asset: item,
-                                            startInEditMode: true,
+                                        navigation.navigate('AssignAsset', {
+                                            supervisor_employeeId: String(supervisorId || ''),
+                                            supervisorName: supervisorName,
+                                            editAsset: item,
                                         })
                                     }
                                 >
@@ -336,7 +358,19 @@ const TotalAssetsDetails: React.FC = () => {
                     />
                 </View>
 
-                <View style={[styles.cellAction, { flex: 1.5, flexDirection: 'row', gap: 10, justifyContent: 'center' }]}>
+                <View style={[styles.cellDate, { flex: 1.2, alignItems: 'center' }]}> 
+                    <Text style={styles.dateCellText}>{formatDate(item.expectedReturnDate)}</Text>
+                </View>
+
+                <View style={[styles.cellDate, { flex: 1.2, alignItems: 'center' }]}> 
+                    <Text style={styles.dateCellText}>{formatDate(item.assignedDate)}</Text>
+                </View>
+
+                <View style={[styles.cellDate, { flex: 1.2, alignItems: 'center' }]}> 
+                    <Text style={styles.dateCellText}>{item.assignedBy || '—'}</Text>
+                </View>
+
+                <View style={[styles.cellAction, styles.webActionButtons]}> 
                     {!isAssignedAsset && (
                         <TouchableOpacity
                             style={styles.assignAssetButton}
@@ -368,9 +402,10 @@ const TotalAssetsDetails: React.FC = () => {
                         <TouchableOpacity
                             style={styles.editAssignedButton}
                             onPress={() =>
-                                navigation.navigate('AssetFullDetails', {
-                                    asset: item,
-                                    startInEditMode: true,
+                                navigation.navigate('AssignAsset', {
+                                    supervisor_employeeId: String(supervisorId || ''),
+                                    supervisorName: supervisorName,
+                                    editAsset: item,
                                 })
                             }
                         >
@@ -427,6 +462,9 @@ const TotalAssetsDetails: React.FC = () => {
                                 <Text style={[styles.headerCell, { flex: 2 }]}>Asset Name</Text>
                                 <Text style={[styles.headerCell, { flex: 2, textAlign: 'center' }]}>Barcode</Text>
                                 <Text style={[styles.headerCell, { flex: 2, textAlign: 'center' }]}>Status</Text>
+                                <Text style={[styles.headerCell, { flex: 1.2, textAlign: 'center' }]}>Expected Due Date</Text>
+                                <Text style={[styles.headerCell, { flex: 1.2, textAlign: 'center' }]}>Assigned Date</Text>
+                                <Text style={[styles.headerCell, { flex: 1.2, textAlign: 'center' }]}>Assigned By</Text>
                                 <Text style={[styles.headerCell, { flex: 1.5, textAlign: 'center' }]}>Action</Text>
                             </View>
                         )}
@@ -499,8 +537,11 @@ const styles = StyleSheet.create({
     searchIcon: { marginRight: 10 },
     tableHeader: {
         display: 'flex',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start',
         flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        width: '100%',
         paddingHorizontal: 15,
         paddingBottom: 10,
         borderBottomWidth: 2,
@@ -583,6 +624,9 @@ topActionRow: {
     assetRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'flex-start',
+        gap: 12,
+        width: '100%',
         backgroundColor: 'rgba(18, 45, 73, 0.86)',
         borderRadius: 10,
         paddingVertical: 10,
@@ -594,13 +638,17 @@ topActionRow: {
     cellSNo: { width: 50, 
     alignItems: 'center', 
     justifyContent: 'center' },
-    cellAssetName: {  marginRight: 10 },
+    cellAssetName: { flex: 2, marginRight: 0 },
     assetName: { fontSize: 15, fontWeight: 'bold', color: '#E6F3FF' },
     assetSubtext: { fontSize: 12, color: '#A9C6E4', marginTop: 2 },
     cellBarcode: {  flex: 2, 
         alignItems: 'center',
         justifyContent: 'center', },
-    cellStatus: {  },
+    cellStatus: { flex: 2 },
+    cellDate: {
+        flex: 1.2,
+        justifyContent: 'center',
+    },
     statusContainer: {
         borderRadius: 8,
         paddingHorizontal: 10,
@@ -609,12 +657,59 @@ topActionRow: {
     },
     statusText: { fontSize: 13, fontWeight: 'bold' },
     statusSubtext: { fontSize: 11, marginTop: 2 },
+    dateCellText: {
+        fontSize: 12,
+        color: '#E6F3FF',
+        fontWeight: '600',
+        textAlign: 'center',
+    },
+    mobileDateGroup: {
+        flex: 1,
+        minWidth: 120,
+        alignItems: 'flex-end',
+        paddingLeft: 12,
+    },
+    mobileActionButtons: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        justifyContent: 'flex-end',
+        flex: 1,
+        alignItems: 'center',
+    },
+    mobileDateLabel: {
+        fontSize: 10,
+        color: '#A9C6E4',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+        fontWeight: '700',
+    },
+    mobileDateValue: {
+        fontSize: 12,
+        color: '#E6F3FF',
+        fontWeight: '600',
+        marginTop: 2,
+    },
     knowMoreText: { color: globalColors.surfacePrimary, fontSize: 13, fontWeight: '600', marginRight: 5 },
     cellAction: {
-        // flex: 1.5, // Give more space for two buttons
+        flex: 1.5,
         justifyContent: 'center',
         alignItems: 'center',
     },
+    webActionButtons: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        minWidth: 0,
+    },
+    cellSNoHeader: { width: 50, textAlign: 'center' },
+    cellAssetNameHeader: { flex: 2, textAlign: 'left' },
+    cellBarcodeHeader: { flex: 2, textAlign: 'center' },
+    cellStatusHeader: { flex: 2, textAlign: 'center' },
+    cellDateHeader: { flex: 1.2, textAlign: 'center' },
+    cellActionHeader: { flex: 1.5, textAlign: 'center' },
     actionButtonsContainer: {
         flexDirection: 'row',
         justifyContent: 'flex-end', // Align buttons to the right

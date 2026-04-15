@@ -150,6 +150,7 @@ const styles = StyleSheet.create({
       shadowOpacity: 0.1,
       shadowRadius: 20,
       elevation: 10,
+      color: '#E6F3FF',
     },
     header: {
         flexDirection: 'row',

@@ -527,7 +527,7 @@ const renderStyles = StyleSheet.create({
   },
   dropdownContainer: {
     flex: 1.2,
-    backgroundColor: 'rgba(18, 45, 73, 0.86)',
+    // backgroundColor: 'rgba(18, 45, 73, 0.86)',
     borderRadius: 10,
     height: 45,
     justifyContent: 'center',
@@ -538,7 +538,7 @@ const renderStyles = StyleSheet.create({
   picker: {
     width: '100%',
     height: 45,
-    color: '#E6F3FF',
+    color: '#0a0a0a',
   },
   searchInput: {
     flex: 1,

@@ -25,6 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       id, assetId: payloadAssetId,
       assetName, category, modelNumber, serialNumber,
       purchaseDate, warrantyExpiry, price, location, status, photoURL,
+      controllerKey,
       barcodeURL, barcode,
       assignedBy, assignedTo, expectedReturnDate,
       assignmentId, operatorId, senderId, receiverId
@@ -52,6 +53,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     if (!categoryRes.rows.length) return res.status(400).json({ message: "Invalid category" });
     const categoryId = categoryRes.rows[0].categoryId;
+    const normalizedCategory = String(category || '').trim().toLowerCase();
+    const normalizedControllerKey =
+      typeof controllerKey === 'string' ? controllerKey.trim() : String(controllerKey || '').trim();
+    const controllerKeyValue = normalizedCategory.includes('controller')
+      ? (normalizedControllerKey || null)
+      : null;
 
     // 2. Get Status ID (Matches Prisma Status table)
     const statusRes = await query(
@@ -101,13 +108,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 3. Insert into Asset_Details with all fields including assigned_by, assigned_to
     const insertAsset = await query(
-      `INSERT INTO "Asset_Details" (id, name, "categoryId", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO "Asset_Details" (id, name, "categoryId", "controller_key", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING id`,
       [
         nextId,
         assetName,
         categoryId,
+        controllerKeyValue,
         modelNumber || null,
         serialNumber,
         purchaseDate || null,
@@ -188,6 +196,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         assetName,
         serialNumber,
         category,
+        controllerKey: controllerKeyValue,
         status,
         assignedBy: assignedByNum,
         assignedTo: assignedToNum,

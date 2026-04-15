@@ -65,6 +65,7 @@ model Asset_Details {
   categoryId       BigInt
   name             String
   asset_Id         String?             @unique(map: "Asset_Details_assetId_key")
+  controller_key   String?             @map("controller_key")
   model_no         String?
   serial_no        String              @unique
   status_id        BigInt?

@@ -54,6 +54,7 @@ CREATE TABLE "Asset_Details" (
     "categoryId" BIGINT NOT NULL,
     "name" TEXT NOT NULL,
     "asset_Id" TEXT,
+    "controller_key" TEXT,
     "model_no" TEXT,
     "serial_no" TEXT,
     "status_id" BIGINT,

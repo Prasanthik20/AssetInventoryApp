@@ -6,6 +6,7 @@ import {
   StyleProp,
   TextStyle,
   ViewStyle,
+  Platform,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Feather } from '@expo/vector-icons';
@@ -39,6 +40,7 @@ type AssetFiltersBarProps = {
   filtersContainerStyle?: StyleProp<ViewStyle>;
   pickerWrapperStyle?: StyleProp<ViewStyle>;
   pickerStyle?: StyleProp<TextStyle>;
+  pickerItemColor?: string;
 };
 
 const normalizeOptions = (options: OptionValue[] = []): string[] => {
@@ -77,9 +79,11 @@ const AssetFiltersBar: React.FC<AssetFiltersBarProps> = ({
   filtersContainerStyle,
   pickerWrapperStyle,
   pickerStyle,
+  pickerItemColor,
 }) => {
   const locationItems = normalizeOptions(locationOptions);
   const statusItems = normalizeOptions(statusOptions);
+  const pickerItemColorProps = pickerItemColor ? { color: pickerItemColor } : {};
 
   return (
     <View
@@ -113,12 +117,13 @@ const AssetFiltersBar: React.FC<AssetFiltersBarProps> = ({
               <Picker
                 selectedValue={categoryValue}
                 onValueChange={(value) => onCategoryChange?.(String(value))}
+                mode={Platform.OS === 'android' ? 'dialog' : undefined}
                 dropdownIconColor="#A9C6E4"
                 style={[styles.picker, pickerStyle]}
               >
-                <Picker.Item label={categoryAllLabel} value="" />
+                <Picker.Item label={categoryAllLabel} value="" {...pickerItemColorProps} />
                 {categoryOptions.map((category) => (
-                  <Picker.Item key={category} label={category} value={category} />
+                  <Picker.Item key={category} label={category} value={category} {...pickerItemColorProps} />
                 ))}
               </Picker>
             </View>
@@ -136,12 +141,13 @@ const AssetFiltersBar: React.FC<AssetFiltersBarProps> = ({
                   <Picker
                     selectedValue={locationValue}
                     onValueChange={(value) => onLocationChange?.(String(value))}
+                    mode={Platform.OS === 'android' ? 'dialog' : undefined}
                     dropdownIconColor="#A9C6E4"
                     style={[styles.picker, pickerStyle]}
                   >
-                    <Picker.Item label={locationAllLabel} value="" />
+                    <Picker.Item label={locationAllLabel} value="" {...pickerItemColorProps} />
                     {locationItems.map((location) => (
-                      <Picker.Item key={location} label={location} value={location} />
+                      <Picker.Item key={location} label={location} value={location} {...pickerItemColorProps} />
                     ))}
                   </Picker>
                 </View>
@@ -152,12 +158,13 @@ const AssetFiltersBar: React.FC<AssetFiltersBarProps> = ({
                   <Picker
                     selectedValue={statusValue}
                     onValueChange={(value) => onStatusChange?.(String(value))}
+                    mode={Platform.OS === 'android' ? 'dialog' : undefined}
                     dropdownIconColor="#A9C6E4"
                     style={[styles.picker, pickerStyle]}
                   >
-                    <Picker.Item label={statusAllLabel} value="" />
+                    <Picker.Item label={statusAllLabel} value="" {...pickerItemColorProps} />
                     {statusItems.map((status) => (
-                      <Picker.Item key={status} label={status} value={status} />
+                      <Picker.Item key={status} label={status} value={status} {...pickerItemColorProps} />
                     ))}
                   </Picker>
                 </View>
@@ -195,7 +202,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     fontSize: globalTypography.bodyMd,
-    color: '#E6F3FF',
+    color: globalColors.textTitle,
   },
   filterGroup: {
     flex: 3,
@@ -228,8 +235,8 @@ const styles = StyleSheet.create({
   picker: {
     width: '100%',
     height: '100%',
-    color: '#E6F3FF',
-    backgroundColor: 'transparent',
+    color: globalColors.textTitle,
+    backgroundColor: globalColors.surfacePrimary,
   },
 });
 

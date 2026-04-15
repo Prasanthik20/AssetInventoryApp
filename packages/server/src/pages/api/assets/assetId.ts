@@ -24,6 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const {
         assetName,
         category,
+        controllerKey,
         modelNumber,
         serialNumber,
         purchaseDate,
@@ -42,6 +43,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const values: any[] = [];
       let paramIndex = 1;
 
+      const currentAssetRes = await query(
+        `SELECT cat.category AS category
+         FROM "Asset_Details" a
+         LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId"
+         WHERE a.id = $1
+         LIMIT 1`,
+        [parseInt(assetId)]
+      );
+
+      if (currentAssetRes.rows.length === 0) {
+        await query("ROLLBACK", []);
+        return res.status(404).json({ message: `Asset with ID ${assetId} not found.` });
+      }
+
+      let effectiveCategory = String(currentAssetRes.rows[0]?.category || '').trim().toLowerCase();
+
       if (assetName !== undefined) {
         updates.push(`name = $${paramIndex++}`);
         values.push(assetName);
@@ -55,7 +72,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (categoryRes.rows.length > 0) {
           updates.push(`"categoryId" = $${paramIndex++}`);
           values.push(categoryRes.rows[0].categoryId);
+          effectiveCategory = String(category || '').trim().toLowerCase();
         }
+      }
+
+      if (controllerKey !== undefined || category !== undefined) {
+        const normalizedControllerKey =
+          typeof controllerKey === 'string' ? controllerKey.trim() : String(controllerKey || '').trim();
+        const controllerKeyValue = effectiveCategory.includes('controller')
+          ? (normalizedControllerKey || null)
+          : null;
+
+        updates.push(`"controller_key" = $${paramIndex++}`);
+        values.push(controllerKeyValue);
       }
 
       if (modelNumber !== undefined) {
@@ -164,6 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         a.id AS "assetId",
         a.name AS "assetName",
         cat.category AS "category",
+        a."controller_key" AS "controllerKey",
         s.status AS "dbStatus",
         a.model_no AS "modelNumber",
         a.serial_no AS "serialNumber",
@@ -190,6 +220,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ORDER BY id DESC
           LIMIT 1
         ) AS expected_return_date
+        ,(
+          SELECT "projectName"
+          FROM "Asset_Assignments"
+          WHERE "assetId" = a.id
+          ORDER BY id DESC
+          LIMIT 1
+        ) AS "projectName"
       FROM "Asset_Details" a
       LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId"
       LEFT JOIN "Status" s ON a.status_id = s.id
@@ -226,6 +263,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       assetId: asset.assetId,
       assetName: asset.assetName,
       category: asset.category,
+      controllerKey: asset.controllerKey,
       status: (isActuallyAssigned && isPastDue) ? "Overdue" : asset.dbStatus, // 🔥 Overdue logic
       modelNumber: asset.modelNumber,
       serialNumber: asset.serialNumber,
@@ -237,6 +275,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       purchaseDate: formatDate(asset.purchaseDate),
       assignedDate: formatDate(asset.assigned_date),
       expectedReturnDate: formatDate(asset.expected_return_date),
+      projectName: asset.projectName || null,
       value: asset.price ? parseFloat(asset.price).toLocaleString() : 'N/A',
     };
 

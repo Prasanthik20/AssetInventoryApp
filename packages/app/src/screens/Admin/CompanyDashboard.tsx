@@ -408,7 +408,7 @@ const CompanyDashboard: React.FC<Props> = ({
 
               {/* System Overview Header */}
               <View style={styles.header}>
-                <Text style={styles.headerTitle}>Company Analytics</Text>
+                <Text style={styles.headerTitle}>Analytics</Text>
                 {!isMobileLayout && (
                   <View style={styles.headerRight}>
                     <SafeIonicons name="person-outline" size={16} color="#A9C6E4" />
@@ -767,7 +767,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     onPress={() => navigation.navigate('AddEditAsset')}
                   >
                     <LinearGradient
-                      colors={['#0EA5E9', '#0369A1']}
+                      colors={['#1E3A5F', '#162D4A']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}
@@ -788,7 +788,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     }
                   >
                     <LinearGradient
-                      colors={['#14B8A6', '#0F766E']}
+                      colors={['#1F4C63', '#1A3D51']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}
@@ -806,7 +806,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     onPress={() => navigation.navigate('AddCompanyUser')}
                   >
                     <LinearGradient
-                      colors={['#F97316', '#C2410C']}
+                      colors={['#334155', '#1E293B']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}
@@ -829,7 +829,7 @@ const CompanyDashboard: React.FC<Props> = ({
                     }
                   >
                     <LinearGradient
-                      colors={['#7C3AED', '#4C1D95']}
+                      colors={['#243B6B', '#1E3157']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.addUserButton}

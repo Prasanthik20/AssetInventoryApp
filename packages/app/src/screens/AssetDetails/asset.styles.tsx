@@ -178,6 +178,33 @@ export function assetStyles(isMobileLayout: boolean) {
       borderBottomColor: theme.border,
       paddingBottom: 5,
     },
+    fieldContainer: {
+      marginBottom: 12,
+    },
+    labelContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 4,
+      marginLeft: 5,
+    },
+    label: {
+      fontSize: 12,
+      color: theme.textSecondary,
+      fontWeight: '500',
+    },
+    valueBox: {
+      backgroundColor: theme.panelMuted,
+      borderRadius: 8,
+      paddingHorizontal: 15,
+      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    editableBox: {
+      backgroundColor: theme.panelStrong,
+      borderColor: theme.accent,
+      borderWidth: 2,
+    },
     valueText: {
       fontSize: 14,
       color: theme.textPrimary,

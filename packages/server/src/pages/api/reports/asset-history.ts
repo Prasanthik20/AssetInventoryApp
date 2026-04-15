@@ -89,6 +89,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const employeeId = Number(req.query.employeeId);
+    const roleNameRaw = Array.isArray(req.query.roleName) ? req.query.roleName[0] : req.query.roleName;
+    const normalizedRoleName = String(roleNameRaw || '').toLowerCase();
+    const isAdminRole = normalizedRoleName.includes('admin');
     const fromDate = normalizeDate(req.query.fromDate);
     const toDate = normalizeDate(req.query.toDate);
 
@@ -96,29 +99,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'employeeId is required' });
     }
 
-    const roleResult = await query(
-      `SELECT LOWER(COALESCE(r."roleName", '')) AS role
+    const userResult = await query(
+      `SELECT u."employeeId"
        FROM "Users" u
-       LEFT JOIN "Roles" r ON u."roleId" = r."roleId"
        WHERE u."employeeId" = $1
        LIMIT 1`,
       [employeeId],
     );
 
-    const roleName = String(roleResult.rows[0]?.role || '');
-    const isAdmin = roleName.includes('admin');
-    const isSupervisor = roleName === 'supervisor';
-
-    if (!isAdmin && !isSupervisor) {
-      return res.status(403).json({ message: 'Access denied for reports' });
+    if (!userResult.rows.length) {
+      return res.status(404).json({ message: 'User not found' });
     }
 
     const where: string[] = [];
     const params: Array<number | string> = [];
 
-    if (isSupervisor && !isAdmin) {
+    if (!isAdminRole) {
       params.push(employeeId);
-      where.push(`aa."supervisor_employeeId" = $${params.length}`);
+      where.push(`(aa."operator_employeeId" = $${params.length} OR aa."supervisor_employeeId" = $${params.length})`);
     }
 
     if (fromDate) {
@@ -149,7 +147,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         aa.assigned_date AS "assignedDate",
         aa.expected_return_date AS "expectedReturnDate",
         aa.returned_date AS "returnedDate",
-        COALESCE(aa.status, 'assigned') AS status
+        CASE
+          WHEN aa.returned_date IS NULL
+            AND LOWER(COALESCE(aa.status, '')) <> 'returned'
+            AND aa.expected_return_date IS NOT NULL
+            AND aa.expected_return_date < CURRENT_DATE
+          THEN 'overdue'
+          ELSE COALESCE(aa.status, 'assigned')
+        END AS status
       FROM "Asset_Assignments" aa
       INNER JOIN "Asset_Details" ad ON ad.id = aa."assetId"
       LEFT JOIN "Users" op ON op."employeeId" = aa."operator_employeeId"
@@ -184,9 +189,71 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       overdueAssignments: history.filter((row) => row.status.toLowerCase() === 'overdue').length,
     };
 
+    const pendingApprovalBaseSql = `
+      FROM "Notifications" n
+      WHERE LOWER(COALESCE(n.status, '')) IN ('unread', 'replied')
+        AND (
+          LOWER(COALESCE(n.reply, '')) LIKE '%pending confirmation%'
+          OR (
+            LOWER(COALESCE(n.reason, '')) LIKE '%has been returned by%'
+            AND LOWER(COALESCE(n.reply, '')) LIKE '%return pending confirmation%'
+          )
+        )
+        AND LOWER(COALESCE(n.reason, '')) NOT LIKE '%return confirmed%'
+        AND LOWER(COALESCE(n.reply, '')) NOT LIKE '%return confirmed%'
+    `;
+
+    const pendingApprovalSql = isAdminRole
+      ? `SELECT COUNT(*)::int AS count ${pendingApprovalBaseSql}`
+      : `SELECT COUNT(*)::int AS count ${pendingApprovalBaseSql}
+         AND (n."receiverId" = $1 OR n."senderId" = $1)`;
+
+    const pendingParams = isAdminRole ? [] : [employeeId];
+    const pendingApprovalResult = await query(pendingApprovalSql, pendingParams);
+    const pendingApprovalConfirmations = Number(pendingApprovalResult.rows?.[0]?.count || 0);
+
+    let adminSummaryExtras: {
+      totalAssets?: number;
+      officeAssets?: number;
+      underMaintenanceAssets?: number;
+    } = {};
+
+    if (isAdminRole) {
+      const totalAssetsResult = await query(
+        `SELECT COUNT(*)::int AS count FROM "Asset_Details"`,
+        [],
+      );
+
+      const officeAssetsResult = await query(
+        `SELECT COUNT(*)::int AS count
+         FROM "Asset_Details" ad
+         LEFT JOIN "Status" s ON ad.status_id = s.id
+         WHERE LOWER(COALESCE(s.status, '')) = 'unassigned'`,
+        [],
+      );
+
+      const maintenanceAssetsResult = await query(
+        `SELECT COUNT(*)::int AS count
+         FROM "Asset_Details" ad
+         LEFT JOIN "Status" s ON ad.status_id = s.id
+         WHERE LOWER(COALESCE(s.status, '')) IN ('under maintenance', 'maintenance')`,
+        [],
+      );
+
+      adminSummaryExtras = {
+        totalAssets: Number(totalAssetsResult.rows?.[0]?.count || 0),
+        officeAssets: Number(officeAssetsResult.rows?.[0]?.count || 0),
+        underMaintenanceAssets: Number(maintenanceAssetsResult.rows?.[0]?.count || 0),
+      };
+    }
+
     return res.status(200).json({
-      role: isAdmin ? 'admin' : 'supervisor',
-      summary,
+      role: isAdminRole ? 'admin' : 'user',
+      summary: {
+        ...summary,
+        pendingApprovalConfirmations,
+        ...adminSummaryExtras,
+      },
       history,
     });
   } catch (error) {

@@ -46,6 +46,7 @@ const AssignAssetScreen: React.FC = () => {
     params: {
       supervisor_employeeId: string;
       supervisorName: string;
+      editAsset?: Asset;
     };
   }>();
 
@@ -53,6 +54,8 @@ const AssignAssetScreen: React.FC = () => {
   // ⬅️ Supervisor details from CompanyLoginScreen
   const supervisor_employeeId = route.params?.supervisor_employeeId;
   const supervisorName = route.params?.supervisorName
+  const editAsset = route.params?.editAsset;
+  const isEditAssignmentMode = Boolean(editAsset?.assignmentId);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -172,6 +175,40 @@ const AssignAssetScreen: React.FC = () => {
         });
 
         setOperators(assignableUsers);
+
+        if (isEditAssignmentMode && editAsset) {
+          setSelectedAssets([editAsset]);
+          setProjectName(String(editAsset.projectName || ''));
+          setLocation(String(editAsset.location || ''));
+          setAssignedDate(String(editAsset.assignedDate || today));
+          setDueDate(String(editAsset.expectedReturnDate || ''));
+
+          try {
+            const assignmentResponse = await axios.get(`${baseURL}/api/assets/assign`, {
+              params: {
+                assignmentId: editAsset.assignmentId,
+                assetId: editAsset.id || editAsset.assetId,
+              },
+            });
+
+            const assignment = assignmentResponse.data || {};
+            setProjectName(String(assignment.projectName || editAsset.projectName || ''));
+            setLocation(String(assignment.location || editAsset.location || ''));
+            setAssignedDate(String(assignment.assignedDate || editAsset.assignedDate || today));
+            setDueDate(String(assignment.expectedReturnDate || editAsset.expectedReturnDate || ''));
+
+            if (assignment.operatorEmployeeId) {
+              const matchedOperator = assignableUsers.find(
+                (op: any) => Number(op.employeeId) === Number(assignment.operatorEmployeeId),
+              );
+              if (matchedOperator) {
+                setSelectedOperator(matchedOperator);
+              }
+            }
+          } catch (assignmentError) {
+            console.error('Failed to fetch assignment details:', assignmentError);
+          }
+        }
       } catch (err) {
         console.log(err);
         setError("Failed to fetch assets or users");
@@ -181,7 +218,7 @@ const AssignAssetScreen: React.FC = () => {
     };
 
     fetchData();
-  }, []);
+  }, [baseURL, editAsset, isEditAssignmentMode, today]);
 
   // -------------------- ASSIGN HANDLER --------------------
   const isValidDateString = (value: string) => {
@@ -194,19 +231,21 @@ const AssignAssetScreen: React.FC = () => {
     const normalizedProjectName = projectName.trim();
     const normalizedLocation = location.trim();
 
-    if (selectedAssets.length === 0) {
-      showSnackbar('Please select at least one asset.', 'error');
-      return false;
-    }
+    if (!isEditAssignmentMode) {
+      if (selectedAssets.length === 0) {
+        showSnackbar('Please select at least one asset.', 'error');
+        return false;
+      }
 
-    if (!selectedOperator) {
-      showSnackbar('Please select an assignee.', 'error');
-      return false;
-    }
+      if (!selectedOperator) {
+        showSnackbar('Please select an assignee.', 'error');
+        return false;
+      }
 
-    if (!selectedOperator?.employeeId) {
-      showSnackbar('Selected assignee is invalid. Please select again.', 'error');
-      return false;
+      if (!selectedOperator?.employeeId) {
+        showSnackbar('Selected assignee is invalid. Please select again.', 'error');
+        return false;
+      }
     }
 
     if (!normalizedProjectName) {
@@ -234,7 +273,7 @@ const AssignAssetScreen: React.FC = () => {
       return false;
     }
 
-    if (selectedAssets.length > 1) {
+    if (!isEditAssignmentMode && selectedAssets.length > 1) {
       const missingMediaAssets = selectedAssets.filter((asset) => {
         const key = toAssetKey(asset.assetId);
         return !assetPhotoMap[key] || !assetBarcodeMap[key];
@@ -255,6 +294,22 @@ const AssignAssetScreen: React.FC = () => {
     }
 
     try {
+      if (isEditAssignmentMode && editAsset?.assignmentId) {
+        await axios.put(`${baseURL}/api/assets/assign`, {
+          assignmentId: editAsset.assignmentId,
+          assetId: editAsset.id || editAsset.assetId,
+          project_name: projectName.trim(),
+          destination: location.trim(),
+          assigned_date: assignedDate,
+          expected_return_date: dueDate,
+          notes: notes.trim(),
+        });
+
+        showSnackbar('Assigned asset updated!', 'success');
+        navigation.goBack();
+        return;
+      }
+
       const selectedAssetIds = selectedAssets.map(a => toAssetId(a.assetId));
       const assetMedia = selectedAssetIds.map((assetId) => ({
         assetId,
@@ -564,7 +619,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               <Ionicons name="arrow-back" size={24} color="#E6F3FF" />
             </TouchableOpacity>
 
-            <Text style={styles.headerTitle}>Assign Asset</Text>
+            <Text style={styles.headerTitle}>{isEditAssignmentMode ? 'Edit Assigned Asset' : 'Assign Asset'}</Text>
 
             <View style={{ width: 40 }} />
           </View>
@@ -590,13 +645,20 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
                 {/* ASSET DROPDOWN */}
                 <Text style={styles.label}>Selected Assets ({selectedAssets.length})</Text>
-                <TouchableOpacity style={styles.pickerInput} onPress={() => setAssetModal(true)}>
+                <TouchableOpacity
+                  style={styles.pickerInput}
+                  onPress={() => {
+                    if (!isEditAssignmentMode) setAssetModal(true);
+                  }}
+                >
                   <Text style={[styles.pickerText, { color: '#E6F3FF' }]}>
                     {selectedAssets.length > 0
                       ? selectedAssets.map(a => a.assetName).join(', ')
                       : 'Select Assets'}
                   </Text>
-                  <Ionicons name="add-circle-outline" size={20} color="#A9C6E4" />
+                  {!isEditAssignmentMode && (
+                    <Ionicons name="add-circle-outline" size={20} color="#A9C6E4" />
+                  )}
                 </TouchableOpacity>
 
                 {/* OPERATOR DROPDOWN */}
@@ -605,11 +667,15 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                 </Text>
                 <TouchableOpacity
                   style={styles.pickerInput}
-                  onPress={() => setOperatorModal(true)}
+                  onPress={() => {
+                    if (!isEditAssignmentMode) setOperatorModal(true);
+                  }}
                 >
                   <Text style={styles.pickerText}>{selectedOperator ? `${selectedOperator.fullName}
                    (${selectedOperator.employeeId})` : (canAssignToSupervisor ? 'Select Employee' : 'Select Operator')}</Text>
-                  <Ionicons name="chevron-down" size={20} color="#A9C6E4" />
+                  {!isEditAssignmentMode && (
+                    <Ionicons name="chevron-down" size={20} color="#A9C6E4" />
+                  )}
                 </TouchableOpacity>
 
                 {/* PROJECT */}
@@ -875,7 +941,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
             <TouchableOpacity onPress={handleAssign}>
               <LinearGradient colors={['#0EA5E9', '#0F766E']} style={styles.assignButton}>
-                <Text style={styles.buttonText}>Assign Asset</Text>
+                <Text style={styles.buttonText}>{isEditAssignmentMode ? 'Save Changes' : 'Assign Asset'}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -905,15 +971,21 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                 borderColor: 'rgba(159, 207, 255, 0.22)',
                 minHeight: 42,
               }}
+              searchInputStyle={{
+                color: '#E6F3FF',
+              }}
               pickerWrapperStyle={{
                 marginBottom: 0,
                 minHeight: 42,
+                backgroundColor: 'rgba(18, 45, 73, 0.86)',
                 borderColor: 'rgba(159, 207, 255, 0.22)',
               }}
               pickerStyle={{
                 fontSize: 14,
                 color: '#E6F3FF',
+                backgroundColor: 'rgba(18, 45, 73, 0.86)',
               }}
+              pickerItemColor="#0F172A"
             />
 
             <FlatList
