@@ -184,7 +184,7 @@ const CompanyDashboard: React.FC<Props> = ({
   const fetchDashboardData = async () => {
     try {
       // Axios returns a response object; the actual data is in .data
-      const response = await axios.get(`${baseURL}/api/dashboard`);
+      const response = await axios.get(`${baseURL}/api/dashboard/metrics`);
 
       const data = response.data;
 

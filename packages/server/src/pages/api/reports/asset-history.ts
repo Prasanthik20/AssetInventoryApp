@@ -147,14 +147,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         aa.assigned_date AS "assignedDate",
         aa.expected_return_date AS "expectedReturnDate",
         aa.returned_date AS "returnedDate",
-        CASE
-          WHEN aa.returned_date IS NULL
-            AND LOWER(COALESCE(aa.status, '')) <> 'returned'
-            AND aa.expected_return_date IS NOT NULL
-            AND aa.expected_return_date < CURRENT_DATE
-          THEN 'overdue'
-          ELSE COALESCE(aa.status, 'assigned')
-        END AS status
+        CASE 
+          WHEN aa.status = 'returned' OR aa.returned_date IS NOT NULL THEN 'returned'
+          WHEN aa.expected_return_date < CURRENT_DATE THEN 'overdue'
+          ELSE 'assigned'
+        END AS "status"
       FROM "Asset_Assignments" aa
       INNER JOIN "Asset_Details" ad ON ad.id = aa."assetId"
       LEFT JOIN "Users" op ON op."employeeId" = aa."operator_employeeId"

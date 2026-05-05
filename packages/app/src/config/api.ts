@@ -82,8 +82,8 @@ export const API_CONFIG = {
     ASSET_RETURN: '/api/assets/:id/return',
     
     // Dashboard
-    DASHBOARD: '/api/dashboard',
-    DASHBOARD_STATS: '/api/dashboard/stats',
+    DASHBOARD: '/api/dashboard/metrics',
+    DASHBOARD_STATS: '/api/dashboard/metrics',
     
     // Categories
     CATEGORIES: '/api/categories',
