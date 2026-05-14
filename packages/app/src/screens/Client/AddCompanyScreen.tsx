@@ -4,26 +4,42 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Switch,
   ImageBackground,
   StyleSheet,
   SafeAreaView,
   ScrollView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
-import AppSnackbar from 'src/components/common/AppSnackbar';
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import AppSnackbar from '../../components/common/AppSnackbar';
+import { baseURL, RootStackParamList } from "../../navigation/types";
 
 export default function AddCompanyScreen() {
-    const navigation = useNavigation();
-  const [companyName, setCompanyName] = useState("");
-  const [contactPerson, setContactPerson] = useState("");
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [loading, setLoading] = useState(false);
+
+  // Organization Details
+  const [orgName, setOrgName] = useState("");
+  const [orgType, setOrgType] = useState("");
+  const [institutionId, setInstitutionId] = useState("");
+  const [gstNumber, setGstNumber] = useState("");
+  const [address, setAddress] = useState("");
+  const [country, setCountry] = useState("India");
+  const [state, setState] = useState("");
+  const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+
+  // Primary User Details
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
+  const [designation, setDesignation] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [autoAssignAdmin, setAutoAssignAdmin] = useState(false);
-  const [subscription, setSubscription] = useState("Basic");
+
   const [snackbar, setSnackbar] = useState<{
     visible: boolean;
     message: string;
@@ -39,133 +55,145 @@ export default function AddCompanyScreen() {
     }, 3000);
   };
 
-  const handleCreateCompany = () => {
-    if (!companyName || !email || !password) {
-      showSnackbar("Please fill all required fields!", 'error');
+  const handleRegister = async () => {
+    // Basic validation
+    if (!orgName || !fullName || !email || !password || !confirmPassword) {
+      showSnackbar("Please fill all mandatory fields (Org Name, Full Name, Email, Password)", 'error');
       return;
     }
-    showSnackbar(`${companyName} has been activated with ${subscription} plan.`, 'success');
+
+    if (password !== confirmPassword) {
+      showSnackbar("Passwords do not match!", 'error');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${baseURL}/api/auth/register-tenant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organization: {
+            name: orgName,
+            type: orgType,
+            institutionId,
+            gst: gstNumber,
+            address,
+            country,
+            state,
+            city,
+            postalCode
+          },
+          user: {
+            fullName,
+            email,
+            mobileNumber,
+            designation,
+            password
+          }
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        showSnackbar("Organization registered successfully!", 'success');
+        setTimeout(() => {
+          navigation.navigate('CompanyLogin');
+        }, 2000);
+      } else {
+        showSnackbar(result.message || "Registration failed", 'error');
+      }
+    } catch (error) {
+      console.error("Registration Error:", error);
+      showSnackbar("Network error occurred. Please try again.", 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <ImageBackground
-          source={require("../../assets/Company-bg.webp")}
-          style={styles.backgroundImage}
-          resizeMode="cover"
-          blurRadius={5}
-        >
+      source={require("../../assets/Company-bg.webp")}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+      blurRadius={10}
+    >
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
           <View style={styles.formCard}>
-            <Text style={styles.header}>New Company Registration</Text>
+            <Text style={styles.header}>🏢 SaaS Organization Registration</Text>
+            
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Organization Details</Text>
+              <View style={styles.divider} />
+            </View>
 
-            {/* Row 1 */}
             <View style={styles.row}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>🏢 Company Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={companyName}
-                  onChangeText={setCompanyName}
-                  placeholder="Enter company name"
-                  placeholderTextColor="#000000ff"
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>📧 Contact Person</Text>
-                <TextInput
-                  style={styles.input}
-                  value={contactPerson}
-                  onChangeText={setContactPerson}
-                  placeholder="Enter contact person"
-                  placeholderTextColor="#000000ff"
-                />
-              </View>
+              <Input label="Organization Name *" value={orgName} onChange={setOrgName} placeholder="Enter org name" />
+              <Input label="Organization Type" value={orgType} onChange={setOrgType} placeholder="e.g. Hospital, Corporate" />
             </View>
 
-            {/* Row 2 */}
             <View style={styles.row}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>✉️ Work Email</Text>
-                <TextInput
-                  style={styles.input}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="company@email.com"
-                  keyboardType="email-address"
-                  placeholderTextColor="#000000ff"
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>📋 Subscription Plan</Text>
-                <TextInput
-                  style={styles.input}
-                  value={subscription}
-                  onChangeText={setSubscription}
-                  placeholder="Basic / Pro / Enterprise"
-                  placeholderTextColor="#000000ff"
-                />
-              </View>
+              <Input label="Institution ID (Opt)" value={institutionId} onChange={setInstitutionId} placeholder="Enter ID" />
+              <Input label="GST Number (Opt)" value={gstNumber} onChange={setGstNumber} placeholder="Enter GST" />
             </View>
 
-            {/* Row 3 */}
+            <Input label="Address" value={address} onChange={setAddress} placeholder="Enter full address" multiline />
+
             <View style={styles.row}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>🔑 Admin Password</Text>
-                <TextInput
-                  style={styles.input}
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Enter admin password"
-                  placeholderTextColor="#000000ff"
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>🔒 Confirm Password</Text>
-                <TextInput
-                  style={styles.input}
-                  secureTextEntry
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm password"
-                  placeholderTextColor="#000000ff"
-                />
-              </View>
+              <Input label="Country" value={country} onChange={setCountry} placeholder="India" />
+              <Input label="State" value={state} onChange={setState} placeholder="Enter state" />
             </View>
 
-            {/* Switch Row */}
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Auto-Assign Company Admin</Text>
-              {/* <Switch
-                value={autoAssignAdmin}
-                onValueChange={setAutoAssignAdmin}
-                thumbColor={autoAssignAdmin ? "#00C6FF" : "#ccc"}
-              /> */}
+            <View style={styles.row}>
+              <Input label="City" value={city} onChange={setCity} placeholder="Enter city" />
+              <Input label="Postal Code" value={postalCode} onChange={setPostalCode} placeholder="Enter code" keyboardType="numeric" />
             </View>
 
-            {/* Buttons */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Primary Admin User</Text>
+              <View style={styles.divider} />
+            </View>
+
+            <View style={styles.row}>
+              <Input label="Full Name *" value={fullName} onChange={setFullName} placeholder="Enter full name" />
+              <Input label="Designation" value={designation} onChange={setDesignation} placeholder="e.g. IT Manager" />
+            </View>
+
+            <View style={styles.row}>
+              <Input label="Email Address *" value={email} onChange={setEmail} placeholder="admin@org.com" keyboardType="email-address" />
+              <Input label="Mobile Number" value={mobileNumber} onChange={setMobileNumber} placeholder="Enter mobile" keyboardType="phone-pad" />
+            </View>
+
+            <View style={styles.row}>
+              <Input label="Password *" value={password} onChange={setPassword} placeholder="••••••••" secureTextEntry />
+              <Input label="Confirm Password *" value={confirmPassword} onChange={setConfirmPassword} placeholder="••••••••" secureTextEntry />
+            </View>
+
             <View style={styles.buttonRow}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.createButton}
-                onPress={handleCreateCompany}
+                onPress={handleRegister}
+                disabled={loading}
               >
                 <LinearGradient
                   colors={["#00c6ff", "#0072ff"]}
                   style={styles.createGradient}
                 >
-                  <Text style={styles.createText}>CREATE COMPANY & ACTIVATE</Text>
+                  {loading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.createText}>REGISTER & ACTIVATE TRIAL</Text>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* <Text style={styles.footerText}>🌐 Web   🧑‍💼 Companies   ⚙️ Settings   🍎 iOS</Text> */}
         </ScrollView>
       </SafeAreaView>
       <AppSnackbar
@@ -179,28 +207,53 @@ export default function AddCompanyScreen() {
   );
 }
 
+const Input = ({ label, value, onChange, placeholder, ...props }: any) => (
+  <View style={styles.inputContainer}>
+    <Text style={styles.label}>{label}</Text>
+    <TextInput
+      style={styles.input}
+      value={value}
+      onChangeText={onChange}
+      placeholder={placeholder}
+      placeholderTextColor="rgba(255,255,255,0.5)"
+      {...props}
+    />
+  </View>
+);
+
 const styles = StyleSheet.create({
-  backgroundImage: { flex: 1 ,
-    width: '100%',
-    height: '100%'
-  },
-  container: { flex: 1,backgroundColor: "globalColors.backgroundSoft" },
+  backgroundImage: { flex: 1, width: '100%', height: '100%' },
+  container: { flex: 1 },
   scrollContainer: { padding: 20, alignItems: "center" },
   formCard: {
-    width: "95%",
-    backgroundColor: "rgba(255,255,255,0.15)",
+    width: Platform.OS === 'web' ? "80%" : "100%",
+    backgroundColor: "rgba(0,0,0,0.7)",
     borderRadius: 20,
-    padding: 20,
+    padding: 25,
     shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
   },
   header: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "bold",
-    color: "#000000ff",
+    color: "#fff",
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 25,
+  },
+  sectionHeader: {
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    color: "#00c6ff",
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 5,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.2)",
   },
   row: {
     flexDirection: Platform.OS === "web" ? "row" : "column",
@@ -208,59 +261,51 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flex: 1,
-    margin: 8,
+    marginHorizontal: 5,
+    marginVertical: 10,
   },
   label: {
-    color: "#000000ff",
-    marginBottom: 5,
+    color: "#eee",
+    marginBottom: 8,
+    fontSize: 14,
   },
   input: {
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: 10,
-    padding: 10,
-    color: "#000000ff",
-  },
-  switchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginVertical: 20,
-  },
-  switchLabel: {
-    color: "#000000ff",
-    fontSize: 16,
+    padding: 12,
+    color: "#fff",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
   },
   buttonRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 10,
+    justifyContent: "flex-end",
+    marginTop: 30,
+    gap: 15,
   },
   cancelButton: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    justifyContent: 'center',
   },
   cancelText: {
-    color: "#000000ff",
+    color: "#fff",
     fontWeight: "600",
   },
   createButton: {
     borderRadius: 10,
     overflow: "hidden",
+    minWidth: 200,
   },
   createGradient: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 25,
     alignItems: "center",
   },
   createText: {
-    color: "#000000ff",
+    color: "#fff",
     fontWeight: "bold",
-  },
-  footerText: {
-    color: "#000000ff",
-    opacity: 0.8,
-    fontSize: 13,
-    marginTop: 30,
+    fontSize: 16,
   },
 });

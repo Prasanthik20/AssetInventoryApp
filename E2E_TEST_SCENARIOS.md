@@ -158,3 +158,20 @@ This document defines end-to-end (E2E) test scenarios for the Asset Inventory ap
 - Capture API request/response for lifecycle transitions (`assign`, `reply`, `return`, `confirm-return`).
 - For media tests, include both small and large image payloads.
 - For timezone-sensitive checks (overdue/returned date), verify with IST display expectations.
+
+
+# APK Generation
+
+cd /Volumes/Data/ASquare/Lavnya\ Group/AssetInventoryApp
+
+cd packages/app
+
+npx expo prebuild
+
+cd android
+
+# Fix permissions if needed
+ls -l ./gradlew && chmod +x ./gradlew && ls -l ./gradlew
+
+# Build release APK
+./gradlew assembleRelease

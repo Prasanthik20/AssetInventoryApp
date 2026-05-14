@@ -1,12 +1,12 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiResponse } from "next";
 import query from "@/lib/db";
 import { setCorsHeaders } from "@/lib/corsHeaders";
+import { withAuth, AuthenticatedRequest } from "@/lib/apiHandler";
 
-export default async function handler(
-  req: NextApiRequest,
+async function handler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
-  // Set CORS headers
   const origin = req.headers.origin as string;
   setCorsHeaders(res, origin);
 
@@ -19,6 +19,8 @@ export default async function handler(
     res.setHeader("Allow", ["GET", "OPTIONS"]);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
+
+  const { tenantId } = req.user;
 
   try {
     const sql = `
@@ -43,55 +45,29 @@ export default async function handler(
       LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
       LEFT JOIN "Users" s ON s."employeeId" = n."senderId"
       LEFT JOIN "Users" r ON r."employeeId" = n."receiverId"
+      WHERE n."tenantId" = $1
       ORDER BY n.created_at DESC;
     `;
 
-    let rows: any[] = [];
-
-    try {
-      const result = await query(sql);
-      rows = result.rows;
-    } catch (error: any) {
-      const relationMissing =
-        typeof error?.message === 'string' &&
-        error.message.includes('relation "Notifications" does not exist');
-
-      if (!relationMissing) {
-        throw error;
-      }
-
-      // Fallback for deployments where notifications table is lowercase.
-      const fallbackSql = `
-        SELECT
-          n.id                  AS "notificationId",
-          n.reason,
-          n.reply,
-          n.status,
-          n.created_at          AS "createdAt"
-        FROM notifications n
-        ORDER BY n.created_at DESC;
-      `;
-
-      const fallbackResult = await query(fallbackSql);
-      rows = fallbackResult.rows;
-    }
+    const result = await query(sql, [tenantId]);
+    const rows = result.rows;
 
     const notifications = rows.map((n) => ({
-      id: n.notificationId,
-      assignmentId: n.assignmentId,
+      id: n.notificationId ? n.notificationId.toString() : null,
+      assignmentId: n.assignmentId ? n.assignmentId.toString() : null,
       message: n.reply ?? n.reason,
       reason: n.reason,
       reply: n.reply,
       status: n.status,
       createdAt: n.createdAt,
-      asset: n.assetId ? { id: n.assetId, name: n.assetName } : null,
+      asset: n.assetId ? { id: n.assetId.toString(), name: n.assetName } : null,
       sender:
         n.senderId || n.senderName
-          ? { employeeId: n.senderId, name: n.senderName }
+          ? { employeeId: n.senderId.toString(), name: n.senderName }
           : null,
       receiver:
         n.receiverId || n.receiverName
-          ? { employeeId: n.receiverId, name: n.receiverName }
+          ? { employeeId: n.receiverId.toString(), name: n.receiverName }
           : null,
     }));
 
@@ -101,3 +77,5 @@ export default async function handler(
     return res.status(500).json({ message: "Internal server error" });
   }
 }
+
+export default withAuth(handler);

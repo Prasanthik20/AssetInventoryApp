@@ -68,11 +68,15 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
         password,
       });
 
-      await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
+      const { user, token } = response.data;
+
+      // Store both user data and JWT token
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+      await AsyncStorage.setItem('token', token);
 
       showSnackbar('Login successful. Welcome!', 'success');
 
-      setUser(response.data.user); // 🔥 This switches stack automatically
+      setUser(user); // 🔥 This switches stack automatically
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
         showSnackbar(error.response.data.message || 'Login failed.', 'error');
@@ -224,6 +228,13 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                     </Text>
                   </Text>
                 </TouchableOpacity>
+
+                <View style={styles.registerContainer}>
+                  <Text style={styles.registerText}>New Organization? </Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('AddCompany' as any)}>
+                    <Text style={styles.registerLink}>Register Now</Text>
+                  </TouchableOpacity>
+                </View>
 
                 {/* <View style={styles.platformIcons}>
                   <Text style={styles.platformText}>
@@ -408,5 +419,22 @@ const styles = StyleSheet.create({
     color: '#22D3EE',
     fontWeight: '500',
     fontSize: 14,
+  },
+  registerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 25,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 20,
+  },
+  registerText: {
+    color: '#A9C6E4',
+    fontSize: 15,
+  },
+  registerLink: {
+    color: '#0EA5E9',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
 });

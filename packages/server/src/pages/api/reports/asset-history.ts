@@ -73,7 +73,9 @@ const normalizeDate = (value?: string | string[]): string | null => {
   return date.toISOString();
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
+
+export default withAuth(async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   const origin = req.headers.origin as string;
   setCorsHeaders(res, origin);
 
@@ -88,6 +90,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const { tenantId } = req.user;
+    if (!tenantId) {
+      return res.status(403).json({ message: 'Tenant context missing.' });
+    }
+
     const employeeId = Number(req.query.employeeId);
     const roleNameRaw = Array.isArray(req.query.roleName) ? req.query.roleName[0] : req.query.roleName;
     const normalizedRoleName = String(roleNameRaw || '').toLowerCase();
@@ -102,17 +109,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userResult = await query(
       `SELECT u."employeeId"
        FROM "Users" u
-       WHERE u."employeeId" = $1
+       WHERE u."employeeId" = $1 AND u."tenantId" = $2
        LIMIT 1`,
-      [employeeId],
+      [employeeId, tenantId],
     );
 
     if (!userResult.rows.length) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'User not found in your organization' });
     }
 
-    const where: string[] = [];
-    const params: Array<number | string> = [];
+    const where: string[] = [`ad."tenantId" = $1`];
+    const params: Array<number | string> = [tenantId];
 
     if (!isAdminRole) {
       params.push(employeeId);
@@ -181,14 +188,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const summary = {
       totalAssignments: history.length,
-      activeAssignments: history.filter((row) => row.status.toLowerCase() === 'assigned').length,
-      returnedAssignments: history.filter((row) => row.status.toLowerCase() === 'returned').length,
-      overdueAssignments: history.filter((row) => row.status.toLowerCase() === 'overdue').length,
+      activeAssignments: history.filter((row: { status: string; }) => row.status.toLowerCase() === 'assigned').length,
+      returnedAssignments: history.filter((row: { status: string; }) => row.status.toLowerCase() === 'returned').length,
+      overdueAssignments: history.filter((row: { status: string; }) => row.status.toLowerCase() === 'overdue').length,
     };
 
     const pendingApprovalBaseSql = `
       FROM "Notifications" n
-      WHERE LOWER(COALESCE(n.status, '')) IN ('unread', 'replied')
+      WHERE n."tenantId" = $1
+        AND LOWER(COALESCE(n.status, '')) IN ('unread', 'replied')
         AND (
           LOWER(COALESCE(n.reply, '')) LIKE '%pending confirmation%'
           OR (
@@ -203,9 +211,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const pendingApprovalSql = isAdminRole
       ? `SELECT COUNT(*)::int AS count ${pendingApprovalBaseSql}`
       : `SELECT COUNT(*)::int AS count ${pendingApprovalBaseSql}
-         AND (n."receiverId" = $1 OR n."senderId" = $1)`;
+         AND (n."receiverId" = $2 OR n."senderId" = $2)`;
 
-    const pendingParams = isAdminRole ? [] : [employeeId];
+    const pendingParams = isAdminRole ? [tenantId] : [tenantId, employeeId];
     const pendingApprovalResult = await query(pendingApprovalSql, pendingParams);
     const pendingApprovalConfirmations = Number(pendingApprovalResult.rows?.[0]?.count || 0);
 
@@ -217,24 +225,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (isAdminRole) {
       const totalAssetsResult = await query(
-        `SELECT COUNT(*)::int AS count FROM "Asset_Details"`,
-        [],
+        `SELECT COUNT(*)::int AS count FROM "Asset_Details" WHERE "tenantId" = $1`,
+        [tenantId],
       );
 
       const officeAssetsResult = await query(
         `SELECT COUNT(*)::int AS count
          FROM "Asset_Details" ad
          LEFT JOIN "Status" s ON ad.status_id = s.id
-         WHERE LOWER(COALESCE(s.status, '')) = 'unassigned'`,
-        [],
+         WHERE ad."tenantId" = $1 AND LOWER(COALESCE(s.status, '')) = 'unassigned'`,
+        [tenantId],
       );
 
       const maintenanceAssetsResult = await query(
         `SELECT COUNT(*)::int AS count
          FROM "Asset_Details" ad
          LEFT JOIN "Status" s ON ad.status_id = s.id
-         WHERE LOWER(COALESCE(s.status, '')) IN ('under maintenance', 'maintenance')`,
-        [],
+         WHERE ad."tenantId" = $1 AND LOWER(COALESCE(s.status, '')) IN ('under maintenance', 'maintenance')`,
+        [tenantId],
       );
 
       adminSummaryExtras = {
@@ -257,4 +265,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Reports API error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
-}
+});

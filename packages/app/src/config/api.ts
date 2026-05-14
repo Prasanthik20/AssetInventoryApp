@@ -16,13 +16,13 @@ const ENV = {
     timeout: 30000,
   },
  staging: {
-    apiUrl: 'https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
-    wsUrl: 'wss://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
+    apiUrl: 'http://localhost:3000', //'https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
+    wsUrl: 'ws://localhost:3000',//'wss://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
     timeout: 30000,
   },
   prod: {
-    apiUrl: 'https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
-    wsUrl: 'wss://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
+    apiUrl: 'http://localhost:3000', //'https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
+    wsUrl: 'ws://localhost:3000', //'wss://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net',
     timeout: 30000,
   },
 };
@@ -139,16 +139,31 @@ export const getAuthHeaders = (token?: string) => {
   return headers;
 };
  
-/**
-* Get platform info for debugging
-*/
 export const getPlatformInfo = () => ({
   platform: Platform.OS,
   isDev: __DEV__,
   apiUrl: API_CONFIG.BASE_URL,
   userAgent: Platform.OS === 'web' ? navigator.userAgent : `AssetApp/${Platform.OS}`,
 });
- 
-export default API_CONFIG;
- 
+
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Global Axios Interceptor to automatically attach the Auth token
+axios.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token && config.headers) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.error('Error fetching token for API request', error);
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+export default API_CONFIG; 
  

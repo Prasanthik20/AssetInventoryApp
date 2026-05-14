@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
 import bcrypt from "bcryptjs";
 import { setCorsHeaders } from '@/lib/corsHeaders';
+import { signToken } from '@/lib/auth';
 
 export default async function loginCoreHandler(
   req: NextApiRequest,
@@ -41,6 +42,8 @@ export default async function loginCoreHandler(
         u."email",
         u."passwordHash",
         u."photoURL",
+        u."tenantId",
+        u."status",
         r."roleName"
       FROM 
         "Users" u
@@ -59,6 +62,11 @@ export default async function loginCoreHandler(
 
     const user = result.rows[0];
 
+    if (user.status === 'disabled') {
+      res.status(403).json({ message: 'Your account has been disabled. Please contact your administrator.' });
+      return;
+    }
+
      // 🔐 SECURE PASSWORD CHECK
     const isMatch = await bcrypt.compare(password, user.passwordHash);
 
@@ -67,10 +75,43 @@ export default async function loginCoreHandler(
       return;
     }
 
+    // 🕒 Check subscription status for non-Super Admins
+    if (user.roleName !== 'Super Admin' && user.tenantId) {
+      const subSql = `
+        SELECT status, "endDate" 
+        FROM "Subscriptions" 
+        WHERE "tenantId" = $1 
+        ORDER BY "createdAt" DESC 
+        LIMIT 1
+      `;
+      const subResult = await query(subSql, [user.tenantId]);
+      const sub = subResult.rows[0];
+
+      if (sub) {
+        const isExpired = sub.status === 'expired' || (sub.endDate && new Date(sub.endDate) < new Date());
+        if (isExpired) {
+          res.status(403).json({ 
+            message: 'Organization subscription expired. Please contact your administrator for renewal.',
+            subscriptionExpired: true
+          });
+          return;
+        }
+      }
+    }
+
+    // Sign JWT
+    const token = signToken({
+      userId: user.userId.toString(),
+      email: user.email,
+      tenantId: user.tenantId,
+      role: user.roleName
+    });
+
     delete user.passwordHash;
 
     res.status(200).json({
       message: 'Login successful!',
+      token,
       user,
     });
   } catch (error) {

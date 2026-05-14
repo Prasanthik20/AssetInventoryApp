@@ -9,6 +9,59 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model Tenants {
+  id               String   @id @default(uuid())
+  name             String
+  organizationType String?
+  institutionId    String?
+  gstNumber        String?
+  address          String?
+  country          String?
+  state            String?
+  city             String?
+  postalCode       String?
+  status           String   @default("active")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users             Users[]
+  subscriptions     Subscriptions[]
+  Asset_Details     Asset_Details[]
+  Category          Category[]
+  Status            Status[]
+  Asset_Assignments Asset_Assignments[]
+  Notifications     Notifications[]
+}
+
+model Plans {
+  id        String   @id
+  name      String
+  maxUsers  Int
+  maxAssets Int
+  price     Decimal  @db.Decimal(10, 2)
+  currency  String   @default("INR")
+  features  Json?
+  createdAt DateTime @default(now())
+
+  subscriptions Subscriptions[]
+}
+
+model Subscriptions {
+  id                     String    @id @default(uuid())
+  tenantId               String
+  planId                 String
+  startDate              DateTime  @default(now())
+  endDate                DateTime?
+  status                 String    @default("trialing")
+  paymentProvider        String?
+  providerSubscriptionId String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  tenant Tenants @relation(fields: [tenantId], references: [id])
+  plan   Plans   @relation(fields: [planId], references: [id])
+}
+
 model Roles {
   roleId   BigInt  @id @default(autoincrement()) @map("roleId")
   roleName String? @map("roleName")
@@ -25,6 +78,10 @@ model Users {
   address               String?
   photoURL              String?             @map("photoURL")
   roleId                BigInt?             @map("roleId")
+  tenantId              String?
+  designation           String?
+  isPrimaryContact      Boolean?            @default(false)
+  status                String?             @default("active")
   resetToken            String?
   resetTokenExpiry      DateTime?           @db.Timestamp(6)
   operatorAssignments   Asset_Assignments[] @relation("OperatorAssignments")
@@ -34,15 +91,18 @@ model Users {
   receivedNotifications Notifications[]     @relation("ReceivedNotifications")
   sentNotifications     Notifications[]     @relation("SentNotifications")
   role                  Roles?              @relation(fields: [roleId], references: [roleId])
+  tenant                Tenants?            @relation(fields: [tenantId], references: [id])
 }
 
 model Category {
   id               BigInt             @id @default(autoincrement())
   categoryId       BigInt             @unique @map("categoryId")
+  tenantId         String?
   category         String?
   serial_no        String             @unique
   Asset_Details    Asset_Details[]
   Category_Details Category_Details[]
+  tenant           Tenants?           @relation(fields: [tenantId], references: [id])
 }
 
 model Category_Details {
@@ -56,13 +116,16 @@ model Category_Details {
 
 model Status {
   id            BigInt          @id @default(autoincrement())
+  tenantId      String?
   status        String
   Asset_Details Asset_Details[]
+  tenant        Tenants?        @relation(fields: [tenantId], references: [id])
 }
 
 model Asset_Details {
   id               BigInt              @id @unique @default(autoincrement())
   categoryId       BigInt
+  tenantId         String?
   name             String
   asset_Id         String?             @unique(map: "Asset_Details_assetId_key")
   controller_key   String?             @map("controller_key")
@@ -84,11 +147,13 @@ model Asset_Details {
   category         Category            @relation(fields: [categoryId], references: [categoryId], map: "Category_Details_categoryId_fkey")
   Category_Details Category_Details?
   notifications    Notifications[]
+  tenant           Tenants?            @relation(fields: [tenantId], references: [id])
 }
 
 model Asset_Assignments {
   id                    BigInt          @id @default(autoincrement())
   assetId               BigInt
+  tenantId              String?
   operator_employeeId   BigInt
   supervisor_employeeId BigInt
   projectName           String?
@@ -106,11 +171,13 @@ model Asset_Assignments {
   operator              Users           @relation("OperatorAssignments", fields: [operator_employeeId], references: [employeeId])
   supervisor            Users           @relation("SupervisorAssignments", fields: [supervisor_employeeId], references: [employeeId])
   notifications         Notifications[]
+  tenant                Tenants?        @relation(fields: [tenantId], references: [id])
 }
 
 model Notifications {
   id           BigInt             @id @default(autoincrement())
   assetId      BigInt
+  tenantId     String?
   assignmentId BigInt?
   reply        String?
   senderId     BigInt
@@ -122,4 +189,5 @@ model Notifications {
   assignment   Asset_Assignments? @relation(fields: [assignmentId], references: [id])
   receiver     Users              @relation("ReceivedNotifications", fields: [receiverId], references: [employeeId])
   sender       Users              @relation("SentNotifications", fields: [senderId], references: [employeeId])
+  tenant       Tenants?           @relation(fields: [tenantId], references: [id])
 }
