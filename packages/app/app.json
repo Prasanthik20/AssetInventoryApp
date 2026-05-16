@@ -1,20 +1,40 @@
 {
   "expo": {
-    "name": "AssetInventoryApp",
+    "name": "AsqAsset Ledger",
     "slug": "asset-inventory-app",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./src/assets/asq.png",
     "platforms": [
       "android",
       "ios",
       "web"
     ],
     "jsEngine": "hermes",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with your friends.",
+          "cameraPermission": "The app accesses your camera to let you take photos of assets."
+        }
+      ]
+    ],
     "android": {
-      "package": "com.anonymous.assetinventoryapp"
+      "package": "com.anonymous.assetinventoryapp",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/asq.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "ios": {
-      "bundleIdentifier": "com.anonymous.assetinventoryapp"
+      "bundleIdentifier": "com.anonymous.assetinventoryapp",
+      "supportsTablet": true
     }
   }
 }
