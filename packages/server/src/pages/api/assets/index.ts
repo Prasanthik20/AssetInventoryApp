@@ -16,7 +16,23 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
 
-    const { tenantId } = req.user;
+    const { tenantId, role } = req.user;
+    
+    if (!tenantId && role !== 'Super Admin') {
+        console.error('[ERROR] tenantId missing in token for non-Super Admin user.');
+        return res.status(403).json({ message: 'Tenant ID missing. Please log in again.' });
+    }
+
+    console.log(`[DEBUG] User Payload: ${JSON.stringify(req.user)}`);
+    console.log(`[DEBUG] Fetching assets for tenantId: "${tenantId}"`);
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const offset = (page - 1) * limit;
+    
+    let search = (req.query.search as string) || '';
+    if (search === 'undefined' || search === 'null') search = '';
+    const isSearch = search.trim().length > 0;
 
     try {
         // 1️⃣ Update assets: Only set to 'Overdue' if it is CURRENTLY assigned to someone
@@ -76,17 +92,39 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             LEFT JOIN LATERAL (
                 SELECT * FROM "Asset_Assignments"
                 WHERE "assetId" = a.id
-                  AND "tenantId" = $1
+                  AND ("tenantId" = $1 OR $1 IS NULL)
                   AND COALESCE(status, '') <> 'returned'
                   AND "returned_date" IS NULL
                 ORDER BY id DESC
                 LIMIT 1
             ) aa ON TRUE
-            WHERE a."tenantId" = $1
-            ORDER BY a.id ASC;
+            WHERE (a."tenantId" = $1 OR $1 IS NULL)
+            ${isSearch ? `AND (a.name ILIKE $2 OR a."asset_Id" ILIKE $2 OR a."serial_no" ILIKE $2)` : ''}
+            ORDER BY a.id ASC
+            LIMIT $${isSearch ? 3 : 2} OFFSET $${isSearch ? 4 : 3};
         `;
 
-        const result = await query(sqlQuery, [tenantId]);
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM "Asset_Details" a
+            WHERE (a."tenantId" = $1 OR $1 IS NULL)
+            ${isSearch ? `AND (a.name ILIKE $2 OR a."asset_Id" ILIKE $2 OR a."serial_no" ILIKE $2)` : ''};
+        `;
+
+        const searchPattern = isSearch ? `%${search.trim()}%` : null;
+        const mainParams = isSearch
+            ? [tenantId, searchPattern, limit, offset]
+            : [tenantId, limit, offset];
+        const countParams = isSearch ? [tenantId, searchPattern] : [tenantId];
+
+        const [result, countResult] = await Promise.all([
+            query(sqlQuery, mainParams),
+            query(countQuery, countParams),
+        ]);
+
+        const total = parseInt(countResult.rows[0]?.total || '0');
+        console.log(`[DEBUG] Query results: MainRows=${result.rows.length}, TotalCount=${total}`);
+        const totalPages = Math.ceil(total / limit);
 
         const formattedAssets = result.rows.map(asset => ({
             id: asset.id.toString(),
@@ -115,6 +153,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(200).json({
             message: 'Assets fetched successfully!',
             count: formattedAssets.length,
+            total,
+            page,
+            limit,
+            totalPages,
             assets: formattedAssets
         });
 

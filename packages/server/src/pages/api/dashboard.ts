@@ -41,7 +41,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         COUNT(a.id) FILTER (WHERE s.status IN ('Under Maintenance', 'Maintenance', 'under maintenance')) AS "underMaintenanceAssets",
         COUNT(a.id) FILTER (WHERE s.status = 'Unassigned') AS "officeAssets",
         COUNT(a.id) FILTER (WHERE s.status IN ('Assigned', 'Overdue')) AS "fieldAssets",
-        (SELECT COUNT(*) FROM "Users" WHERE "tenantId" = $1) AS "totalUsers"
+        (SELECT COUNT(*) FROM "Users" WHERE "tenantId" = $1) AS "totalUsers",
+        (SELECT COUNT(*) FROM "Category" WHERE "tenantId" = $1 OR "isSystemCategory" = true) AS "totalCategories"
       FROM "Asset_Details" a
       LEFT JOIN "Status" s ON a.status_id = s.id
       WHERE a."tenantId" = $1;
@@ -63,9 +64,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const locationResult = await query(locationSql, [tenantId]);
 
     // Convert string counts from PostgreSQL to numbers
+    const totalAssetsCount = Number(stats.totalAssets || 0);
+    const totalUsersCount = Number(stats.totalUsers || 0);
+
     const metrics = {
-      totalAssets: Number(stats.totalAssets || 0),
-      totalUsers: Number(stats.totalUsers || 0),
+      totalAssets: totalAssetsCount,
+      totalUsers: totalUsersCount,
+      totalCategories: Number(stats.totalCategories || 0),
       unassignedAssets: Number(stats.unassignedAssets || 0),
       assignedAssets: Number(stats.assignedAssets || 0),
       overdueAssets: Number(stats.overdueAssets || 0),
@@ -74,16 +79,25 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       fieldAssets: Number(stats.fieldAssets || 0),
     };
 
-    return res.status(200).json({
-      ...metrics,
-      fieldLocationStats: locationResult.rows,
-      subscription: subscription ? {
+    let subscriptionUsage = null;
+    if (subscription) {
+       const userUsagePct = subscription.maxUsers > 0 ? (totalUsersCount / subscription.maxUsers) * 100 : 0;
+       const assetUsagePct = subscription.maxAssets > 0 ? (totalAssetsCount / subscription.maxAssets) * 100 : 0;
+       subscriptionUsage = {
         plan: subscription.planName,
         status: subscription.status,
         endDate: subscription.endDate,
         maxUsers: subscription.maxUsers,
-        maxAssets: subscription.maxAssets
-      } : null
+        maxAssets: subscription.maxAssets,
+        userUsagePercent: Math.min(100, Math.round(userUsagePct)),
+        assetUsagePercent: Math.min(100, Math.round(assetUsagePct)),
+       };
+    }
+
+    return res.status(200).json({
+      ...metrics,
+      fieldLocationStats: locationResult.rows,
+      subscription: subscriptionUsage
     });
 
   } catch (error) {

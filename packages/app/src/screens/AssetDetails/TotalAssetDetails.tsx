@@ -110,6 +110,10 @@ const TotalAssetsDetails: React.FC = () => {
     const [assets, setAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [totalCount, setTotalCount] = useState(0);
 
     const [supervisorId, setSupervisorId] = useState<number | null>(null);
     const [supervisorName, setSupervisorName] = useState<string>('');
@@ -163,30 +167,51 @@ const TotalAssetsDetails: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        fetchAssets();
+        fetchAssets(1, false);
     }, []);
-    /* 🔹 Fetch assigned assets */
-    const fetchAssets = async () => {
-        try {
-            setLoading(true);
-            const response = await axios.get(`${baseURL}/api/assets`);
-            const rawData = response.data.assets || response.data || [];
 
-            // 🔥 Remove duplicates by Asset ID
+    /* 🔹 Fetch assets with pagination */
+    const fetchAssets = async (pageNum = 1, append = false) => {
+        try {
+            if (pageNum === 1) setLoading(true);
+            else setLoadingMore(true);
+
+            const response = await axios.get(`${baseURL}/api/assets`, {
+                params: { page: pageNum, limit: 50 }
+            });
+            const rawData = response.data.assets || [];
+            const { total, totalPages } = response.data;
+
+            setTotalCount(total || 0);
+            setHasMore(pageNum < (totalPages || 1));
+
+            // De-duplicate by id
             const uniqueMap = new Map();
             rawData.forEach((item: any) => {
-                // Use assetId (or id) as the unique key
                 const id = item.assetId || item.id;
-                if (!uniqueMap.has(id)) {
-                    uniqueMap.set(id, item);
-                }
+                if (!uniqueMap.has(id)) uniqueMap.set(id, item);
             });
 
-            setAssets(Array.from(uniqueMap.values()));
+            const newAssets = Array.from(uniqueMap.values()) as Asset[];
+            setAssets(prev => {
+                if (!append) return newAssets;
+                const existingIds = new Set(prev.map(a => a.assetId || a.id));
+                const filteredNew = newAssets.filter(a => !existingIds.has(a.assetId || a.id));
+                return [...prev, ...filteredNew];
+            });
         } catch (err) {
             setError("Failed to fetch assets.");
         } finally {
             setLoading(false);
+            setLoadingMore(false);
+        }
+    };
+
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore && !loading) {
+            const nextPage = page + 1;
+            setPage(nextPage);
+            fetchAssets(nextPage, true);
         }
     };
 
@@ -427,6 +452,7 @@ const TotalAssetsDetails: React.FC = () => {
                             <Ionicons name="arrow-back" size={24} color="#E0E0E0" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>All Assets</Text>
+                        <Text style={{ color: '#A9C6E4', marginLeft: 'auto', fontSize: 13 }}>{totalCount} total</Text>
                     </View>
                     
                     {/* BODY MUST BE flex: 1 */}
@@ -474,8 +500,10 @@ const TotalAssetsDetails: React.FC = () => {
                             keyExtractor={(item) => (item.id || item.assetId).toString()}
                             renderItem={renderAsset}
                             contentContainerStyle={{ paddingBottom: 20 }}
-                            // This ensures the FlatList fills the remaining body space
                             style={{ flex: 1 }}
+                            onEndReached={handleLoadMore}
+                            onEndReachedThreshold={0.3}
+                            ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#A9C6E4" style={{ marginVertical: 16 }} /> : null}
                         />
                     </View>
                 </View>

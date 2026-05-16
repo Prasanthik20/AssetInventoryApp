@@ -27,10 +27,10 @@ export type Asset = {
   returnedDate?: string | null;
   assignmentId: number;
   isOverdue: boolean;
-  senderId?: string | number;   // Changed to allow both for flexibility
-  receiverId?: string | number; // Changed to allow both for flexibility
+  senderId?: string | number;
+  receiverId?: string | number;
   operatorId?: string | number;
-  
+  dynamicValues?: any[];
 };
 
 export type AssetAssignment = {
@@ -59,6 +59,7 @@ ResetPassword: { token: string };
 
   CompanyUsersScreen: undefined;
   AddCompanyUser: undefined;
+  CustomCategoryBuilder: undefined;
 
   SupervisorDashboard: {
     supervisorName: string;
@@ -85,7 +86,9 @@ ResetPassword: { token: string };
         operatorName?: string;
       }
     | undefined;
-  AddEditAsset: undefined;
+  AddEditAsset: {
+    editAsset?: Asset;
+  } | undefined;
 
   AssetFullDetails: {
     asset: Asset;

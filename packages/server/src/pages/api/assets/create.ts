@@ -1,8 +1,9 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiResponse } from 'next';
 import query from "@/lib/db";
 import { setCorsHeaders } from "@/lib/corsHeaders";
+import { withAuth, AuthenticatedRequest } from "@/lib/apiHandler";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   // Set CORS headers
   const origin = req.headers.origin as string;
   setCorsHeaders(res, origin);
@@ -13,10 +14,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
 
+  const { tenantId } = req.user;
+
   try {
-    // Support both payload shapes:
-    // 1) flat body { assetName, ... }
-    // 2) nested body { data: { assetName, ... } }
     const payload = req.body?.data && typeof req.body.data === "object"
       ? req.body.data
       : req.body;
@@ -28,7 +28,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       controllerKey,
       barcodeURL, barcode,
       assignedBy, assignedTo, expectedReturnDate,
-      assignmentId, operatorId, senderId, receiverId
+      assignmentId, operatorId, senderId, receiverId,
+      dynamicFields // Expected as an array of { fieldId: number, value: string }
     } = payload;
 
     if (!assetName?.toString().trim()) {
@@ -46,10 +47,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const senderIdNum = senderId ? parseInt(String(senderId), 10) : null;
     const receiverIdNum = receiverId ? parseInt(String(receiverId), 10) : null;
 
-    // 1. Get Category ID (Matches Prisma categoryId)
+    // 1. Get Category ID
     const categoryRes = await query(
-      `SELECT "categoryId" FROM "Category" WHERE category = $1 LIMIT 1`,
-      [category]
+      `SELECT "categoryId" FROM "Category" WHERE category = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
+      [category, tenantId]
     );
     if (!categoryRes.rows.length) return res.status(400).json({ message: "Invalid category" });
     const categoryId = categoryRes.rows[0].categoryId;
@@ -60,18 +61,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? (normalizedControllerKey || null)
       : null;
 
-    // 2. Get Status ID (Matches Prisma Status table)
+    // 2. Get Status ID
     const statusRes = await query(
-      `SELECT id FROM "Status" WHERE status = $1 LIMIT 1`,
-      [status || "Unassigned"]
+      `SELECT id FROM "Status" WHERE status = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
+      [status || "Unassigned", tenantId]
     );
     if (!statusRes.rows.length) return res.status(400).json({ message: "Invalid status" });
     const statusId = statusRes.rows[0].id;
 
     // 3. Create endpoint should fail if serial number already exists.
     const serialNumberRes = await query(
-      `SELECT id FROM "Asset_Details" WHERE "serial_no" = $1 LIMIT 1`,
-      [serialNumber]
+      `SELECT id FROM "Asset_Details" WHERE "serial_no" = $1 AND "tenantId" = $2 LIMIT 1`,
+      [serialNumber, tenantId]
     );
     if (serialNumberRes.rows.length > 0) {
       return res.status(409).json({
@@ -79,25 +80,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // 4. Also block if caller passes an existing id/assetId to create route.
-    const existingAssetId = id || payloadAssetId;
-    if (existingAssetId) {
-      const existingByIdRes = await query(
-        `SELECT id FROM "Asset_Details" WHERE id = $1 OR "asset_Id" = $2 LIMIT 1`,
-        [existingAssetId, String(existingAssetId)]
-      );
-      if (existingByIdRes.rows.length > 0) {
-      return res.status(409).json({
-        message: "Asset already exists. Use edit/update flow instead.",
-      });
-      }
-    }
-
-    // Asset doesn't exist, so INSERT new asset
+    // 4. INSERT new asset
     await query("BEGIN", []);
 
-    // Lock id generation for this transaction to avoid duplicate primary keys
-    // when the underlying sequence is out of sync.
+    // Lock id generation for this transaction
     await query(`SELECT pg_advisory_xact_lock(hashtext('asset_details_id_lock'))`, []);
 
     const nextIdRes = await query(
@@ -106,10 +92,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     const nextId = nextIdRes.rows[0]?.next_id;
 
-    // 3. Insert into Asset_Details with all fields including assigned_by, assigned_to
     const insertAsset = await query(
-      `INSERT INTO "Asset_Details" (id, name, "categoryId", "controller_key", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `INSERT INTO "Asset_Details" (id, name, "categoryId", "controller_key", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to, "tenantId")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING id`,
       [
         nextId,
@@ -126,12 +111,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         photoURL || null,
         barcodeURL || barcode || null,
         assignedByNum,
-        assignedToNum
+        assignedToNum,
+        tenantId
       ]
     );
 
     const assetId = insertAsset.rows[0].id;
-    const assetIdStr = assetId.toString(); // Convert BigInt to String for the asset_Id field
+    const assetIdStr = assetId.toString();
 
     // 4. Update the generated asset_Id field
     await query(
@@ -139,20 +125,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [assetIdStr, assetId]
     );
 
-    // Best-effort: align sequence for other endpoints that rely on default id.
-    await query(
-      `WITH seq AS (
-        SELECT pg_get_serial_sequence('"Asset_Details"', 'id') AS seq_name
-      )
-      SELECT setval(seq_name, $1::bigint, true)
-      FROM seq
-      WHERE seq_name IS NOT NULL`,
-      [assetId]
-    );
+    // 5. Insert Dynamic Values (EAV)
+    if (dynamicFields && Array.isArray(dynamicFields)) {
+      for (const field of dynamicFields) {
+        if (field.fieldId && field.value !== undefined) {
+          await query(
+            `INSERT INTO "AssetDynamicValues" ("assetId", "fieldId", value) VALUES ($1, $2, $3)`,
+            [assetId, field.fieldId, String(field.value)]
+          );
+        }
+      }
+    }
 
-    // 5. Insert into Category_Details (Matches your unique asset_Id relation)
-    await query(`SELECT pg_advisory_xact_lock(hashtext('category_details_id_lock'))`, []);
-
+    // 6. Insert into Category_Details
     const nextCategoryDetailsIdRes = await query(
       `SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "Category_Details"`,
       []
@@ -164,25 +149,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [nextCategoryDetailsId, categoryId, assetName, assetIdStr]
     );
 
-    // Best-effort: align Category_Details sequence for any other writes that rely on default id.
-    await query(
-      `WITH seq AS (
-        SELECT pg_get_serial_sequence('"Category_Details"', 'id') AS seq_name
-      )
-      SELECT setval(seq_name, $1::bigint, true)
-      FROM seq
-      WHERE seq_name IS NOT NULL`,
-      [nextCategoryDetailsId]
-    );
-
-    // 6. Optionally create assignment if assignment details are provided
+    // 7. Optionally create assignment
     if (operatorIdNum && senderIdNum && receiverIdNum) {
       await query(
         `INSERT INTO "Asset_Assignments" 
-        ("assetId", "operator_employeeId", "supervisor_employeeId", "expected_return_date")
-        VALUES ($1, $2, $3, $4)
+        ("assetId", "operator_employeeId", "supervisor_employeeId", "expected_return_date", "tenantId")
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT DO NOTHING`,
-        [assetId, operatorIdNum, senderIdNum || receiverIdNum, expectedReturnDate || null]
+        [assetId, operatorIdNum, senderIdNum || receiverIdNum, expectedReturnDate || null, tenantId]
       );
     }
 
@@ -209,27 +183,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       await query("ROLLBACK", []);
     } catch {
-      // Ignore rollback errors when no transaction is active.
-    }
-
-    const pgCode = error?.code;
-    const constraint = error?.constraint || "";
-
-    if (pgCode === "23505") {
-      if (constraint.includes("serial_no") || constraint.includes("Asset_Details_serial_no")) {
-        return res.status(409).json({ message: "Serial number already exists" });
-      }
-      if (constraint.includes("Asset_Details_pkey")) {
-        return res.status(409).json({ message: "Asset ID conflict. Please retry." });
-      }
-      if (constraint.includes("Category_Details_pkey")) {
-        return res.status(409).json({ message: "Category detail ID conflict. Please retry." });
-      }
-      return res.status(409).json({ message: "Duplicate value violates a unique constraint" });
-    }
-
-    if (pgCode === "23502") {
-      return res.status(400).json({ message: "Missing required asset field(s)" });
+      // Ignore
     }
 
     console.error("FULL DATABASE ERROR:", error);
@@ -239,3 +193,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler);

@@ -138,6 +138,8 @@ const CompanyDashboard: React.FC<Props> = ({
   const [notifications, setNotifications] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [totalCategories, setTotalCategories] = useState<number>(0);
+  const [subscription, setSubscription] = useState<any>(null);
 
   const fetchUsers = async () => {
     try {
@@ -195,6 +197,8 @@ const CompanyDashboard: React.FC<Props> = ({
       setOverdueAssets(data.overdueAssets);
       setUnderMaintenanceAssets(data.underMaintenanceAssets);
       setFieldLocationStats(data.fieldLocationStats || []);
+      setTotalCategories(data.totalCategories || 0);
+      setSubscription(data.subscription || null);
       
     } catch (error: any) {
       console.log('Dashboard API Error:', error.response?.data || error.message);
@@ -381,6 +385,42 @@ const CompanyDashboard: React.FC<Props> = ({
                 )}
               </View>
 
+              {/* 🛡️ SUBSCRIPTION USAGE WIDGET */}
+              {subscription && (
+                <View style={[styles.metricBox, { width: '100%', marginBottom: 16, padding: 16, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E3A8A' }}>
+                      {subscription.plan} Plan - {subscription.status.toUpperCase()}
+                    </Text>
+                    <Text style={{ fontSize: 14, color: '#3B82F6' }}>
+                      Renews: {new Date(subscription.endDate).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  
+                  {/* Users Progress Bar */}
+                  <View style={{ marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#475569' }}>User Limits</Text>
+                      <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '600' }}>{totalUsers} / {subscription.maxUsers === 999999 ? 'Unlimited' : subscription.maxUsers}</Text>
+                    </View>
+                    <View style={{ height: 6, backgroundColor: '#DBEAFE', borderRadius: 3, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', width: `${subscription.userUsagePercent}%`, backgroundColor: subscription.userUsagePercent > 80 ? '#EF4444' : '#3B82F6' }} />
+                    </View>
+                  </View>
+
+                  {/* Assets Progress Bar */}
+                  <View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#475569' }}>Asset Limits</Text>
+                      <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '600' }}>{totalAssets} / {subscription.maxAssets === 999999 ? 'Unlimited' : subscription.maxAssets}</Text>
+                    </View>
+                    <View style={{ height: 6, backgroundColor: '#DBEAFE', borderRadius: 3, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', width: `${subscription.assetUsagePercent}%`, backgroundColor: subscription.assetUsagePercent > 80 ? '#EF4444' : '#10B981' }} />
+                    </View>
+                  </View>
+                </View>
+              )}
+
               {/* Metrics Grid - 4 in a row on Web */}
               <View style={styles.metricsGrid}>
                 <View style={styles.metricBox}>
@@ -407,6 +447,18 @@ const CompanyDashboard: React.FC<Props> = ({
                     <Text style={styles.metricLabel}>Total Users</Text>
                   </TouchableOpacity>
                   <Text style={styles.metricValue}>{totalUsers ?? 0}</Text>
+                </View>
+
+                <View style={styles.metricBox}>
+                  <TouchableOpacity
+                    style={styles.metricRow}
+                    activeOpacity={0.8}
+                    onPress={() => navigation.navigate('CustomCategoryBuilder')}
+                  >
+                    <SafeIonicons name="folder-open-outline" size={24} color="#8B5CF6" />
+                    <Text style={styles.metricLabel}>Total Categories</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.metricValue}>{totalCategories}</Text>
                 </View>
 
                 <View style={styles.metricBox}>

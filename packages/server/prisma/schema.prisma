@@ -31,6 +31,7 @@ model Tenants {
   Status            Status[]
   Asset_Assignments Asset_Assignments[]
   Notifications     Notifications[]
+  AssetCategoryFields AssetCategoryFields[]
 }
 
 model Plans {
@@ -100,8 +101,12 @@ model Category {
   tenantId         String?
   category         String?
   serial_no        String             @unique
+  parentCategoryId BigInt?
+  isCustom         Boolean            @default(false)
+  isSystemCategory Boolean            @default(false)
   Asset_Details    Asset_Details[]
   Category_Details Category_Details[]
+  AssetCategoryFields AssetCategoryFields[]
   tenant           Tenants?           @relation(fields: [tenantId], references: [id])
 }
 
@@ -148,6 +153,7 @@ model Asset_Details {
   Category_Details Category_Details?
   notifications    Notifications[]
   tenant           Tenants?            @relation(fields: [tenantId], references: [id])
+  AssetDynamicValues AssetDynamicValues[]
 }
 
 model Asset_Assignments {
@@ -190,4 +196,26 @@ model Notifications {
   receiver     Users              @relation("ReceivedNotifications", fields: [receiverId], references: [employeeId])
   sender       Users              @relation("SentNotifications", fields: [senderId], references: [employeeId])
   tenant       Tenants?           @relation(fields: [tenantId], references: [id])
+}
+
+model AssetCategoryFields {
+  id               BigInt               @id @default(autoincrement())
+  tenantId         String
+  categoryId       BigInt
+  fieldName        String
+  fieldType        String
+  isRequired       Boolean              @default(false)
+  validationRules  String?
+  category         Category             @relation(fields: [categoryId], references: [categoryId])
+  tenant           Tenants              @relation(fields: [tenantId], references: [id])
+  AssetDynamicValues AssetDynamicValues[]
+}
+
+model AssetDynamicValues {
+  id               BigInt               @id @default(autoincrement())
+  assetId          BigInt
+  fieldId          BigInt
+  value            String?
+  asset            Asset_Details        @relation(fields: [assetId], references: [id])
+  field            AssetCategoryFields  @relation(fields: [fieldId], references: [id])
 }

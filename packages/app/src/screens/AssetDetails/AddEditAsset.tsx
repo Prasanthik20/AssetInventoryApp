@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, SafeAreaView, ImageBackground, TouchableOpacity, Image, TextInput, Modal,
   FlatList, Platform, ScrollView, useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from "@react-navigation/stack";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import useAssetMeta from "../../hooks/useAssetMeta";
@@ -16,6 +17,7 @@ import * as FileSystem from 'expo-file-system';
 import { addStyles } from './addstyles';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, "AddEditAsset">;
+type AddEditRouteProp = RouteProp<RootStackParamList, "AddEditAsset">;
 
 const inferMimeType = (uri: string, explicitMimeType?: string): string => {
     if (explicitMimeType) return explicitMimeType;
@@ -85,6 +87,10 @@ const CustomPickerModal = ({ visible, title, data, onSelect, onClose, keyLabel, 
 
 const AddEditAsset: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<AddEditRouteProp>();
+  const params = route.params;
+  const editAsset = params?.editAsset;
+  const isEditMode = !!editAsset;
   const { statuses, categories } = useAssetMeta();
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 900;
@@ -103,13 +109,17 @@ const AddEditAsset: React.FC = () => {
   }>({ visible: false, message: '', kind: 'info' });
   const snackbarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 🔹 New state for dynamic fields
+  const [dynamicFieldDefs, setDynamicFieldDefs] = useState<any[]>([]);
+  const [dynamicValues, setDynamicValues] = useState<Record<string, string>>({});
+  const [fieldsLoading, setFieldsLoading] = useState(false);
+
   const locations = ["Office", "Field"];
 
   const getInitialAssetData = (): Omit<Asset, 'assetId'> => ({
     id: 0,
     assetName: "",
     category: categories?.[0]?.category || "",
-    controllerKey: "",
     status: statuses?.[0]?.status || "Unassigned",
     location: "Office",
     modelNumber: "",
@@ -124,7 +134,26 @@ const AddEditAsset: React.FC = () => {
   });
 
   const [assetData, setAssetData] = useState<Omit<Asset, 'assetId'>>(getInitialAssetData);
-  const isControllerCategory = String(assetData.category || '').trim().toLowerCase().includes('controller');
+
+  useEffect(() => {
+    if (editAsset) {
+      setAssetData({
+        ...editAsset,
+        // Ensure dates are just the YYYY-MM-DD part
+        purchaseDate: editAsset.purchaseDate ? editAsset.purchaseDate.split('T')[0] : "",
+        warrantyExpiry: editAsset.warrantyExpiry ? editAsset.warrantyExpiry.split('T')[0] : "",
+      });
+      
+      // If dynamicValues are provided in editAsset (from detail screen), populate them
+      if (editAsset.dynamicValues) {
+        const values: Record<string, string> = {};
+        editAsset.dynamicValues.forEach((dv: any) => {
+          values[dv.fieldId] = dv.value;
+        });
+        setDynamicValues(values);
+      }
+    }
+  }, [editAsset]);
 
   useEffect(() => {
     if (categories?.length || statuses?.length) {
@@ -136,11 +165,31 @@ const AddEditAsset: React.FC = () => {
     }
   }, [categories, statuses]);
 
+  // 🔹 Fetch dynamic fields when category changes
   useEffect(() => {
-    if (!isControllerCategory && assetData.controllerKey) {
-      setAssetData((prev) => ({ ...prev, controllerKey: '' }));
+    const selectedCat = categories?.find(c => c.category === assetData.category);
+    if (selectedCat?.categoryId) {
+      fetchDynamicFields(selectedCat.categoryId);
+    } else {
+      setDynamicFieldDefs([]);
     }
-  }, [assetData.controllerKey, isControllerCategory]);
+  }, [assetData.category, categories]);
+
+  const fetchDynamicFields = async (catId: string) => {
+    try {
+      setFieldsLoading(true);
+      const res = await axios.get(`${baseURL}/api/categories/${catId}/fields`);
+      setDynamicFieldDefs(res.data.fields || []);
+    } catch (error) {
+      console.error("Error fetching dynamic fields:", error);
+    } finally {
+      setFieldsLoading(false);
+    }
+  };
+
+  const handleDynamicValueChange = (fieldId: string, val: string) => {
+    setDynamicValues(prev => ({ ...prev, [fieldId]: val }));
+  };
 
   const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
     if (snackbarTimeoutRef.current) {
@@ -318,7 +367,7 @@ const AddEditAsset: React.FC = () => {
     return true;
   };
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
     if (!validateCreateForm()) {
       return;
     }
@@ -328,37 +377,49 @@ const AddEditAsset: React.FC = () => {
         ...assetData,
         assetName: String(assetData.assetName || '').trim(),
         category: String(assetData.category || '').trim(),
-        controllerKey: isControllerCategory
-          ? (String(assetData.controllerKey || '').trim() || null)
-          : null,
         status: String(assetData.status || '').trim(),
         serialNumber: String(assetData.serialNumber || '').trim(),
         location: String(assetData.location || '').trim(),
         modelNumber: String(assetData.modelNumber || '').trim(),
         price: String(assetData.price || '').trim(),
+        dynamicFields: Object.entries(dynamicValues).map(([fieldId, value]) => ({
+          fieldId: parseInt(fieldId),
+          value
+        }))
       };
 
-      const res = await axios.post(
-        `${baseURL}/api/assets/create`,
-        payload,
-        { headers: { "Content-Type": "application/json" } }
-      );
-
-      const data = res.data;
-      const isSuccess = res.status >= 200 && res.status < 300;
-      if (!isSuccess) {
-        throw new Error(data?.message || "Failed to create asset");
+      let res;
+      if (isEditMode) {
+        res = await axios.put(
+          `${baseURL}/api/assets/${editAsset.assetId || editAsset.id}`,
+          payload
+        );
+      } else {
+        res = await axios.post(
+          `${baseURL}/api/assets/create`,
+          payload
+        );
       }
 
-      showSnackbar(data?.message || "Asset created successfully.", 'success');
-      setAssetData(getInitialAssetData());
+      const data = res.data;
+      if (res.status >= 200 && res.status < 300) {
+        showSnackbar(data?.message || `Asset ${isEditMode ? 'updated' : 'created'} successfully.`, 'success');
+        if (!isEditMode) {
+          setAssetData(getInitialAssetData());
+          setDynamicValues({});
+        } else {
+          // Navigate back after update
+          setTimeout(() => navigation.goBack(), 1500);
+        }
+      } else {
+        throw new Error(data?.message || "Operation failed");
+      }
     } catch (error: any) {
       console.error(error);
       const errorMessage =
         error?.response?.data?.message ||
-        error?.response?.data?.detail ||
         error?.message ||
-        "Failed to create asset";
+        `Failed to ${isEditMode ? 'update' : 'create'} asset`;
       showSnackbar(errorMessage, 'error');
     }
   };
@@ -378,7 +439,7 @@ const AddEditAsset: React.FC = () => {
               <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backCircle}>
                 <Ionicons name="arrow-back" size={20} color="#E6F3FF" />
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>Add New Asset</Text>
+              <Text style={styles.headerTitle}>{isEditMode ? 'Edit Asset' : 'Add New Asset'}</Text>
               <View style={styles.headerRight}>
                 <Feather name="user" size={14} color="#22D3EE" />
                 {/* <Text style={styles.userText}>Supervisor</Text> */}
@@ -414,22 +475,6 @@ const AddEditAsset: React.FC = () => {
                     <Ionicons name="layers-outline" size={18} color="#22D3EE" />
                   </TouchableOpacity>
 
-                  {isControllerCategory && (
-                    <>
-                      <Text style={styles.label}>Controller Key</Text>
-                      <View style={styles.inputGroup}>
-                        <Feather name="key" size={16} color="#22D3EE" style={styles.inputIcon} />
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="Controller Key"
-                          placeholderTextColor="#999"
-                          value={String(assetData.controllerKey || '')}
-                          onChangeText={v => handleInputChange('controllerKey', v)}
-                        />
-                      </View>
-                    </>
-                  )}
-
                   <Text style={styles.label}>Status</Text>
                   <TouchableOpacity style={styles.pickerInput} onPress={() => setShowStatusPicker(true)}>
                     <Text style={styles.pickerText}>{assetData.status}</Text>
@@ -459,6 +504,49 @@ const AddEditAsset: React.FC = () => {
                       onChangeText={v => handleInputChange('serialNumber', v)} 
                     />
                   </View>
+
+                  {/* 🔹 DYNAMIC FIELDS SECTION */}
+                  {dynamicFieldDefs.length > 0 && (
+                    <View style={{ marginTop: 20 }}>
+                      <Text style={[styles.sectionTitle, { color: '#22D3EE' }]}>Additional Details</Text>
+                      {fieldsLoading ? (
+                        <ActivityIndicator color="#22D3EE" style={{ marginTop: 10 }} />
+                      ) : (
+                        dynamicFieldDefs.map(field => (
+                          <View key={field.id} style={{ marginTop: 12 }}>
+                            <Text style={styles.label}>
+                              {field.fieldName} {field.isRequired ? '*' : ''}
+                            </Text>
+                            <View style={styles.inputGroup}>
+                              <Feather 
+                                name={field.fieldType === 'number' ? 'hash' : field.fieldType === 'date' ? 'calendar' : 'edit-3'} 
+                                size={16} 
+                                color="#22D3EE" 
+                                style={styles.inputIcon} 
+                              />
+                              {field.fieldType === 'date' && Platform.OS === 'web' ? (
+                                <input
+                                  type="date"
+                                  style={styles.webDatePicker as any}
+                                  value={dynamicValues[field.id] || ''}
+                                  onChange={(e) => handleDynamicValueChange(field.id, e.target.value)}
+                                />
+                              ) : (
+                                <TextInput
+                                  style={styles.textInput}
+                                  placeholder={field.fieldName}
+                                  placeholderTextColor="#999"
+                                  keyboardType={field.fieldType === 'number' ? 'numeric' : 'default'}
+                                  value={dynamicValues[field.id] || ''}
+                                  onChangeText={v => handleDynamicValueChange(field.id, v)}
+                                />
+                              )}
+                            </View>
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  )}
                 </View>
 
                 {/* Column 2 */}
@@ -562,9 +650,9 @@ const AddEditAsset: React.FC = () => {
             </ScrollView>
 
             <View style={styles.footer}>
-              <TouchableOpacity onPress={handleCreate} activeOpacity={0.8}>
+              <TouchableOpacity onPress={handleSave} activeOpacity={0.8}>
                 <LinearGradient colors={['#0EA5E9', '#0F766E']} style={styles.saveButton}>
-                  <Text style={styles.buttonText}>CREATE ASSET</Text>
+                  <Text style={styles.buttonText}>{isEditMode ? 'SAVE CHANGES' : 'CREATE ASSET'}</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -580,9 +668,6 @@ const AddEditAsset: React.FC = () => {
           styles={styles}
           onSelect={(item: any) => {
             handleInputChange('category', item.category);
-            if (!String(item?.category || '').trim().toLowerCase().includes('controller')) {
-              handleInputChange('controllerKey', '');
-            }
             setShowCategoryPicker(false);
           }}
           onClose={() => setShowCategoryPicker(false)}

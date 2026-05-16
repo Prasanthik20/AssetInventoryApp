@@ -1,8 +1,9 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiResponse } from 'next';
 import query from '@/lib/db';
 import { setCorsHeaders } from '@/lib/corsHeaders';
+import { withAuth, AuthenticatedRequest } from "@/lib/apiHandler";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   // Set CORS headers
   const origin = req.headers.origin as string;
   setCorsHeaders(res, origin);
@@ -12,11 +13,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  const { assetId } = req.query;
+  // Next.js dynamic route param is 'id' because the file is [id].ts
+  const { id } = req.query;
+  const { tenantId } = req.user;
 
-  if (!assetId || typeof assetId !== 'string') {
+  if (!id || typeof id !== 'string') {
     return res.status(400).json({ message: 'Asset ID is required.' });
   }
+
+  const assetId = id; // For readability and matching legacy logic
 
   // Handle PUT - Update Asset
   if (req.method === 'PUT') {
@@ -33,10 +38,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         location,
         status,
         photoURL,
-        barcodeURL
+        barcodeURL,
+        dynamicFields // Expected as array of { fieldId: number, value: string }
       } = req.body;
 
       await query("BEGIN", []);
+
+      // 1. Verify ownership
+      const ownershipRes = await query(
+        `SELECT id FROM "Asset_Details" WHERE id = $1 AND "tenantId" = $2 LIMIT 1`,
+        [parseInt(assetId), tenantId]
+      );
+      if (ownershipRes.rows.length === 0) {
+        await query("ROLLBACK", []);
+        return res.status(404).json({ message: "Asset not found or access denied." });
+      }
 
       // Build dynamic update query
       const updates: string[] = [];
@@ -47,15 +63,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `SELECT cat.category AS category
          FROM "Asset_Details" a
          LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId"
-         WHERE a.id = $1
+         WHERE a.id = $1 AND a."tenantId" = $2
          LIMIT 1`,
-        [parseInt(assetId)]
+        [parseInt(assetId), tenantId]
       );
-
-      if (currentAssetRes.rows.length === 0) {
-        await query("ROLLBACK", []);
-        return res.status(404).json({ message: `Asset with ID ${assetId} not found.` });
-      }
 
       let effectiveCategory = String(currentAssetRes.rows[0]?.category || '').trim().toLowerCase();
 
@@ -66,8 +77,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (category !== undefined) {
         const categoryRes = await query(
-          `SELECT "categoryId" FROM "Category" WHERE category = $1 LIMIT 1`,
-          [category]
+          `SELECT "categoryId" FROM "Category" WHERE category = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
+          [category, tenantId]
         );
         if (categoryRes.rows.length > 0) {
           updates.push(`"categoryId" = $${paramIndex++}`);
@@ -119,8 +130,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (status !== undefined) {
         const statusRes = await query(
-          `SELECT id FROM "Status" WHERE status = $1 LIMIT 1`,
-          [status]
+          `SELECT id FROM "Status" WHERE status = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
+          [status, tenantId]
         );
         if (statusRes.rows.length > 0) {
           updates.push(`status_id = $${paramIndex++}`);
@@ -138,33 +149,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         values.push(barcodeURL || null);
       }
 
-      if (updates.length === 0) {
-        await query("ROLLBACK", []);
-        return res.status(400).json({ message: 'No fields to update.' });
+      if (updates.length > 0) {
+        values.push(parseInt(assetId));
+        values.push(tenantId);
+        const updateQuery = `
+          UPDATE "Asset_Details"
+          SET ${updates.join(', ')}
+          WHERE id = $${paramIndex++} AND "tenantId" = $${paramIndex}
+          RETURNING id
+        `;
+        await query(updateQuery, values);
       }
 
-      // Add asset ID as last parameter
-      values.push(parseInt(assetId));
-
-      const updateQuery = `
-        UPDATE "Asset_Details"
-        SET ${updates.join(', ')}
-        WHERE id = $${paramIndex}
-        RETURNING id
-      `;
-
-      const result = await query(updateQuery, values);
-
-      if (result.rows.length === 0) {
-        await query("ROLLBACK", []);
-        return res.status(404).json({ message: `Asset with ID ${assetId} not found.` });
+      // Update Dynamic Fields (EAV)
+      if (dynamicFields && Array.isArray(dynamicFields)) {
+        for (const field of dynamicFields) {
+          if (field.fieldId) {
+            // Check if field exists for this category/tenant
+            const fieldExistsRes = await query(
+              `SELECT id FROM "AssetCategoryFields" WHERE id = $1 AND "tenantId" = $2 LIMIT 1`,
+              [field.fieldId, tenantId]
+            );
+            
+            if (fieldExistsRes.rows.length > 0) {
+              await query(`DELETE FROM "AssetDynamicValues" WHERE "assetId" = $1 AND "fieldId" = $2`, [parseInt(assetId), field.fieldId]);
+              await query(`INSERT INTO "AssetDynamicValues" ("assetId", "fieldId", value) VALUES ($1, $2, $3)`, [parseInt(assetId), field.fieldId, String(field.value)]);
+            }
+          }
+        }
       }
 
       await query("COMMIT", []);
 
       return res.status(200).json({
         message: 'Asset updated successfully',
-        assetId: result.rows[0].id.toString()
+        assetId: assetId
       });
 
     } catch (error: any) {
@@ -183,16 +202,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  if (!assetId || typeof assetId !== 'string') {
-    return res.status(400).json({ message: 'Asset ID is required.' });
-  }
-
   try {
     const sqlQuery = `
       SELECT
         a.id AS "assetId",
         a.name AS "assetName",
         cat.category AS "category",
+        a."categoryId" AS "categoryId",
         a."controller_key" AS "controllerKey",
         s.status AS "dbStatus",
         a.model_no AS "modelNumber",
@@ -209,21 +225,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         (
           SELECT "assigned_date"
           FROM "Asset_Assignments"
-          WHERE "assetId" = a.id
+          WHERE "assetId" = a.id AND "tenantId" = $2
           ORDER BY id DESC
           LIMIT 1
         ) AS assigned_date,
         (
           SELECT "expected_return_date"
           FROM "Asset_Assignments"
-          WHERE "assetId" = a.id
+          WHERE "assetId" = a.id AND "tenantId" = $2
           ORDER BY id DESC
           LIMIT 1
         ) AS expected_return_date
         ,(
           SELECT "projectName"
           FROM "Asset_Assignments"
-          WHERE "assetId" = a.id
+          WHERE "assetId" = a.id AND "tenantId" = $2
           ORDER BY id DESC
           LIMIT 1
         ) AS "projectName"
@@ -231,16 +247,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId"
       LEFT JOIN "Status" s ON a.status_id = s.id
       LEFT JOIN "Users" u ON a.assigned_by = u."employeeId"
-      WHERE a.id = $1;
+      WHERE a.id = $1 AND a."tenantId" = $2;
     `;
 
-    const result = await query(sqlQuery, [parseInt(assetId)]);
+    const result = await query(sqlQuery, [parseInt(assetId), tenantId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: `Asset with ID ${assetId} not found.` });
     }
 
     const asset = result.rows[0];
+
+    // Fetch Dynamic Values
+    const dynamicValuesRes = await query(
+      `SELECT adv."fieldId", adv.value, acf."fieldName", acf."fieldType"
+       FROM "AssetDynamicValues" adv
+       JOIN "AssetCategoryFields" acf ON adv."fieldId" = acf.id
+       WHERE adv."assetId" = $1`,
+      [parseInt(assetId)]
+    );
 
     const formatDate = (d: string | null) =>
       d ? new Date(d).toISOString().split('T')[0] : null;
@@ -253,18 +278,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? new Date(asset.expected_return_date)
       : null;
 
-   // Check 1: Is the date in the past?
     const isPastDue = expectedReturn ? expectedReturn < today : false;
-    
-    // Check 2: Is it currently assigned to someone in the DB?
     const isActuallyAssigned = asset.dbStatus === "Assigned" && asset.assigned_to !== null;
 
     const formatted = {
       assetId: asset.assetId,
       assetName: asset.assetName,
       category: asset.category,
+      categoryId: asset.categoryId,
       controllerKey: asset.controllerKey,
-      status: (isActuallyAssigned && isPastDue) ? "Overdue" : asset.dbStatus, // 🔥 Overdue logic
+      status: (isActuallyAssigned && isPastDue) ? "Overdue" : asset.dbStatus,
       modelNumber: asset.modelNumber,
       serialNumber: asset.serialNumber,
       barcode: asset.barcode,
@@ -276,7 +299,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       assignedDate: formatDate(asset.assigned_date),
       expectedReturnDate: formatDate(asset.expected_return_date),
       projectName: asset.projectName || null,
+      price: asset.price || null,
       value: asset.price ? parseFloat(asset.price).toLocaleString() : 'N/A',
+      dynamicValues: dynamicValuesRes.rows
     };
 
     return res.status(200).json(formatted);
@@ -286,3 +311,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ message: 'Internal server error.' });
   }
 }
+
+export default withAuth(handler);

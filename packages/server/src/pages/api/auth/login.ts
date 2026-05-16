@@ -42,7 +42,7 @@ export default async function loginCoreHandler(
         u."email",
         u."passwordHash",
         u."photoURL",
-        u."tenantId",
+        u."tenantId" AS "tenantId",
         u."status",
         r."roleName"
       FROM 
