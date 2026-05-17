@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, TextInput, useWindowDimensions, Modal } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, TextInput, useWindowDimensions, Modal, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -272,74 +272,106 @@ const AssetFullDetails: React.FC = () => {
     }, [asset?.assignmentId, asset?.id, asset?.location, asset?.projectName, asset?.assignedDate, isAssignedCardEdit]);
     
     const handleImageUpload = async () => {
-        try {
-            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            
-            if (!permissionResult.granted) {
-                showSnackbar("Please allow access to your photo library.", 'error');
-                return;
-            }
-
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-            });
-
-            if (!result.canceled && result.assets[0]) {
-                try {
-                    // Convert to persistent data URL so it still works after reload.
-                    const dataURL = await toPersistentDataUrl(
-                        result.assets[0].uri,
-                        result.assets[0].mimeType || undefined
-                    );
-                    setPhotoURL(dataURL);
-                } catch (readError) {
-                    // Fallback to URI if file system read fails
-                    console.warn("Could not read file, using URI:", readError);
-                    setPhotoURL(result.assets[0].uri);
-                }
-            }
-        } catch (error) {
-            console.error("Error picking image:", error);
-            showSnackbar("Failed to select image", 'error');
+        if (Platform.OS === 'web') {
+            await launchLibrary('photo');
+            return;
         }
+
+        Alert.alert(
+            "Upload Photo",
+            "Choose a source for your asset photo",
+            [
+                { text: "Camera", onPress: () => launchCamera('photo') },
+                { text: "Gallery", onPress: () => launchLibrary('photo') },
+                { text: "Cancel", style: "cancel" }
+            ]
+        );
     };
     
     const handleBarcodeUpload = async () => {
+        if (Platform.OS === 'web') {
+            await launchLibrary('barcode');
+            return;
+        }
+
+        Alert.alert(
+            "Upload Barcode",
+            "Choose a source for your barcode image",
+            [
+                { text: "Camera", onPress: () => launchCamera('barcode') },
+                { text: "Gallery", onPress: () => launchLibrary('barcode') },
+                { text: "Cancel", style: "cancel" }
+            ]
+        );
+    };
+
+    const launchCamera = async (type: 'photo' | 'barcode') => {
         try {
-            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            
-            if (!permissionResult.granted) {
-                showSnackbar("Please allow access to your photo library.", 'error');
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                showSnackbar('Camera permission is required.', 'error');
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: type === 'barcode' ? [4, 1] : [1, 1],
+                quality: 0.5,
+                base64: true,
+            });
+
+            processResult(result, type);
+        } catch (error) {
+            console.error('Camera error:', error);
+            showSnackbar('Failed to open camera.', 'error');
+        }
+    };
+
+    const launchLibrary = async (type: 'photo' | 'barcode') => {
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                showSnackbar('Media library permission is required.', 'error');
                 return;
             }
 
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
-                aspect: [4, 1],
-                quality: 0.8,
+                aspect: type === 'barcode' ? [4, 1] : [1, 1],
+                quality: 0.5,
+                base64: true,
             });
 
-            if (!result.canceled && result.assets[0]) {
-                try {
-                    // Convert to persistent data URL so it still works after reload.
-                    const dataURL = await toPersistentDataUrl(
-                        result.assets[0].uri,
-                        result.assets[0].mimeType || undefined
-                    );
-                    setBarcodeURL(dataURL);
-                } catch (readError) {
-                    // Fallback to URI if file system read fails
-                    console.warn("Could not read barcode file, using URI:", readError);
-                    setBarcodeURL(result.assets[0].uri);
-                }
-            }
+            processResult(result, type);
         } catch (error) {
-            console.error("Error picking barcode image:", error);
-            showSnackbar("Failed to select barcode image", 'error');
+            console.error('Library error:', error);
+            showSnackbar('Failed to open gallery.', 'error');
+        }
+    };
+
+    const processResult = async (result: ImagePicker.ImagePickerResult, type: 'photo' | 'barcode') => {
+        if (!result.canceled && result.assets[0]) {
+            try {
+                const asset = result.assets[0];
+                if (asset.base64) {
+                    const dataURL = `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+                    if (type === 'photo') setPhotoURL(dataURL);
+                    else setBarcodeURL(dataURL);
+                } else {
+                    const dataURL = await toPersistentDataUrl(
+                        asset.uri,
+                        asset.mimeType || undefined
+                    );
+                    if (type === 'photo') setPhotoURL(dataURL);
+                    else setBarcodeURL(dataURL);
+                }
+            } catch (readError) {
+                console.warn("Could not read file, using URI:", readError);
+                if (type === 'photo') setPhotoURL(result.assets[0].uri);
+                else setBarcodeURL(result.assets[0].uri);
+            }
         }
     };
     

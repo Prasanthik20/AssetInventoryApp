@@ -25,7 +25,14 @@
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO"
+      ],
+      "intentFilters": [
+        {
+          "action": "android.media.action.IMAGE_CAPTURE"
+        }
       ],
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/asq.png",

@@ -464,7 +464,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: type === 'barcode',
         aspect: type === 'barcode' ? [4, 3] : [1, 1],
-        quality: 0.8,
+        quality: 0.5,
         base64: true,
       });
 
@@ -508,7 +508,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
         allowsMultipleSelection: type === 'photo',
         selectionLimit: type === 'photo' ? 0 : 1,
         aspect: type === 'barcode' ? [4, 3] : [1, 1],
-        quality: 0.8,
+        quality: 0.5,
         base64: true,
       });
 
@@ -534,9 +534,13 @@ const onDueChange = (event: any, selectedDate?: Date) => {
     if (!result.canceled && result.assets[0]) {
       if (type === 'photo') {
         const photos = result.assets
-          .map((asset) => asset.base64)
-          .filter((value): value is string => Boolean(value))
-          .map((base64) => `data:image/jpeg;base64,${base64}`);
+          .map((asset) => {
+            if (asset.base64) {
+              return `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+            }
+            return null;
+          })
+          .filter((value): value is string => Boolean(value));
 
         if (photos.length > 0) {
           const primaryPhoto = photos[0];
@@ -553,9 +557,9 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           showSnackbar('Failed to process image.', 'error');
         }
       } else {
-        const base64 = result.assets[0].base64;
-        if (base64) {
-          const barcodeData = `data:image/jpeg;base64,${base64}`;
+        const asset = result.assets[0];
+        if (asset.base64) {
+          const barcodeData = `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
           if (hasTargetAsset && targetKey) {
             setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: barcodeData }));
             showSnackbar('Barcode saved for selected asset.', 'success');

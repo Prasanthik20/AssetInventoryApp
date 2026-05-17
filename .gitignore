@@ -37,7 +37,10 @@ local.properties
 *.keystore
 !debug.keystore
 .kotlin/
+deploy/
+*.log
 
+!scripts/deploy_final
 # node.js
 #
 node_modules/

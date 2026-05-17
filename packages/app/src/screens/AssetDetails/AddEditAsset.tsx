@@ -212,7 +212,8 @@ const AddEditAsset: React.FC = () => {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect,
-        quality: 0.8,
+        quality: 0.5,
+        base64: true,
       });
 
       processImageResult(result, field);
@@ -234,7 +235,8 @@ const AddEditAsset: React.FC = () => {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect,
-        quality: 0.8,
+        quality: 0.5,
+        base64: true,
       });
 
       processImageResult(result, field);
@@ -247,11 +249,16 @@ const AddEditAsset: React.FC = () => {
   const processImageResult = async (result: ImagePicker.ImagePickerResult, field: keyof Asset) => {
     if (!result.canceled && result.assets[0]) {
       try {
-        const dataURL = await toPersistentDataUrl(
-          result.assets[0].uri,
-          result.assets[0].mimeType || undefined
-        );
-        handleInputChange(field, dataURL);
+        const asset = result.assets[0];
+        if (asset.base64) {
+          handleInputChange(field, `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`);
+        } else {
+          const dataURL = await toPersistentDataUrl(
+            asset.uri,
+            asset.mimeType || undefined
+          );
+          handleInputChange(field, dataURL);
+        }
       } catch (readError) {
         console.warn(`Could not read file for ${field}, using URI:`, readError);
         handleInputChange(field, result.assets[0].uri);

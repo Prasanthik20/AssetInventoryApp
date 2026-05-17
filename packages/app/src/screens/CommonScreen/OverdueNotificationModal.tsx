@@ -8,6 +8,7 @@ import {
     TextInput,
     ScrollView,
     Image,
+    Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,41 +49,78 @@ const OverdueNotificationModal: React.FC<Props> = ({
     }, [visible]);
 
     const handlePickProofImages = async () => {
+        Alert.alert(
+            "Attach Proof",
+            "Take photos or choose from gallery",
+            [
+                { text: "Camera", onPress: () => launchCamera() },
+                { text: "Gallery", onPress: () => launchLibrary() },
+                { text: "Cancel", style: "cancel" }
+            ]
+        );
+    };
+
+    const launchCamera = async () => {
         try {
-            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (permissionResult.status !== 'granted') {
-                setErrorText('Media library permission is required to attach proof images.');
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                setErrorText('Camera permission is required.');
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 0.5,
+                base64: true,
+            });
+
+            processResult(result);
+        } catch (error) {
+            console.error('Camera error:', error);
+            setErrorText('Failed to open camera.');
+        }
+    };
+
+    const launchLibrary = async () => {
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                setErrorText('Media library permission is required.');
                 return;
             }
 
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: false,
                 allowsMultipleSelection: true,
                 selectionLimit: 0,
-                quality: 0.7,
+                quality: 0.5,
                 base64: true,
             });
 
-            if (result.canceled) {
-                return;
-            }
-
-            const selectedImages = result.assets
-                .map((asset) => asset.base64)
-                .filter((value): value is string => Boolean(value))
-                .map((base64) => `data:image/jpeg;base64,${base64}`);
-
-            if (selectedImages.length === 0) {
-                setErrorText('Could not process selected images. Please try again.');
-                return;
-            }
-
-            setProofImages(selectedImages);
-            setErrorText('');
+            processResult(result);
         } catch (error) {
-            console.error('Proof image picker error:', error);
-            setErrorText('Failed to select proof images.');
+            console.error('Library error:', error);
+            setErrorText('Failed to select images.');
+        }
+    };
+
+    const processResult = (result: ImagePicker.ImagePickerResult) => {
+        if (!result.canceled && result.assets) {
+            const selectedImages = result.assets
+                .map((asset) => {
+                    if (asset.base64) {
+                        return `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+                    }
+                    return null;
+                })
+                .filter((value): value is string => Boolean(value));
+
+            if (selectedImages.length > 0) {
+                setProofImages((prev) => [...prev, ...selectedImages]);
+                setErrorText('');
+            } else {
+                setErrorText('No valid images processed.');
+            }
         }
     };
 

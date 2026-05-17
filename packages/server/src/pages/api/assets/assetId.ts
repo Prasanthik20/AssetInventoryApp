@@ -1,6 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
 import { setCorsHeaders } from '@/lib/corsHeaders';
+ 
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '2gb',
+        },
+    },
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Set CORS headers
