@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
+  Alert,
   Platform,
   Image,
   Pressable,
@@ -406,7 +407,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
     });
   }, [assets, assetSearchQuery, assetCategoryFilter]);
 
-  const handleUploadBarcode = async (targetAssetId?: number | string) => {
+  const pickImage = async (useCamera: boolean, isBarcode: boolean, targetAssetId?: number | string) => {
     const hasTargetAsset =
       targetAssetId !== undefined &&
       targetAssetId !== null &&
@@ -415,93 +416,39 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
     try {
       if (hasTargetAsset && targetKey) {
-        setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+        if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+        else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
       } else {
-        setBarcodeLoading(true);
+        if (isBarcode) setBarcodeLoading(true);
+        else setPhotoLoading(true);
       }
 
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        showSnackbar('Media library permission is required to upload barcode image.', 'error');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const base64 = result.assets[0].base64;
-
-        if (base64) {
-          const barcodeData = `data:image/jpeg;base64,${base64}`;
-          if (hasTargetAsset && targetKey) {
-            setAssetBarcodeMap((prev) => {
-              const updated = { ...prev, [targetKey]: barcodeData };
-              console.log('🔍 Barcode uploaded for asset:', targetKey, '| Map:', updated);
-              return updated;
-            });
-            showSnackbar('Barcode saved for selected asset.', 'success');
-          } else {
-            setBarcodeURL(barcodeData);
-            showSnackbar('Barcode image will be attached to the assignment.', 'success');
-          }
-        } else {
-          showSnackbar('Failed to process barcode image. Please try again.', 'error');
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          showSnackbar('Camera permission is required.', 'error');
+          return;
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          showSnackbar('Media library permission is required.', 'error');
+          return;
         }
       }
-    } catch (error) {
-      console.error('Barcode picker error:', error);
-      showSnackbar('Failed to open image library.', 'error');
-    } finally {
-      if (hasTargetAsset && targetKey) {
-        setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
-      } else {
-        setBarcodeLoading(false);
-      }
-    }
-  };
 
-  const handleUploadPhoto = async (targetAssetId?: number | string) => {
-    const hasTargetAsset =
-      targetAssetId !== undefined &&
-      targetAssetId !== null &&
-      !Number.isNaN(toAssetId(targetAssetId));
-    const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
-
-    try {
-      if (hasTargetAsset && targetKey) {
-        setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
-      } else {
-        setPhotoLoading(true);
-      }
-
-      // Request permission
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        showSnackbar('Camera roll permission is required to upload photos.', 'error');
-        if (hasTargetAsset && targetKey) {
-          setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
-        } else {
-          setPhotoLoading(false);
-        }
-        return;
-      }
-
-      // Launch image picker
-      const result = await ImagePicker.launchImageLibraryAsync({
+      const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        allowsMultipleSelection: true,
-        selectionLimit: 0,
-        aspect: [4, 3],
+        allowsEditing: useCamera ? true : !isBarcode, // allow multi-select for photos in library
+        allowsMultipleSelection: !useCamera && !isBarcode,
+        aspect: isBarcode ? [4, 3] : undefined,
         quality: 0.8,
         base64: true,
-      });
+      };
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
 
       if (!result.canceled && result.assets[0]) {
         const photos = result.assets
@@ -511,32 +458,72 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
         if (photos.length > 0) {
           const primaryPhoto = photos[0];
-          if (hasTargetAsset && targetKey) {
-            setAssetPhotoMap((prev) => {
-              const updated = { ...prev, [targetKey]: primaryPhoto };
-              console.log('🔍 Photo uploaded for asset:', targetKey, '| Map:', updated);
-              return updated;
-            });
-            setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
-            showSnackbar('Photo saved for selected asset.', 'success');
+          if (isBarcode) {
+            if (hasTargetAsset && targetKey) {
+              setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
+              showSnackbar('Barcode saved for selected asset.', 'success');
+            } else {
+              setBarcodeURL(primaryPhoto);
+              showSnackbar('Barcode image will be attached to the assignment.', 'success');
+            }
           } else {
-            setPhoto(primaryPhoto);
-            setPhotoBatch(photos);
-            showSnackbar('Photo will be attached to the assignment.', 'success');
+            if (hasTargetAsset && targetKey) {
+              setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
+              setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
+              showSnackbar('Photo saved for selected asset.', 'success');
+            } else {
+              setPhoto(primaryPhoto);
+              setPhotoBatch(photos);
+              showSnackbar('Photo will be attached to the assignment.', 'success');
+            }
           }
         } else {
           showSnackbar('Failed to process image. Please try again.', 'error');
         }
       }
     } catch (error) {
-      console.error('Photo picker error:', error);
-      showSnackbar('Failed to open image library.', 'error');
+      console.error('Picker error:', error);
+      showSnackbar('Failed to open camera or image library.', 'error');
     } finally {
       if (hasTargetAsset && targetKey) {
-        setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+        if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+        else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
       } else {
-        setPhotoLoading(false);
+        if (isBarcode) setBarcodeLoading(false);
+        else setPhotoLoading(false);
       }
+    }
+  };
+
+  const handleUploadBarcode = (targetAssetId?: number | string) => {
+    if (Platform.OS === 'web') {
+      pickImage(false, true, targetAssetId);
+    } else {
+      Alert.alert(
+        "Upload Barcode",
+        "Choose an option",
+        [
+          { text: "Take Photo", onPress: () => pickImage(true, true, targetAssetId) },
+          { text: "Choose from Gallery", onPress: () => pickImage(false, true, targetAssetId) },
+          { text: "Cancel", style: "cancel" }
+        ]
+      );
+    }
+  };
+
+  const handleUploadPhoto = (targetAssetId?: number | string) => {
+    if (Platform.OS === 'web') {
+      pickImage(false, false, targetAssetId);
+    } else {
+      Alert.alert(
+        "Upload Photo",
+        "Choose an option",
+        [
+          { text: "Take Photo", onPress: () => pickImage(true, false, targetAssetId) },
+          { text: "Choose from Gallery", onPress: () => pickImage(false, false, targetAssetId) },
+          { text: "Cancel", style: "cancel" }
+        ]
+      );
     }
   };
 

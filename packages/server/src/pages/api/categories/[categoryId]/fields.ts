@@ -42,7 +42,7 @@ export default withAuth(async function handler(req: AuthenticatedRequest, res: N
       const sqlQuery = `
         SELECT id, "fieldName", "fieldType", "isRequired", "validationRules"
         FROM "AssetCategoryFields"
-        WHERE "categoryId" = $1 AND "tenantId" = $2
+        WHERE "categoryId" = $1 AND ("tenantId" = $2 OR "tenantId" = 'tenant-nscllp-001' OR "tenantId" = 'default-tenant' OR "tenantId" = 'system')
         ORDER BY id ASC;
       `;
       const result = await query(sqlQuery, [categoryId, tenantId]);

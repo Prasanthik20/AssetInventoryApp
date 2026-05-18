@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, SafeAreaView, ImageBackground, TouchableOpacity, Image, TextInput, Modal,
   FlatList, Platform, ScrollView, useWindowDimensions,
-  ActivityIndicator,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -212,21 +212,32 @@ const AddEditAsset: React.FC = () => {
   const handleInputChange = (field: keyof Asset, value: any) =>
     setAssetData((prev) => ({ ...prev, [field]: value }));
 
-  const handleImageUpload = async () => {
+  const pickImage = async (useCamera: boolean, field: 'photoURL' | 'barcode') => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (!permissionResult.granted) {
-        showSnackbar("Please allow access to your photo library.", 'error');
-        return;
+      if (useCamera) {
+        const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permissionResult.granted) {
+          showSnackbar("Please allow access to your camera.", 'error');
+          return;
+        }
+      } else {
+        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissionResult.granted) {
+          showSnackbar("Please allow access to your photo library.", 'error');
+          return;
+        }
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
+      const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [1, 1],
+        aspect: field === 'barcode' ? [4, 1] : [1, 1],
         quality: 0.8,
-      });
+      };
+
+      const result = useCamera 
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
 
       if (!result.canceled && result.assets[0]) {
         try {
@@ -234,49 +245,47 @@ const AddEditAsset: React.FC = () => {
             result.assets[0].uri,
             result.assets[0].mimeType || undefined
           );
-          handleInputChange('photoURL', dataURL);
+          handleInputChange(field, dataURL);
         } catch (readError) {
-          console.warn("Could not read file, using URI:", readError);
-          handleInputChange('photoURL', result.assets[0].uri);
+          console.warn(`Could not read ${field} file, using URI:`, readError);
+          handleInputChange(field, result.assets[0].uri);
         }
       }
     } catch (error) {
-      console.error("Error picking image:", error);
-      showSnackbar("Failed to select image.", 'error');
+      console.error(`Error picking ${field} image:`, error);
+      showSnackbar(`Failed to select ${field === 'barcode' ? 'barcode' : 'image'}.`, 'error');
     }
   };
 
-  const handleBarcodeUpload = async () => {
-    try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (!permissionResult.granted) {
-        showSnackbar("Please allow access to your photo library.", 'error');
-        return;
-      }
+  const handleImageUpload = () => {
+    if (Platform.OS === 'web') {
+      pickImage(false, 'photoURL');
+    } else {
+      Alert.alert(
+        "Upload Photo",
+        "Choose an option",
+        [
+          { text: "Take Photo", onPress: () => pickImage(true, 'photoURL') },
+          { text: "Choose from Gallery", onPress: () => pickImage(false, 'photoURL') },
+          { text: "Cancel", style: "cancel" }
+        ]
+      );
+    }
+  };
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        try {
-          const dataURL = await toPersistentDataUrl(
-            result.assets[0].uri,
-            result.assets[0].mimeType || undefined
-          );
-          handleInputChange('barcode', dataURL);
-        } catch (readError) {
-          console.warn("Could not read barcode file, using URI:", readError);
-          handleInputChange('barcode', result.assets[0].uri);
-        }
-      }
-    } catch (error) {
-      console.error("Error picking barcode image:", error);
-      showSnackbar("Failed to select barcode image.", 'error');
+  const handleBarcodeUpload = () => {
+    if (Platform.OS === 'web') {
+      pickImage(false, 'barcode');
+    } else {
+      Alert.alert(
+        "Upload Barcode",
+        "Choose an option",
+        [
+          { text: "Take Photo", onPress: () => pickImage(true, 'barcode') },
+          { text: "Choose from Gallery", onPress: () => pickImage(false, 'barcode') },
+          { text: "Cancel", style: "cancel" }
+        ]
+      );
     }
   };
 

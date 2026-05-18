@@ -42,7 +42,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         COUNT(a.id) FILTER (WHERE s.status = 'Unassigned') AS "officeAssets",
         COUNT(a.id) FILTER (WHERE s.status IN ('Assigned', 'Overdue')) AS "fieldAssets",
         (SELECT COUNT(*) FROM "Users" WHERE "tenantId" = $1) AS "totalUsers",
-        (SELECT COUNT(*) FROM "Category" WHERE "tenantId" = $1 OR "isSystemCategory" = true) AS "totalCategories"
+        (SELECT COUNT(*) FROM "Category" WHERE "tenantId" = $1) AS "totalCategories"
       FROM "Asset_Details" a
       LEFT JOIN "Status" s ON a.status_id = s.id
       WHERE a."tenantId" = $1;

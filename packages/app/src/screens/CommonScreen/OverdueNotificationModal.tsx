@@ -8,6 +8,8 @@ import {
     TextInput,
     ScrollView,
     Image,
+    Platform,
+    Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,22 +49,34 @@ const OverdueNotificationModal: React.FC<Props> = ({
         }
     }, [visible]);
 
-    const handlePickProofImages = async () => {
+    const pickImage = async (useCamera: boolean) => {
         try {
-            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (permissionResult.status !== 'granted') {
-                setErrorText('Media library permission is required to attach proof images.');
-                return;
+            if (useCamera) {
+                const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+                if (permissionResult.status !== 'granted') {
+                    setErrorText('Camera permission is required to attach proof images.');
+                    return;
+                }
+            } else {
+                const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (permissionResult.status !== 'granted') {
+                    setErrorText('Media library permission is required to attach proof images.');
+                    return;
+                }
             }
 
-            const result = await ImagePicker.launchImageLibraryAsync({
+            const options: ImagePicker.ImagePickerOptions = {
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: false,
-                allowsMultipleSelection: true,
+                allowsEditing: useCamera,
+                allowsMultipleSelection: !useCamera,
                 selectionLimit: 0,
                 quality: 0.7,
                 base64: true,
-            });
+            };
+
+            const result = useCamera
+                ? await ImagePicker.launchCameraAsync(options)
+                : await ImagePicker.launchImageLibraryAsync(options);
 
             if (result.canceled) {
                 return;
@@ -78,11 +92,27 @@ const OverdueNotificationModal: React.FC<Props> = ({
                 return;
             }
 
-            setProofImages(selectedImages);
+            setProofImages((prev) => [...prev, ...selectedImages]);
             setErrorText('');
         } catch (error) {
             console.error('Proof image picker error:', error);
             setErrorText('Failed to select proof images.');
+        }
+    };
+
+    const handlePickProofImages = () => {
+        if (Platform.OS === 'web') {
+            pickImage(false);
+        } else {
+            Alert.alert(
+                "Upload Proof Images",
+                "Choose an option",
+                [
+                    { text: "Take Photo", onPress: () => pickImage(true) },
+                    { text: "Choose from Gallery", onPress: () => pickImage(false) },
+                    { text: "Cancel", style: "cancel" }
+                ]
+            );
         }
     };
 

@@ -23,7 +23,7 @@ export default withAuth(async function handler(req: AuthenticatedRequest, res: N
       const sqlQuery = `
         SELECT id, "categoryId", category, "parentCategoryId", "isCustom", "isSystemCategory"
         FROM "Category"
-        WHERE "tenantId" = $1 OR "isSystemCategory" = true
+        WHERE "tenantId" = $1 OR "tenantId" IS NULL OR "isSystemCategory" = true
         ORDER BY id ASC;
       `;
       const result = await query(sqlQuery, [tenantId]);

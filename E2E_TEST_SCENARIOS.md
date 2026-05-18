@@ -162,7 +162,7 @@ This document defines end-to-end (E2E) test scenarios for the Asset Inventory ap
 
 # APK Generation
 
-cd /Volumes/Data/ASquare/Lavnya\ Group/AssetInventoryApp
+cd /Volumes/Data/ASquare/Lavnya\ Group/asqassetledger
 
 cd packages/app
 

@@ -1,19 +1,20 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiResponse } from "next";
 import query from "@/lib/db";
 import bcrypt from "bcrypt";
+import { withAuth, AuthenticatedRequest } from "@/lib/apiHandler";
 
-export default async function addUserHandler(
-  req: NextApiRequest,
+async function addUserHandler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
-
   if (req.method !== "POST") {
-    res.setHeader("Allow", ["POST"]);
+    res.setHeader("Allow", ["POST", "OPTIONS"]);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
   const { fullName, email, password, phoneNumber, address, roleName } =
     req.body;
+  const { tenantId } = req.user;
 
   if (!fullName || !email || !password || !roleName) {
     return res.status(400).json({ message: "Missing required fields." });
@@ -39,9 +40,9 @@ export default async function addUserHandler(
     const sql = `
       INSERT INTO "Users" (
         "fullName", "email", "passwordHash",
-        "phoneNumber", "address", "roleId"
+        "phoneNumber", "address", "roleId", "tenantId"
       )
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING "userId";
     `;
 
@@ -52,6 +53,7 @@ export default async function addUserHandler(
       phoneNumber || null,
       address || null,
       roleId,
+      tenantId,
     ];
 
     const result = await query(sql, values);
@@ -74,3 +76,5 @@ export default async function addUserHandler(
       .json({ message: "An internal server error occurred." });
   }
 }
+
+export default withAuth(addUserHandler);

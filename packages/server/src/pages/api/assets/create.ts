@@ -62,10 +62,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       : null;
 
     // 2. Get Status ID
-    const statusRes = await query(
-      `SELECT id FROM "Status" WHERE status = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
-      [status || "Unassigned", tenantId]
+    const statusVal = (status || "Unassigned").trim();
+    let statusRes = await query(
+      `SELECT id FROM "Status" WHERE (status = $1 OR status ILIKE $1) AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
+      [statusVal, tenantId]
     );
+    if (!statusRes.rows.length) {
+      statusRes = await query(
+        `SELECT id FROM "Status" WHERE status = $1 OR status ILIKE $1 LIMIT 1`,
+        [statusVal]
+      );
+    }
     if (!statusRes.rows.length) return res.status(400).json({ message: "Invalid status" });
     const statusId = statusRes.rows[0].id;
 

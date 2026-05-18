@@ -8,11 +8,19 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation } from "@react-navigation/native"; 
 import axios from 'axios';
 import { baseURL } from '../../navigation/types';
-import { globalColors } from 'src/styles/globalStyles';
+
 
 const AddCompanyUser: React.FC = () => {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
     const isWeb = Platform.OS === 'web';
+
+    const handleGoBack = () => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            navigation.navigate('CompanyDashboard' as any);
+        }
+    };
 
     // Prisma Schema States
     const [fullName, setFullName] = useState('');
@@ -45,7 +53,7 @@ const AddCompanyUser: React.FC = () => {
 
     if (response.status === 201) {
       alert("User Added Successfully");
-      navigation.goBack();
+      handleGoBack();
     }
   } catch (error: any) { // ': any' fixes the 'unknown' type error
     console.error("Axios add-user error:", error.response?.status, error.response?.data);
@@ -167,7 +175,7 @@ const AddCompanyUser: React.FC = () => {
                                     </TouchableOpacity>
                                     <TouchableOpacity 
                                         style={[styles.cancelButton, !isWeb && styles.mobileCancelBtn]} 
-                                        onPress={() => navigation.goBack()}
+                                        onPress={handleGoBack}
                                     >
                                         <Text style={styles.cancelText}>Cancel</Text>
                                     </TouchableOpacity>

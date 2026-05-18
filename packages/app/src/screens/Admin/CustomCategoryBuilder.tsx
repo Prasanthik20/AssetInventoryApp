@@ -14,9 +14,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
-import { API_CONFIG } from '../../config/api';
-
-const BASE_URL = API_CONFIG.BASE_URL;
+import { baseURL } from '../../navigation/types';
 
 interface Category {
   id: string;
@@ -34,7 +32,14 @@ interface CustomField {
 }
 
 export default function CustomCategoryBuilder() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+  const handleGoBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('CompanyDashboard' as any);
+    }
+  };
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -56,7 +61,7 @@ export default function CustomCategoryBuilder() {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${BASE_URL}/api/categories`);
+      const res = await axios.get(`${baseURL}/api/categories`);
       setCategories(res.data.categories || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -71,7 +76,7 @@ export default function CustomCategoryBuilder() {
       return;
     }
     try {
-      await axios.post(`${BASE_URL}/api/categories`, {
+      await axios.post(`${baseURL}/api/categories`, {
         categoryName: newCategoryName,
       });
       setNewCategoryName('');
@@ -87,7 +92,7 @@ export default function CustomCategoryBuilder() {
     setSelectedCategory(category);
     try {
       setFieldsLoading(true);
-      const res = await axios.get(`${BASE_URL}/api/categories/${category.categoryId}/fields`);
+      const res = await axios.get(`${baseURL}/api/categories/${category.categoryId}/fields`);
       setFields(res.data.fields || []);
     } catch (error) {
       console.error('Error fetching fields:', error);
@@ -103,7 +108,7 @@ export default function CustomCategoryBuilder() {
       return;
     }
     try {
-      await axios.post(`${BASE_URL}/api/categories/${selectedCategory.categoryId}/fields`, {
+      await axios.post(`${baseURL}/api/categories/${selectedCategory.categoryId}/fields`, {
         fieldName: newFieldName,
         fieldType: newFieldType,
         isRequired: false,
@@ -139,7 +144,7 @@ export default function CustomCategoryBuilder() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12 }}>
+        <TouchableOpacity onPress={handleGoBack} style={{ marginRight: 12 }}>
           <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.title}>Asset Categories</Text>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Platform,ImageBackground, ScrollView, Image, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Platform,ImageBackground, ScrollView, Image, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -71,8 +71,7 @@ const ReturnAssetScreen: React.FC = () => {
         handleCloseModal();
     };
 
-    // --- Button Action Handlers ---
-    const handleScanBarcode = async (targetAssetId?: number | string) => {
+    const pickImage = async (useCamera: boolean, isBarcode: boolean, targetAssetId?: number | string) => {
         const hasTargetAsset =
             targetAssetId !== undefined &&
             targetAssetId !== null &&
@@ -81,99 +80,39 @@ const ReturnAssetScreen: React.FC = () => {
 
         try {
             if (hasTargetAsset && targetKey) {
-                setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+                if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+                else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
             } else {
-                setBarcodeLoading(true);
+                if (isBarcode) setBarcodeLoading(true);
+                else setPhotoLoading(true);
             }
 
-            if (Platform.OS === 'web') {
-                // Web fallback: use file picker for barcode/QR image capture.
-                await handleUploadBarcode(targetAssetId);
-                return;
-            }
-
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-                showSnackbar('Camera permission is required to scan QR/barcode.', 'error');
-                if (hasTargetAsset && targetKey) {
-                    setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
-                } else {
-                    setBarcodeLoading(false);
+            if (useCamera) {
+                const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                if (status !== 'granted') {
+                    showSnackbar('Camera permission is required.', 'error');
+                    return;
                 }
-                return;
-            }
-
-            const result = await ImagePicker.launchCameraAsync({
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 0.8,
-                base64: true,
-            });
-
-            if (!result.canceled && result.assets[0]) {
-                const base64 = result.assets[0].base64;
-
-                if (base64) {
-                    const barcodeData = `data:image/jpeg;base64,${base64}`;
-                    if (hasTargetAsset && targetKey) {
-                        setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: barcodeData }));
-                        showSnackbar('Captured barcode saved for selected asset.', 'success');
-                    } else {
-                        setBarcodeURL(barcodeData);
-                        showSnackbar('Captured barcode image will be attached to the return.', 'success');
-                    }
-                } else {
-                    showSnackbar('Failed to process captured image. Please try again.', 'error');
+            } else {
+                const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (status !== 'granted') {
+                    showSnackbar('Media library permission is required.', 'error');
+                    return;
                 }
             }
-        } catch (error) {
-            console.error('Barcode camera error:', error);
-            showSnackbar('Failed to open camera.', 'error');
-        } finally {
-            if (hasTargetAsset && targetKey) {
-                setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
-            } else {
-                setBarcodeLoading(false);
-            }
-        }
-    };
-    
-    const handleUploadPhoto = async (targetAssetId?: number | string) => {
-        const hasTargetAsset =
-            targetAssetId !== undefined &&
-            targetAssetId !== null &&
-            !Number.isNaN(toAssetId(targetAssetId));
-        const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
 
-        try {
-            if (hasTargetAsset && targetKey) {
-                setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
-            } else {
-                setPhotoLoading(true);
-            }
-
-            // Request permission
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                showSnackbar('Camera roll permission is required to upload photos.', 'error');
-                if (hasTargetAsset && targetKey) {
-                    setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
-                } else {
-                    setPhotoLoading(false);
-                }
-                return;
-            }
-
-            // Launch image picker
-            const result = await ImagePicker.launchImageLibraryAsync({
+            const options: ImagePicker.ImagePickerOptions = {
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: false,
-                allowsMultipleSelection: true,
-                selectionLimit: 0,
-                aspect: [4, 3],
+                allowsEditing: useCamera ? true : !isBarcode,
+                allowsMultipleSelection: !useCamera && !isBarcode,
+                aspect: isBarcode ? [4, 3] : undefined,
                 quality: 0.8,
                 base64: true,
-            });
+            };
+
+            const result = useCamera
+                ? await ImagePicker.launchCameraAsync(options)
+                : await ImagePicker.launchImageLibraryAsync(options);
 
             if (!result.canceled && result.assets[0]) {
                 const photos = result.assets
@@ -183,89 +122,76 @@ const ReturnAssetScreen: React.FC = () => {
 
                 if (photos.length > 0) {
                     const primaryPhoto = photos[0];
-                    if (hasTargetAsset && targetKey) {
-                        setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
-                        setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
-                        showSnackbar('Photo saved for selected asset.', 'success');
+                    if (isBarcode) {
+                        if (hasTargetAsset && targetKey) {
+                            setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
+                            showSnackbar('Barcode saved for selected asset.', 'success');
+                        } else {
+                            setBarcodeURL(primaryPhoto);
+                            showSnackbar('Barcode image will be attached to the return.', 'success');
+                        }
                     } else {
-                        setPhoto(primaryPhoto);
-                        setPhotoBatch(photos);
-                        showSnackbar('Photo will be attached to the return.', 'success');
+                        if (hasTargetAsset && targetKey) {
+                            setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
+                            setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
+                            showSnackbar('Photo saved for selected asset.', 'success');
+                        } else {
+                            setPhoto(primaryPhoto);
+                            setPhotoBatch(photos);
+                            showSnackbar('Photo will be attached to the return.', 'success');
+                        }
                     }
                 } else {
                     showSnackbar('Failed to process image. Please try again.', 'error');
                 }
             }
         } catch (error) {
-            console.error('Photo picker error:', error);
-            showSnackbar('Failed to open image library.', 'error');
+            console.error('Picker error:', error);
+            showSnackbar('Failed to open camera or image library.', 'error');
         } finally {
             if (hasTargetAsset && targetKey) {
-                setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+                if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+                else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
             } else {
-                setPhotoLoading(false);
+                if (isBarcode) setBarcodeLoading(false);
+                else setPhotoLoading(false);
             }
         }
     };
 
-    const handleUploadBarcode = async (targetAssetId?: number | string) => {
-        const hasTargetAsset =
-            targetAssetId !== undefined &&
-            targetAssetId !== null &&
-            !Number.isNaN(toAssetId(targetAssetId));
-        const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+    const handleScanBarcode = (targetAssetId?: number | string) => {
+        handleUploadBarcode(targetAssetId);
+    };
 
-        try {
-            if (hasTargetAsset && targetKey) {
-                setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
-            } else {
-                setBarcodeLoading(true);
-            }
+    const handleUploadBarcode = (targetAssetId?: number | string) => {
+        if (Platform.OS === 'web') {
+            pickImage(false, true, targetAssetId);
+        } else {
+            Alert.alert(
+                "Upload Barcode",
+                "Choose an option",
+                [
+                    { text: "Take Photo", onPress: () => pickImage(true, true, targetAssetId) },
+                    { text: "Choose from Gallery", onPress: () => pickImage(false, true, targetAssetId) },
+                    { text: "Cancel", style: "cancel" }
+                ]
+            );
+        }
+    };
 
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                showSnackbar('Camera roll permission is required to upload barcode image.', 'error');
-                if (hasTargetAsset && targetKey) {
-                    setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
-                } else {
-                    setBarcodeLoading(false);
-                }
-                return;
-            }
-
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 0.8,
-                base64: true,
-            });
-
-            if (!result.canceled && result.assets[0]) {
-                const base64 = result.assets[0].base64;
-
-                if (base64) {
-                    const barcodeData = `data:image/jpeg;base64,${base64}`;
-                    if (hasTargetAsset && targetKey) {
-                        setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: barcodeData }));
-                        showSnackbar('Barcode saved for selected asset.', 'success');
-                    } else {
-                        setBarcodeURL(barcodeData);
-                        showSnackbar('Barcode image will be attached to the return.', 'success');
-                    }
-                } else {
-                    showSnackbar('Failed to process barcode image. Please try again.', 'error');
-                }
-            }
-        } catch (error) {
-            console.error('Barcode picker error:', error);
-            showSnackbar('Failed to open image library.', 'error');
-        } finally {
-            if (hasTargetAsset && targetKey) {
-                setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
-            } else {
-                setBarcodeLoading(false);
-            }
+    const handleUploadPhoto = (targetAssetId?: number | string) => {
+        if (Platform.OS === 'web') {
+            pickImage(false, false, targetAssetId);
+        } else {
+            Alert.alert(
+                "Upload Photo",
+                "Choose an option",
+                [
+                    { text: "Take Photo", onPress: () => pickImage(true, false, targetAssetId) },
+                    { text: "Choose from Gallery", onPress: () => pickImage(false, false, targetAssetId) },
+                    { text: "Cancel", style: "cancel" }
+                ]
+            );
         }
     };
 

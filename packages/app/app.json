@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "AssetInventoryApp",
+    "name": "Asq Asset Lendger",
     "slug": "asset-inventory-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,10 +11,31 @@
     ],
     "jsEngine": "hermes",
     "android": {
-      "package": "com.anonymous.assetinventoryapp"
+      "package": "com.asq.assetledger",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO"
+      ],
+      "intentFilters": [
+        {
+          "action": "android.media.action.IMAGE_CAPTURE"
+        }
+      ],
+      "icon": "./src/assets/asq.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/asq.png",
+        "backgroundColor": "#FFFFFF"
+      }
     },
     "ios": {
-      "bundleIdentifier": "com.anonymous.assetinventoryapp"
+      "bundleIdentifier": "com.asq.assetledger",
+      "infoPlist": {
+        "NSCameraUsageDescription": "The app accesses your camera to let you take photos of assets and scan barcodes.",
+        "NSPhotoLibraryUsageDescription": "The app accesses your photos to let you select images for assets and barcodes."
+      }
     }
   }
 }

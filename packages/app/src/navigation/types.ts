@@ -48,7 +48,7 @@ export type AssetAssignment = {
 export type RootStackParamList = {
   CompanyLogin: undefined;
   ForgotPassword: undefined;
-ResetPassword: { token: string };
+  ResetPassword: { token: string };
   AddCompany: undefined;
   CompanyDashboard: {
     adminName: string;
@@ -81,11 +81,11 @@ ResetPassword: { token: string };
   } | undefined;
   OfficeAssets: undefined;
   FieldAssets:
-    | {
-        employeeId?: string;
-        operatorName?: string;
-      }
-    | undefined;
+  | {
+    employeeId?: string;
+    operatorName?: string;
+  }
+  | undefined;
   AddEditAsset: {
     editAsset?: Asset;
   } | undefined;
@@ -111,12 +111,12 @@ ResetPassword: { token: string };
   };
 };
 
-const PROD_API_URL = 'https://asset-api-anbfahfmdjh6bzap.southindia-01.azurewebsites.net';
+const PROD_API_URL = 'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net';
 const WEB_DEV_API_URL =
   process.env.REACT_APP_API_URL ||
   process.env.EXPO_PUBLIC_API_URL ||
   PROD_API_URL;
-// const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
+const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
 
 // Keep all app screens on the same backend in development.
-export const baseURL = 'http://localhost:3000'; //'__DEV__ ? WEB_DEV_API_URL : PROD_API_URL; //'http://localhost:3000'; //
+export const baseURL = 'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net' //DEV_API_URL; //http://localhost:3000'; //PROD_API_URL
