@@ -230,7 +230,7 @@ const AddEditAsset: React.FC = () => {
 
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: Platform.OS === 'ios',
         aspect: field === 'barcode' ? [4, 1] : [1, 1],
         quality: 0.8,
       };

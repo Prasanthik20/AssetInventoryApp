@@ -335,7 +335,7 @@ const AssetFullDetails: React.FC = () => {
 
             const options: ImagePicker.ImagePickerOptions = {
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
+                allowsEditing: Platform.OS === 'ios',
                 aspect: isBarcode ? [4, 1] : [1, 1],
                 quality: 0.8,
             };

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Asq Asset Lendger",
+    "name": "Asq Asset Ledger",
     "slug": "asset-inventory-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,6 +10,15 @@
       "web"
     ],
     "jsEngine": "hermes",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you select images for assets and barcodes.",
+          "cameraPermission": "The app accesses your camera to let you take photos of assets and scan barcodes."
+        }
+      ]
+    ],
     "android": {
       "package": "com.asq.assetledger",
       "permissions": [

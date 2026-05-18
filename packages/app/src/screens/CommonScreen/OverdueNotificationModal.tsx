@@ -67,7 +67,7 @@ const OverdueNotificationModal: React.FC<Props> = ({
 
             const options: ImagePicker.ImagePickerOptions = {
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: useCamera,
+                allowsEditing: useCamera && Platform.OS === 'ios',
                 allowsMultipleSelection: !useCamera,
                 selectionLimit: 0,
                 quality: 0.7,

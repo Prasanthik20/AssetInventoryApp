@@ -439,7 +439,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: useCamera ? true : !isBarcode, // allow multi-select for photos in library
+        allowsEditing: useCamera ? Platform.OS === 'ios' : !isBarcode, // allow multi-select for photos in library
         allowsMultipleSelection: !useCamera && !isBarcode,
         aspect: isBarcode ? [4, 3] : undefined,
         quality: 0.8,

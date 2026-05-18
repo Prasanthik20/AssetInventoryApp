@@ -103,7 +103,7 @@ const ReturnAssetScreen: React.FC = () => {
 
             const options: ImagePicker.ImagePickerOptions = {
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: useCamera ? true : !isBarcode,
+                allowsEditing: useCamera ? Platform.OS === 'ios' : !isBarcode,
                 allowsMultipleSelection: !useCamera && !isBarcode,
                 aspect: isBarcode ? [4, 3] : undefined,
                 quality: 0.8,
