@@ -22,6 +22,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -442,7 +443,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
         allowsEditing: useCamera ? Platform.OS === 'ios' : !isBarcode, // allow multi-select for photos in library
         allowsMultipleSelection: !useCamera && !isBarcode,
         aspect: isBarcode ? [4, 3] : undefined,
-        quality: 0.8,
+        quality: 0.2,
         base64: true,
       };
 
@@ -451,10 +452,22 @@ const onDueChange = (event: any, selectedDate?: Date) => {
         : await ImagePicker.launchImageLibraryAsync(options);
 
       if (!result.canceled && result.assets[0]) {
-        const photos = result.assets
-          .map((asset) => asset.base64)
-          .filter((value): value is string => Boolean(value))
-          .map((base64) => `data:image/jpeg;base64,${base64}`);
+        const photos: string[] = [];
+        for (const asset of result.assets) {
+          let base64 = asset.base64;
+          if (!base64 && asset.uri) {
+            try {
+              base64 = await FileSystem.readAsStringAsync(asset.uri, {
+                encoding: 'base64' as any,
+              });
+            } catch (err) {
+              console.warn("Error reading file manually:", err);
+            }
+          }
+          if (base64) {
+            photos.push(`data:image/jpeg;base64,${base64}`);
+          }
+        }
 
         if (photos.length > 0) {
           const primaryPhoto = photos[0];
@@ -942,6 +955,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
             <Text style={styles.modalTitle}>Select Assets</Text>
 
             <AssetFiltersBar
+              isMobileLayout={isMobileLayout}
               searchValue={assetSearchQuery}
               onSearchChange={setAssetSearchQuery}
               searchPlaceholder="Search by name, serial no, or ID"

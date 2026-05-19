@@ -232,7 +232,7 @@ const AddEditAsset: React.FC = () => {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: Platform.OS === 'ios',
         aspect: field === 'barcode' ? [4, 1] : [1, 1],
-        quality: 0.8,
+        quality: 0.2,
       };
 
       const result = useCamera 

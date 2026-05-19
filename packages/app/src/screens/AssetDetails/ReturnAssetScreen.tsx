@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import { globalColors } from '../..//styles/globalStyles';
@@ -106,7 +107,7 @@ const ReturnAssetScreen: React.FC = () => {
                 allowsEditing: useCamera ? Platform.OS === 'ios' : !isBarcode,
                 allowsMultipleSelection: !useCamera && !isBarcode,
                 aspect: isBarcode ? [4, 3] : undefined,
-                quality: 0.8,
+                quality: 0.2,
                 base64: true,
             };
 
@@ -115,10 +116,22 @@ const ReturnAssetScreen: React.FC = () => {
                 : await ImagePicker.launchImageLibraryAsync(options);
 
             if (!result.canceled && result.assets[0]) {
-                const photos = result.assets
-                    .map((asset) => asset.base64)
-                    .filter((value): value is string => Boolean(value))
-                    .map((base64) => `data:image/jpeg;base64,${base64}`);
+                const photos: string[] = [];
+                for (const asset of result.assets) {
+                    let base64 = asset.base64;
+                    if (!base64 && asset.uri) {
+                        try {
+                            base64 = await FileSystem.readAsStringAsync(asset.uri, {
+                                encoding: 'base64' as any,
+                            });
+                        } catch (err) {
+                            console.warn("Error reading file manually:", err);
+                        }
+                    }
+                    if (base64) {
+                        photos.push(`data:image/jpeg;base64,${base64}`);
+                    }
+                }
 
                 if (photos.length > 0) {
                     const primaryPhoto = photos[0];

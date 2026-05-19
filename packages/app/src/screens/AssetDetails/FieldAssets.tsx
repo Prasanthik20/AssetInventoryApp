@@ -361,7 +361,7 @@ const FieldAssets: React.FC = () => {
             onCategoryChange={setSelectedCategory}
             categoryOptions={assetCategories}
             categoryAllLabel="All Assets"
-            containerStyle={renderStyles.controlsRow}
+            containerStyle={isMobileLayout ? renderStyles.controlsRowMobile : renderStyles.controlsRow}
             searchContainerStyle={renderStyles.searchContainerInRow}
             searchInputStyle={renderStyles.searchInputInRow}
             filtersContainerStyle={[renderStyles.dropdownContainer, isMobileLayout && { width: '100%' }]}
@@ -504,6 +504,11 @@ const renderStyles = StyleSheet.create({
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  controlsRowMobile: {
     paddingHorizontal: 15,
     paddingVertical: 10,
     gap: 10,

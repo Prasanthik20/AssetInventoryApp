@@ -15,6 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { globalColors } from '../../styles/globalStyles';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 interface Props {
     visible: boolean;
@@ -70,7 +71,7 @@ const OverdueNotificationModal: React.FC<Props> = ({
                 allowsEditing: useCamera && Platform.OS === 'ios',
                 allowsMultipleSelection: !useCamera,
                 selectionLimit: 0,
-                quality: 0.7,
+                quality: 0.2,
                 base64: true,
             };
 
@@ -82,10 +83,22 @@ const OverdueNotificationModal: React.FC<Props> = ({
                 return;
             }
 
-            const selectedImages = result.assets
-                .map((asset) => asset.base64)
-                .filter((value): value is string => Boolean(value))
-                .map((base64) => `data:image/jpeg;base64,${base64}`);
+            const selectedImages: string[] = [];
+            for (const asset of result.assets) {
+                let base64 = asset.base64;
+                if (!base64 && asset.uri) {
+                    try {
+                        base64 = await FileSystem.readAsStringAsync(asset.uri, {
+                            encoding: 'base64' as any,
+                        });
+                    } catch (err) {
+                        console.warn("Error reading file manually:", err);
+                    }
+                }
+                if (base64) {
+                    selectedImages.push(`data:image/jpeg;base64,${base64}`);
+                }
+            }
 
             if (selectedImages.length === 0) {
                 setErrorText('Could not process selected images. Please try again.');
