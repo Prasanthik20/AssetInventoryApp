@@ -108,8 +108,28 @@ const OverdueNotificationModal: React.FC<Props> = ({
             setProofImages((prev) => [...prev, ...selectedImages]);
             setErrorText('');
         } catch (error) {
-            console.error('Proof image picker error:', error);
-            setErrorText('Failed to select proof images.');
+            console.error('Library error:', error);
+            setErrorText('Failed to select images.');
+        }
+    };
+
+    const processResult = (result: ImagePicker.ImagePickerResult) => {
+        if (!result.canceled && result.assets) {
+            const selectedImages = result.assets
+                .map((asset) => {
+                    if (asset.base64) {
+                        return `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+                    }
+                    return null;
+                })
+                .filter((value): value is string => Boolean(value));
+
+            if (selectedImages.length > 0) {
+                setProofImages((prev) => [...prev, ...selectedImages]);
+                setErrorText('');
+            } else {
+                setErrorText('No valid images processed.');
+            }
         }
     };
 

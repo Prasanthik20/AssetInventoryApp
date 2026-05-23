@@ -11,11 +11,11 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
-  Alert,
   Platform,
   Image,
   Pressable,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -491,7 +491,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
             }
           }
         } else {
-          showSnackbar('Failed to process image. Please try again.', 'error');
+          showSnackbar('Failed to process image.', 'error');
         }
       }
     } catch (error) {

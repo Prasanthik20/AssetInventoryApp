@@ -4,6 +4,7 @@
     "slug": "asset-inventory-app",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./src/assets/asq.png",
     "platforms": [
       "android",
       "ios",

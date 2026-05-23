@@ -155,7 +155,7 @@ const ReturnAssetScreen: React.FC = () => {
                         }
                     }
                 } else {
-                    showSnackbar('Failed to process image. Please try again.', 'error');
+                    showSnackbar('Failed to process image.', 'error');
                 }
             }
         } catch (error) {

@@ -4,10 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
-    "build": "prisma generate && next build",
+    "build": "npx prisma generate && npx next build",
     "start": "next start -p $PORT",
     "deploy": "prisma migrate deploy && next start -p $PORT",
     "lint": "eslint"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

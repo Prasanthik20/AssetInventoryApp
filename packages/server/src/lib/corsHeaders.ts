@@ -2,6 +2,7 @@ import type { NextApiResponse } from 'next';
 
 export function setCorsHeaders(res: NextApiResponse, origin?: string): void {
   const allowedOrigins = [
+    'https://assetmgmt.asquaretech.in',
     'http://localhost:8081',
     'http://localhost:8082',
     'http://localhost:3000',

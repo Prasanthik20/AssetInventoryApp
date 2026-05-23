@@ -9,16 +9,6 @@ export default async function loginCoreHandler(
   res: NextApiResponse
 ): Promise<void> {
 
-  // Set CORS headers
-  const origin = req.headers.origin as string;
-  setCorsHeaders(res, origin);
-
-  // Handle OPTIONS for CORS preflight
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
   // ❌ Block non-POST requests
   if (req.method !== 'POST') {
     res.setHeader("Allow", ['POST', 'OPTIONS']);

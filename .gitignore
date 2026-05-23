@@ -43,6 +43,7 @@ local.properties
 **/packages/server/node_modules/
 
 
+!scripts/deploy_final
 # node.js
 #
 node_modules/

@@ -1,0 +1,55 @@
+	Npm run build
+o	This is creates .next folder which contains folders with
+	Standalone
+•	.next (hidden folder)
+•	/packages/server/
+o	Node_modules
+o	Server.js
+o	Package.json
+
+	In Kudu if manually deploying
+o	Zip node_modules in standalone/packages/server and drag drop at /home/site/wwwroot
+o	At same level add server.js and package.json
+o	At same level zip .next (hidden folder) in standalone folder, upload it
+o	wwwroot should look EXACTLY like this:
+/site/wwwroot
+   ├── server.js        ✅ must exist
+   ├── package.json
+   ├── node_modules/
+   ├── .next/
+   │     └── static/
+   └── public/
+o	Once done Verify in Kudu console, 
+o	Navigate to /home/site/wwwroot
+o	Node server.js
+	If result is below your API is up and running successfully
+Listening on port 8080
+Ready on http://localhost:8080
+	In Aure Portal goto Configuration, set statup command as node server.js
+
+	If not some like already in use, means either localhost/ip address or PORT is assigned by Azure by default, then go to Aure Portal goto Configuration, change the startup command to 
+•	HOSTNAME=0.0.0.0 node server.js
+o	To Debug, if any error while running commands in Kudu SSH,
+o	Go to Azure Portal -> WebApp -> Overview – Stop the App wati for some time and the start.
+o	After this run same command in kudu still same error, ignore  Kudu and check the api url with endpoints
+
+
+cd packages/server && \
+npm run build && \
+rm -rf deploy_exact && \
+mkdir -p deploy_exact/.next && \
+cp .next/standalone/packages/server/server.js deploy_exact/ && \
+cp .next/standalone/packages/server/package.json deploy_exact/ && \
+cp -r .next/standalone/node_modules deploy_exact/ && \
+cp -r .next/standalone/packages/server/node_modules/. deploy_exact/node_modules/ && \
+cp -r .next/static deploy_exact/.next/static && \
+cp -r public/. deploy_exact/public/ && \
+cd deploy_exact && \
+zip -r ../deploy.zip . && \
+cd .. && \
+az webapp deploy --name asset-api --resource-group asquaretechrg --src-path deploy.zip --type zip
+
+
+debug:
+az webapp log tail --name asset-api --resource-group asquaretechrg
+ls -F packages/server/deploy_final/
