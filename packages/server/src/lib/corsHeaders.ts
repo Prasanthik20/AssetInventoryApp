@@ -9,16 +9,18 @@ export function setCorsHeaders(res: NextApiResponse, origin?: string): void {
     'http://127.0.0.1:8081',
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
+    'https://assetmgmt.asquaretech.in',
+    'https://assetmgmt.asquaretech.in/'
   ];
 
-  const isAllowed = !origin || 
-                   allowedOrigins.includes(origin) || 
-                   origin.includes('localhost') || 
-                   origin.includes('127.0.0.1');
+  // Normalize origin
+  let normalizedOrigin = origin || '';
+  if (normalizedOrigin.endsWith('/')) {
+    normalizedOrigin = normalizedOrigin.slice(0, -1);
+  }
 
-  if (isAllowed) {
-    const headerValue = origin || 'https://assetmgmt.asquaretech.in';
-    res.setHeader('Access-Control-Allow-Origin', headerValue);
+  if (normalizedOrigin && (normalizedOrigin.includes('localhost') || normalizedOrigin.includes('127.0.0.1') || allowedOrigins.includes(normalizedOrigin))) {
+    res.setHeader('Access-Control-Allow-Origin', normalizedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
     res.setHeader('Access-Control-Allow-Credentials', 'true');

@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { baseURL } from "src/navigation/types";
 
 interface Category {
-  id: number;
+  id: number | string;
+  categoryId: string;
   category: string;
 }
 
 interface Status {
-  id: number;
+  id: number | string;
   status: string;
 }
 

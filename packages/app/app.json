@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "AsqAsset Ledger",
+    "name": "Asq Asset Ledger",
     "slug": "asset-inventory-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,33 +15,30 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to let you share them with your friends.",
-          "cameraPermission": "The app accesses your camera to let you take photos of assets."
+          "photosPermission": "The app accesses your photos to let you select images for assets and barcodes.",
+          "cameraPermission": "The app accesses your camera to let you take photos of assets and scan barcodes."
         }
       ]
     ],
     "android": {
-      "package": "com.anonymous.assetinventoryapp",
-      "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES",
-        "READ_MEDIA_VIDEO"
-      ],
+      "package": "com.asq.assetledger",
       "intentFilters": [
         {
           "action": "android.media.action.IMAGE_CAPTURE"
         }
       ],
+      "icon": "./src/assets/asq.png",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/asq.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FFFFFF"
       }
     },
     "ios": {
-      "bundleIdentifier": "com.anonymous.assetinventoryapp",
-      "supportsTablet": true
+      "bundleIdentifier": "com.asq.assetledger",
+      "infoPlist": {
+        "NSCameraUsageDescription": "The app accesses your camera to let you take photos of assets and scan barcodes.",
+        "NSPhotoLibraryUsageDescription": "The app accesses your photos to let you select images for assets and barcodes."
+      }
     }
   }
 }

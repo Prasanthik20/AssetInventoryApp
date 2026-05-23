@@ -98,7 +98,7 @@ const OfficeAssets: React.FC = () => {
             onCategoryChange={setSelectedName}
             categoryOptions={assetCategories}
             categoryAllLabel="All Assets"
-            containerStyle={styles.topControlsRow}
+            containerStyle={isMobileLayout ? styles.topControlsRowMobile : styles.topControlsRow}
             searchContainerStyle={styles.searchContainer}
             searchInputStyle={styles.searchInput}
             filtersContainerStyle={[styles.dropdownContainer, isMobileLayout && { width: '100%' }]}
@@ -173,6 +173,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
       gap: 10,
+  },
+  topControlsRowMobile: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    gap: 10,
   },
   searchContainer: {
     flex: 2,

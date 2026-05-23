@@ -1,9 +1,9 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiResponse } from 'next';
 import query from '@/lib/db';
 import { setCorsHeaders } from '@/lib/corsHeaders';
+import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    // Set CORS headers
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const origin = req.headers.origin as string;
     setCorsHeaders(res, origin);
 
@@ -16,27 +16,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
 
+    const { tenantId, role } = req.user;
+    
+    if (!tenantId && role !== 'Super Admin') {
+        console.error('[ERROR] tenantId missing in token for non-Super Admin user.');
+        return res.status(403).json({ message: 'Tenant ID missing. Please log in again.' });
+    }
+
+    console.log(`[DEBUG] User Payload: ${JSON.stringify(req.user)}`);
+    console.log(`[DEBUG] Fetching assets for tenantId: "${tenantId}"`);
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const offset = (page - 1) * limit;
+    
+    let search = (req.query.search as string) || '';
+    if (search === 'undefined' || search === 'null') search = '';
+    const isSearch = search.trim().length > 0;
+
     try {
         // 1️⃣ Update assets: Only set to 'Overdue' if it is CURRENTLY assigned to someone
-        // This prevents returned assets with old dates from being flipped back to 'Overdue'
         const updateQuery = `
             UPDATE "Asset_Details"
             SET status_id = (
-                SELECT id FROM "Status" WHERE status = 'Overdue' LIMIT 1
+                SELECT id FROM "Status" WHERE status = 'Overdue' AND ("tenantId" = $1 OR "tenantId" IS NULL) LIMIT 1
             )
             WHERE status_id = (
-                SELECT id FROM "Status" WHERE status = 'Assigned' LIMIT 1
+                SELECT id FROM "Status" WHERE status = 'Assigned' AND ("tenantId" = $1 OR "tenantId" IS NULL) LIMIT 1
             )
+            AND "tenantId" = $1
             AND assigned_to IS NOT NULL
             AND id IN (
                 SELECT "assetId" FROM "Asset_Assignments"
                 WHERE "expected_return_date" < CURRENT_DATE
+                  AND "tenantId" = $1
                   AND COALESCE(status, '') <> 'returned'
                   AND "returned_date" IS NULL
             );
         `;
 
-        await query(updateQuery);
+        await query(updateQuery, [tenantId]);
 
         // 2️⃣ Fetch assets with only the LATEST assignment record
         const sqlQuery = `
@@ -58,7 +77,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 u."fullName" AS "assignedBy",
                 assignee."fullName" AS "assignedTo",
                 
-                -- Lateral join ensures we only get the single most recent assignment record
                 aa.id AS "assignmentId",
                 aa."projectName" AS "projectName",
                 aa.expected_return_date AS "expectedReturnDate",
@@ -71,23 +89,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             LEFT JOIN "Users" u ON a.assigned_by = u."employeeId"
             LEFT JOIN "Users" assignee ON a.assigned_to = assignee."employeeId"
             
-            -- This subquery picks the latest ACTIVE assignment row for each asset
             LEFT JOIN LATERAL (
                 SELECT * FROM "Asset_Assignments"
                 WHERE "assetId" = a.id
+                  AND ("tenantId" = $1 OR $1 IS NULL)
                   AND COALESCE(status, '') <> 'returned'
                   AND "returned_date" IS NULL
                 ORDER BY id DESC
                 LIMIT 1
             ) aa ON TRUE
-
-            ORDER BY a.id ASC;
+            WHERE (a."tenantId" = $1 OR $1 IS NULL)
+            ${isSearch ? `AND (a.name ILIKE $2 OR a."asset_Id" ILIKE $2 OR a."serial_no" ILIKE $2)` : ''}
+            ORDER BY a.id ASC
+            LIMIT $${isSearch ? 3 : 2} OFFSET $${isSearch ? 4 : 3};
         `;
 
-        const result = await query(sqlQuery);
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM "Asset_Details" a
+            WHERE (a."tenantId" = $1 OR $1 IS NULL)
+            ${isSearch ? `AND (a.name ILIKE $2 OR a."asset_Id" ILIKE $2 OR a."serial_no" ILIKE $2)` : ''};
+        `;
+
+        const searchPattern = isSearch ? `%${search.trim()}%` : null;
+        const mainParams = isSearch
+            ? [tenantId, searchPattern, limit, offset]
+            : [tenantId, limit, offset];
+        const countParams = isSearch ? [tenantId, searchPattern] : [tenantId];
+
+        const [result, countResult] = await Promise.all([
+            query(sqlQuery, mainParams),
+            query(countQuery, countParams),
+        ]);
+
+        const total = parseInt(countResult.rows[0]?.total || '0');
+        console.log(`[DEBUG] Query results: MainRows=${result.rows.length}, TotalCount=${total}`);
+        const totalPages = Math.ceil(total / limit);
 
         const formattedAssets = result.rows.map(asset => ({
-            id: asset.id,
+            id: asset.id.toString(),
             assetName: asset.assetName,
             barcode: asset.barcode,
             controllerKey: asset.controllerKey || null,
@@ -104,15 +144,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             barcodeURL: asset.barcodeURL || null,
             expectedReturnDate: asset.expectedReturnDate || null,
             projectName: asset.projectName || null,
-            assignmentId: asset.assignmentId || null,
-            operatorId: asset.operatorId || null,
-            senderId: asset.senderId || null,
-            receiverId: asset.operatorId || null
+            assignmentId: asset.assignmentId ? asset.assignmentId.toString() : null,
+            operatorId: asset.operatorId ? asset.operatorId.toString() : null,
+            senderId: asset.senderId ? asset.senderId.toString() : null,
+            receiverId: asset.operatorId ? asset.operatorId.toString() : null
         }));
 
         return res.status(200).json({
             message: 'Assets fetched successfully!',
             count: formattedAssets.length,
+            total,
+            page,
+            limit,
+            totalPages,
             assets: formattedAssets
         });
 
@@ -121,3 +165,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ message: 'Internal server error.' });
     }
 }
+
+export default withAuth(handler);

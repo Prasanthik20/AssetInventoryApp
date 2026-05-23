@@ -1,6 +1,7 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiResponse } from 'next';
 import query from '@/lib/db';
 import crypto from 'crypto';
+import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 
 /**
  * Securely hashes a password using Node's native crypto module.
@@ -11,9 +12,9 @@ function hashPassword(password: string): string {
   return `${salt}:${hash}`; // Store salt and hash together
 }
 
-export default async function addUserHandler(req: NextApiRequest, res: NextApiResponse) {
+async function addUserHandler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
+    res.setHeader('Allow', ['POST', 'OPTIONS']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
@@ -21,6 +22,7 @@ export default async function addUserHandler(req: NextApiRequest, res: NextApiRe
     employeeId, fullName, email, password, 
     phoneNumber, address, photoURL, roleName 
   } = req.body;
+  const { tenantId } = req.user;
 
   if (!employeeId || !fullName || !email || !password || !roleName) {
     return res.status(400).json({ message: 'Missing required fields.' });
@@ -41,8 +43,8 @@ export default async function addUserHandler(req: NextApiRequest, res: NextApiRe
     const sql = `
       INSERT INTO "Users" (
         "employeeId", "fullName", "email", "passwordHash", 
-        "phoneNumber", "address", "photoURL", "roleId"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        "phoneNumber", "address", "photoURL", "roleId", "tenantId"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING "userId";
     `;
 
@@ -54,7 +56,8 @@ export default async function addUserHandler(req: NextApiRequest, res: NextApiRe
       phoneNumber || null, 
       address || null, 
       photoURL || null, 
-      roleId
+      roleId,
+      tenantId
     ];
 
     const result = await query(sql, values);
@@ -72,3 +75,5 @@ export default async function addUserHandler(req: NextApiRequest, res: NextApiRe
     return res.status(500).json({ message: 'An internal server error occurred.' });
   }
 }
+
+export default withAuth(addUserHandler);

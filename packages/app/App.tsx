@@ -4,6 +4,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import "./src/config/api"; // Initializes global Axios interceptors
 
 import { RootStackParamList } from "./src/navigation/types";
 
@@ -19,6 +20,7 @@ import CompanyDashboard from "./src/screens/Admin/CompanyDashboard";
 import CompanyUsersScreen from "./src/screens/CommonScreen/CompanyUsersScreen";
 import ReportsScreen from "./src/screens/CommonScreen/ReportsScreen";
 import AddCompanyUser from "./src/screens/Admin/AddCompanyUser";
+import CustomCategoryBuilder from "./src/screens/Admin/CustomCategoryBuilder";
 
 // Supervisor
 import SupervisorDashboard from "./src/screens/Supervisor/SupervisorDashboard";
@@ -121,6 +123,7 @@ function App(): React.JSX.Element {
         CompanyDashboard: 'company-dashboard',
         CompanyUsersScreen: 'company-users',
         AddCompanyUser: 'add-company-user',
+        CustomCategoryBuilder: 'categories/custom',
         SupervisorDashboard: 'supervisor',
         OperatorDashboard: 'operator',
         SuperAdminLogin: 'superadmin/login',
@@ -253,6 +256,11 @@ function AppStack({ user, setUser }: any) {
       <Stack.Screen
         name="CompanyUsersScreen"
         component={CompanyUsersScreen}
+      />
+
+      <Stack.Screen
+        name="CustomCategoryBuilder"
+        component={CustomCategoryBuilder}
       />
 
      {/* ===== ASSET SCREENS ===== */}

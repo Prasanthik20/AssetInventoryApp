@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollVi
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { RootStackParamList, baseURL } from '../../navigation/types';
+import { Asset, RootStackParamList, baseURL } from '../../navigation/types';
 import useAssetMeta from "../../hooks/useAssetMeta";
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
@@ -29,6 +29,7 @@ const iconMap: any = {
     "map-pin": <Feather name="map-pin" size={16} color="#22D3EE" />,
     "user-check": <Feather name="user-check" size={16} color="#22D3EE" />,
     calendar: <Feather name="calendar" size={16} color="#22D3EE" />,
+    "edit-3": <Feather name="edit-3" size={16} color="#22D3EE" />,
 };
 
 type AssigneeOption = {
@@ -140,7 +141,8 @@ const AssetFullDetails: React.FC = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<AssetFullDetailsRouteProp>();
     const { statuses, categories } = useAssetMeta();
-    const { asset } = route.params;
+    const params = route.params;
+    const asset = params?.asset;
     const startInEditMode = route.params?.startInEditMode;
     const isAssignedCardEdit = Boolean(startInEditMode);
     const { width } = useWindowDimensions();
@@ -150,11 +152,11 @@ const AssetFullDetails: React.FC = () => {
     const styles = assetStyles(isMobileLayout);
     // Edit mode state
     const [isEditMode, setIsEditMode] = useState(false);
+    const [currentAsset, setCurrentAsset] = useState<Asset | null>(asset || null);
     
     // Editable fields state
     const [assetName, setAssetName] = useState(asset?.assetName || '');
     const [selectedCategory, setSelectedCategory] = useState(String(asset?.category || ''));
-    const [controllerKey, setControllerKey] = useState(String(asset?.controllerKey || ''));
     const [modelNumber, setModelNumber] = useState(asset?.modelNumber || '');
     const [serialNumber, setSerialNumber] = useState(asset?.serialNumber || '');
     const [price, setPrice] = useState(asset?.price || '');
@@ -169,6 +171,8 @@ const AssetFullDetails: React.FC = () => {
     const [initialPhotoURL] = useState(asset?.photoURL || '');
     const [barcodeURL, setBarcodeURL] = useState(asset?.barcodeURL || '');
     const [initialBarcodeURL] = useState(asset?.barcodeURL || '');
+    const [dynamicValues, setDynamicValues] = useState<any[]>(asset?.dynamicValues || []);
+    const [initialDynamicValues, setInitialDynamicValues] = useState<any[]>(asset?.dynamicValues || []);
     const [showStatusPicker, setShowStatusPicker] = useState(false);
     const [showCategoryPicker, setShowCategoryPicker] = useState(false);
     const [showAssigneePicker, setShowAssigneePicker] = useState(false);
@@ -179,7 +183,6 @@ const AssetFullDetails: React.FC = () => {
         message: string;
         kind: 'success' | 'error' | 'info';
     }>({ visible: false, message: '', kind: 'info' });
-    const isControllerCategory = String(selectedCategory || '').trim().toLowerCase().includes('controller');
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
@@ -270,114 +273,133 @@ const AssetFullDetails: React.FC = () => {
 
         loadAssignmentDetails();
     }, [asset?.assignmentId, asset?.id, asset?.location, asset?.projectName, asset?.assignedDate, isAssignedCardEdit]);
-    
-    const handleImageUpload = async () => {
-        if (Platform.OS === 'web') {
-            await launchLibrary('photo');
-            return;
-        }
 
-        Alert.alert(
-            "Upload Photo",
-            "Choose a source for your asset photo",
-            [
-                { text: "Camera", onPress: () => launchCamera('photo') },
-                { text: "Gallery", onPress: () => launchLibrary('photo') },
-                { text: "Cancel", style: "cancel" }
-            ]
-        );
-    };
-    
-    const handleBarcodeUpload = async () => {
-        if (Platform.OS === 'web') {
-            await launchLibrary('barcode');
-            return;
-        }
-
-        Alert.alert(
-            "Upload Barcode",
-            "Choose a source for your barcode image",
-            [
-                { text: "Camera", onPress: () => launchCamera('barcode') },
-                { text: "Gallery", onPress: () => launchLibrary('barcode') },
-                { text: "Cancel", style: "cancel" }
-            ]
-        );
-    };
-
-    const launchCamera = async (type: 'photo' | 'barcode') => {
-        try {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-                showSnackbar('Camera permission is required.', 'error');
-                return;
-            }
-
-            const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: type === 'barcode' ? [4, 1] : [1, 1],
-                quality: 0.5,
-                base64: true,
-            });
-
-            processResult(result, type);
-        } catch (error) {
-            console.error('Camera error:', error);
-            showSnackbar('Failed to open camera.', 'error');
-        }
-    };
-
-    const launchLibrary = async (type: 'photo' | 'barcode') => {
-        try {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                showSnackbar('Media library permission is required.', 'error');
-                return;
-            }
-
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: type === 'barcode' ? [4, 1] : [1, 1],
-                quality: 0.5,
-                base64: true,
-            });
-
-            processResult(result, type);
-        } catch (error) {
-            console.error('Library error:', error);
-            showSnackbar('Failed to open gallery.', 'error');
-        }
-    };
-
-    const processResult = async (result: ImagePicker.ImagePickerResult, type: 'photo' | 'barcode') => {
-        if (!result.canceled && result.assets[0]) {
+    // 🔹 Fetch full asset details including dynamic values if needed
+    useEffect(() => {
+        const fetchFullDetails = async () => {
             try {
-                const asset = result.assets[0];
-                if (asset.base64) {
-                    const dataURL = `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
-                    if (type === 'photo') setPhotoURL(dataURL);
-                    else setBarcodeURL(dataURL);
-                } else {
-                    const dataURL = await toPersistentDataUrl(
-                        asset.uri,
-                        asset.mimeType || undefined
-                    );
-                    if (type === 'photo') setPhotoURL(dataURL);
-                    else setBarcodeURL(dataURL);
+                const response = await axios.get(`${baseURL}/api/assets/${asset?.id || asset?.assetId}`);
+                if (response.data) {
+                    const d = response.data;
+                    if (d.dynamicValues) {
+                        setDynamicValues(d.dynamicValues);
+                        setInitialDynamicValues(d.dynamicValues);
+                    }
+                    // Sync other fields if they were partial
+                    setAssetName(d.assetName || '');
+                    setModelNumber(d.modelNumber || '');
+                    setSerialNumber(d.serialNumber || '');
+                    setPrice(d.price || '');
+                    setWarrantyExpiry(d.warrantyExpiry || '');
+                    setPurchaseDate(d.purchaseDate || '');
+                    setLocation(d.location || '');
+                    setProjectName(d.projectName || '');
+                    setAssignedDate(d.assignedDate || '');
+                    setStatusValue(d.status || '');
+                    setAssignedTo(d.assignedTo || 'Admin Role');
+                    setPhotoURL(d.photoURL || '');
+                    setBarcodeURL(d.barcodeURL || '');
+                    
+                    setCurrentAsset({
+                        ...asset,
+                        ...d,
+                        id: asset?.id || d.assetId
+                    });
                 }
-            } catch (readError) {
-                console.warn("Could not read file, using URI:", readError);
-                if (type === 'photo') setPhotoURL(result.assets[0].uri);
-                else setBarcodeURL(result.assets[0].uri);
+            } catch (error) {
+                console.error("Error fetching full asset details:", error);
             }
+        };
+        fetchFullDetails();
+    }, [asset?.id, asset?.assetId]);
+
+    const handleDynamicValueChange = (fieldId: any, val: string) => {
+        setDynamicValues(prev => prev.map(dv => dv.fieldId == fieldId ? { ...dv, value: val } : dv));
+    };
+    
+    const pickImage = async (useCamera: boolean, isBarcode: boolean) => {
+        try {
+            if (useCamera) {
+                const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+                if (!permissionResult.granted) {
+                    showSnackbar("Please allow access to your camera.", 'error');
+                    return;
+                }
+            } else {
+                const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (!permissionResult.granted) {
+                    showSnackbar("Please allow access to your photo library.", 'error');
+                    return;
+                }
+            }
+
+            const options: ImagePicker.ImagePickerOptions = {
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: Platform.OS === 'ios',
+                aspect: isBarcode ? [4, 1] : [1, 1],
+                quality: 0.2,
+            };
+
+            const result = useCamera
+                ? await ImagePicker.launchCameraAsync(options)
+                : await ImagePicker.launchImageLibraryAsync(options);
+
+            if (!result.canceled && result.assets[0]) {
+                try {
+                    const dataURL = await toPersistentDataUrl(
+                        result.assets[0].uri,
+                        result.assets[0].mimeType || undefined
+                    );
+                    if (isBarcode) setBarcodeURL(dataURL);
+                    else setPhotoURL(dataURL);
+                } catch (readError) {
+                    console.warn(`Could not read file, using URI:`, readError);
+                    if (isBarcode) setBarcodeURL(result.assets[0].uri);
+                    else setPhotoURL(result.assets[0].uri);
+                }
+            }
+        } catch (error) {
+            console.error("Error picking image:", error);
+            showSnackbar("Failed to select image", 'error');
+        }
+    };
+
+    const handleImageUpload = () => {
+        if (Platform.OS === 'web') {
+            pickImage(false, false);
+        } else {
+            Alert.alert(
+                "Upload Photo",
+                "Choose an option",
+                [
+                    { text: "Take Photo", onPress: () => pickImage(true, false) },
+                    { text: "Choose from Gallery", onPress: () => pickImage(false, false) },
+                    { text: "Cancel", style: "cancel" }
+                ]
+            );
+        }
+    };
+
+    const handleBarcodeUpload = () => {
+        if (Platform.OS === 'web') {
+            pickImage(false, true);
+        } else {
+            Alert.alert(
+                "Upload Barcode",
+                "Choose an option",
+                [
+                    { text: "Take Photo", onPress: () => pickImage(true, true) },
+                    { text: "Choose from Gallery", onPress: () => pickImage(false, true) },
+                    { text: "Cancel", style: "cancel" }
+                ]
+            );
         }
     };
     
     const handleSaveAsset = async () => {
         try {
-            if (!asset.id) {
+            const finalId = asset?.id || asset?.assetId;
+            if (!finalId) {
                 showSnackbar("Asset ID is missing", 'error');
                 return;
             }
@@ -429,14 +451,6 @@ const AssetFullDetails: React.FC = () => {
             if (selectedCategory !== String(asset.category || '')) {
                 updateData.category = selectedCategory;
             }
-            if (
-                selectedCategory !== String(asset.category || '') ||
-                String(controllerKey || '').trim() !== String(asset.controllerKey || '').trim()
-            ) {
-                updateData.controllerKey = isControllerCategory
-                    ? (String(controllerKey || '').trim() || null)
-                    : null;
-            }
             if (modelNumber !== asset.modelNumber) {
                 updateData.modelNumber = modelNumber;
             }
@@ -472,6 +486,19 @@ const AssetFullDetails: React.FC = () => {
                 updateData.barcodeURL = barcodeURL;
             }
 
+            // Include changed dynamic values
+            const changedDynamicFields = dynamicValues.filter(dv => {
+                const initial = initialDynamicValues.find(idv => idv.fieldId === dv.fieldId);
+                return initial ? initial.value !== dv.value : !!dv.value;
+            }).map(dv => ({
+                fieldId: parseInt(dv.fieldId),
+                value: dv.value
+            }));
+
+            if (changedDynamicFields.length > 0) {
+                updateData.dynamicFields = changedDynamicFields;
+            }
+
             // Only send update if there are changes
             if (Object.keys(updateData).length === 0) {
                 showSnackbar("No updates to save", 'info');
@@ -480,35 +507,32 @@ const AssetFullDetails: React.FC = () => {
             }
 
             const response = await axios.put(
-                `${baseURL}/api/assets/assetId?assetId=${asset.id}`,
+                `${baseURL}/api/assets/${finalId}`,
                 updateData
             );
 
             if (response.status === 200) {
                 showSnackbar("Asset updated successfully", 'success');
                 setIsEditMode(false);
-                // Update the asset object with new values
-                asset.assetName = assetName;
-                if (updateData.category) {
-                    asset.category = selectedCategory;
-                }
-                asset.controllerKey = isControllerCategory
-                    ? (String(controllerKey || '').trim() || null)
-                    : null;
-                asset.modelNumber = modelNumber;
-                asset.serialNumber = serialNumber;
-                asset.price = price;
-                asset.purchaseDate = purchaseDate;
-                asset.warrantyExpiry = warrantyExpiry;
-                asset.location = location;
-                asset.status = statusValue;
-                asset.assignedTo = assignedTo;
-                if (photoURL) {
-                    asset.photoURL = photoURL;
-                }
-                if (barcodeURL) {
-                    asset.barcodeURL = barcodeURL;
-                }
+                
+                // Update currentAsset state
+                const updatedAsset = {
+                    ...(currentAsset || asset),
+                    assetName,
+                    category: selectedCategory,
+                    modelNumber,
+                    serialNumber,
+                    price,
+                    purchaseDate,
+                    warrantyExpiry,
+                    location,
+                    status: statusValue,
+                    assignedTo,
+                    photoURL,
+                    barcodeURL,
+                    dynamicValues
+                };
+                setCurrentAsset(updatedAsset as Asset);
             }
         } catch (error: any) {
             console.error("Save Asset Error:", error);
@@ -519,22 +543,25 @@ const AssetFullDetails: React.FC = () => {
     
     const handleEditToggle = () => {
         if (isEditMode) {
-            // Cancel edit mode - reset fields
-            setAssetName(asset?.assetName || '');
-            setSelectedCategory(String(asset?.category || ''));
-            setControllerKey(String(asset?.controllerKey || ''));
-            setModelNumber(asset?.modelNumber || '');
-            setSerialNumber(asset?.serialNumber || '');
-            setPrice(asset?.price || '');
-            setWarrantyExpiry(asset?.warrantyExpiry || '');
-            setPurchaseDate(asset?.purchaseDate || '');
-            setLocation(asset?.location || '');
-            setProjectName(asset?.projectName || '');
-            setAssignedDate(asset?.assignedDate || '');
-            setStatusValue(asset?.status || '');
-            setAssignedTo(asset?.assignedTo || 'Admin Role');
-            setPhotoURL(asset?.photoURL || '');
-            setBarcodeURL(asset?.barcodeURL || '');
+            // Cancel edit mode - reset fields to currentAsset
+            const resetSource = currentAsset || asset;
+            setAssetName(resetSource?.assetName || '');
+            setSelectedCategory(String(resetSource?.category || ''));
+            setModelNumber(resetSource?.modelNumber || '');
+            setSerialNumber(resetSource?.serialNumber || '');
+            setPrice(resetSource?.price || '');
+            setWarrantyExpiry(resetSource?.warrantyExpiry || '');
+            setPurchaseDate(resetSource?.purchaseDate || '');
+            setLocation(resetSource?.location || '');
+            setProjectName(resetSource?.projectName || '');
+            setAssignedDate(resetSource?.assignedDate || '');
+            setStatusValue(resetSource?.status || '');
+            setAssignedTo(resetSource?.assignedTo || 'Admin Role');
+            setPhotoURL(resetSource?.photoURL || '');
+            setBarcodeURL(resetSource?.barcodeURL || '');
+            if (resetSource?.dynamicValues) {
+                setDynamicValues(resetSource.dynamicValues);
+            }
         }
         setIsEditMode(!isEditMode);
     };
@@ -612,15 +639,6 @@ const AssetFullDetails: React.FC = () => {
                                             <Text style={styles.valueText}>{selectedCategory || 'N/A'}</Text>
                                         )}
                                     </DisplayField>
-                                    {isControllerCategory && (
-                                        <DisplayField
-                                            label="Controller Key"
-                                            value={controllerKey}
-                                            icon="hash"
-                                            editable={false}
-                                            onChangeText={setControllerKey}
-                                        />
-                                    )}
                                     <DisplayField
                                         label="Status"
                                         value={statusValue || 'N/A'}
@@ -657,6 +675,23 @@ const AssetFullDetails: React.FC = () => {
                                         editable={isEditMode && !isAssignedCardEdit}
                                         onChangeText={setPrice}
                                     />
+
+                                    {/* 🔹 DYNAMIC FIELDS DISPLAY/EDIT */}
+                                    {dynamicValues.length > 0 && (
+                                        <View style={{ marginTop: 20 }}>
+                                            <Text style={[styles.sectionTitle, { color: '#22D3EE' }]}>Additional Information</Text>
+                                            {dynamicValues.map(dv => (
+                                                <DisplayField
+                                                    key={dv.fieldId}
+                                                    label={dv.fieldName}
+                                                    value={dv.value || ''}
+                                                    icon={dv.fieldType === 'number' ? 'hash' : dv.fieldType === 'date' ? 'calendar' : 'edit-3'}
+                                                    editable={isEditMode && !isAssignedCardEdit}
+                                                    onChangeText={(v) => handleDynamicValueChange(dv.fieldId, v)}
+                                                />
+                                            ))}
+                                        </View>
+                                    )}
                                 </View>
 
                                 <View style={styles.formColumn}>
@@ -890,9 +925,6 @@ const AssetFullDetails: React.FC = () => {
                                             style={styles.pickerModalItem}
                                             onPress={() => {
                                                 setSelectedCategory(value);
-                                                if (String(value || '').trim().toLowerCase() !== 'controller') {
-                                                    setControllerKey('');
-                                                }
                                                 setShowCategoryPicker(false);
                                             }}
                                         >

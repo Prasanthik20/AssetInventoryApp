@@ -110,6 +110,10 @@ const TotalAssetsDetails: React.FC = () => {
     const [assets, setAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [totalCount, setTotalCount] = useState(0);
 
     const [supervisorId, setSupervisorId] = useState<number | null>(null);
     const [supervisorName, setSupervisorName] = useState<string>('');
@@ -163,30 +167,51 @@ const TotalAssetsDetails: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        fetchAssets();
+        fetchAssets(1, false);
     }, []);
-    /* 🔹 Fetch assigned assets */
-    const fetchAssets = async () => {
-        try {
-            setLoading(true);
-            const response = await axios.get(`${baseURL}/api/assets`);
-            const rawData = response.data.assets || response.data || [];
 
-            // 🔥 Remove duplicates by Asset ID
+    /* 🔹 Fetch assets with pagination */
+    const fetchAssets = async (pageNum = 1, append = false) => {
+        try {
+            if (pageNum === 1) setLoading(true);
+            else setLoadingMore(true);
+
+            const response = await axios.get(`${baseURL}/api/assets`, {
+                params: { page: pageNum, limit: 50 }
+            });
+            const rawData = response.data.assets || [];
+            const { total, totalPages } = response.data;
+
+            setTotalCount(total || 0);
+            setHasMore(pageNum < (totalPages || 1));
+
+            // De-duplicate by id
             const uniqueMap = new Map();
             rawData.forEach((item: any) => {
-                // Use assetId (or id) as the unique key
                 const id = item.assetId || item.id;
-                if (!uniqueMap.has(id)) {
-                    uniqueMap.set(id, item);
-                }
+                if (!uniqueMap.has(id)) uniqueMap.set(id, item);
             });
 
-            setAssets(Array.from(uniqueMap.values()));
+            const newAssets = Array.from(uniqueMap.values()) as Asset[];
+            setAssets(prev => {
+                if (!append) return newAssets;
+                const existingIds = new Set(prev.map(a => a.assetId || a.id));
+                const filteredNew = newAssets.filter(a => !existingIds.has(a.assetId || a.id));
+                return [...prev, ...filteredNew];
+            });
         } catch (err) {
             setError("Failed to fetch assets.");
         } finally {
             setLoading(false);
+            setLoadingMore(false);
+        }
+    };
+
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore && !loading) {
+            const nextPage = page + 1;
+            setPage(nextPage);
+            fetchAssets(nextPage, true);
         }
     };
 
@@ -256,77 +281,101 @@ const TotalAssetsDetails: React.FC = () => {
         if (isMobileLayout) {
             return (
                 <View style={styles.mobileCard}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    {/* Header Row */}
+                    <View style={styles.cardHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
                             <View style={styles.indexBadge}>
                                 <Text style={styles.indexText}>{index + 1}</Text>
                             </View>
-                            <Text style={styles.assetName}>{item.assetName}</Text>
+                            <Text style={styles.assetName} numberOfLines={1}>{item.assetName}</Text>
                         </View>
-                        <View style={styles.mobileBarcodeContainer}>
-                            <MaterialCommunityIcons name="barcode" size={32} color="#A9C6E4" />
-                            <Text style={styles.mobileBarcodeText}> S/N: {item.serialNumber}</Text>
-                        </View>
-                    </View>
-                    
-                    <View style={{ flexDirection: "row", alignItems: 'center', justifyContent: 'space-between', marginTop: 15 }}>
                         <StatusBadge
                             status={item.status || null}
                             assignedTo={item.assignedTo}
                             location={item.location} 
                         />
-                        <View style={styles.mobileDateGroup}>
-                            <Text style={styles.mobileDateLabel}>Expected Due Date</Text>
-                            <Text style={styles.mobileDateValue}>{formatDate(item.expectedReturnDate)}</Text>
-                            <Text style={[styles.mobileDateLabel, { marginTop: 6 }]}>Assigned Date</Text>
-                            <Text style={styles.mobileDateValue}>{formatDate(item.assignedDate)}</Text>
-                            <Text style={[styles.mobileDateLabel, { marginTop: 6 }]}>Assigned By</Text>
-                            <Text style={styles.mobileDateValue}>{item.assignedBy || '—'}</Text>
+                    </View>
+
+                    {/* Metadata Section (Info Grid) */}
+                    <View style={styles.cardInfoGrid}>
+                        {/* Serial Number & Location */}
+                        <View style={styles.infoRow}>
+                            <View style={styles.infoCol}>
+                                <Text style={styles.infoLabel}>Serial Number</Text>
+                                <Text style={styles.infoValue} numberOfLines={1}>{item.serialNumber || '—'}</Text>
+                            </View>
+                            <View style={styles.infoCol}>
+                                <Text style={styles.infoLabel}>Location</Text>
+                                <Text style={styles.infoValue} numberOfLines={1}>{item.location || '—'}</Text>
+                            </View>
                         </View>
-                        <View style={styles.mobileActionButtons}>
-                            {!isAssignedAsset && (
-                                <TouchableOpacity
-                                    style={styles.assignAssetButton}
-                                    onPress={() =>
-                                        navigation.navigate('AssignAsset', {
-                                            supervisor_employeeId: String(supervisorId),
-                                            supervisorName: supervisorName,
-                                        })
-                                    }
-                                >
-                                    <MaterialCommunityIcons name="plus-circle" size={16} color="#fff" />
-                                    <Text style={styles.actionButtonText}>Assign</Text>
-                                </TouchableOpacity>
-                            )}
-                            {isOverdue && (
-                                <TouchableOpacity style={styles.notifyButton} onPress={() => handleOpenModal(item)}>
-                                    <Ionicons name="notifications" size={16} color="#fff" />
-                                    <Text style={styles.actionButtonText}>Notify</Text>
-                                </TouchableOpacity>
-                            )}
-                            <TouchableOpacity 
-                                style={styles.knowMoreButton} 
-                                onPress={() => navigation.navigate('AssetFullDetails', { asset: item })}
+
+                        {/* Assignment Details */}
+                        <View style={[styles.infoRow, { marginTop: 10 }]}>
+                            <View style={styles.infoCol}>
+                                <Text style={styles.infoLabel}>Expected Return</Text>
+                                <Text style={styles.infoValue}>{formatDate(item.expectedReturnDate)}</Text>
+                            </View>
+                            <View style={styles.infoCol}>
+                                <Text style={styles.infoLabel}>Assigned Date</Text>
+                                <Text style={styles.infoValue}>{formatDate(item.assignedDate)}</Text>
+                            </View>
+                        </View>
+
+                        {item.assignedBy ? (
+                            <View style={[styles.infoRow, { marginTop: 10 }]}>
+                                <View style={styles.infoCol}>
+                                    <Text style={styles.infoLabel}>Assigned By</Text>
+                                    <Text style={styles.infoValue} numberOfLines={1}>{item.assignedBy}</Text>
+                                </View>
+                            </View>
+                        ) : null}
+                    </View>
+
+                    {/* Actions Row */}
+                    <View style={styles.cardActionsRow}>
+                        {!isAssignedAsset && (
+                            <TouchableOpacity
+                                style={[styles.assignAssetButton, { flex: 1 }]}
+                                onPress={() =>
+                                    navigation.navigate('AssignAsset', {
+                                        supervisor_employeeId: String(supervisorId),
+                                        supervisorName: supervisorName,
+                                    })
+                                }
                             >
-                                <Ionicons name="information-circle-outline" size={18} color="#fff" />
-                                <Text style={styles.actionButtonText}>Know More</Text>
+                                <MaterialCommunityIcons name="plus-circle" size={16} color="#fff" />
+                                <Text style={styles.actionButtonText}>Assign</Text>
                             </TouchableOpacity>
-                            {isAssignedAsset && (
-                                <TouchableOpacity
-                                    style={styles.editAssignedButton}
-                                    onPress={() =>
-                                        navigation.navigate('AssignAsset', {
-                                            supervisor_employeeId: String(supervisorId || ''),
-                                            supervisorName: supervisorName,
-                                            editAsset: item,
-                                        })
-                                    }
-                                >
-                                    <Feather name="edit-2" size={16} color="#fff" />
-                                    <Text style={styles.actionButtonText}>Edit Assigned</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
+                        )}
+                        {isOverdue && (
+                            <TouchableOpacity style={[styles.notifyButton, { flex: 1 }]} onPress={() => handleOpenModal(item)}>
+                                <Ionicons name="notifications" size={16} color="#fff" />
+                                <Text style={styles.actionButtonText}>Notify</Text>
+                            </TouchableOpacity>
+                        )}
+                        {isAssignedAsset && (
+                            <TouchableOpacity
+                                style={[styles.editAssignedButton, { flex: 1 }]}
+                                onPress={() =>
+                                    navigation.navigate('AssignAsset', {
+                                        supervisor_employeeId: String(supervisorId || ''),
+                                        supervisorName: supervisorName,
+                                        editAsset: item,
+                                    })
+                                }
+                            >
+                                <Feather name="edit-2" size={16} color="#fff" />
+                                <Text style={styles.actionButtonText}>Edit</Text>
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity 
+                            style={[styles.knowMoreButton, { flex: 1 }]} 
+                            onPress={() => navigation.navigate('AssetFullDetails', { asset: item })}
+                        >
+                            <Ionicons name="information-circle-outline" size={18} color="#fff" />
+                            <Text style={styles.actionButtonText}>Details</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             );
@@ -427,6 +476,7 @@ const TotalAssetsDetails: React.FC = () => {
                             <Ionicons name="arrow-back" size={24} color="#E0E0E0" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>All Assets</Text>
+                        <Text style={{ color: '#A9C6E4', marginLeft: 'auto', fontSize: 13 }}>{totalCount} total</Text>
                     </View>
                     
                     {/* BODY MUST BE flex: 1 */}
@@ -448,7 +498,7 @@ const TotalAssetsDetails: React.FC = () => {
                             statusValue={selectedStatus}
                             onStatusChange={setSelectedStatus}
                             statusOptions={uniqueStatuses}
-                            containerStyle={styles.topActionRow}
+                            containerStyle={isMobileLayout ? styles.topActionRowMobile : styles.topActionRow}
                             searchContainerStyle={styles.searchContainer}
                             searchInputStyle={styles.searchInput}
                             filtersContainerStyle={isMobileLayout ? styles.mobileFilterContainer : styles.filterGroup}
@@ -474,8 +524,10 @@ const TotalAssetsDetails: React.FC = () => {
                             keyExtractor={(item) => (item.id || item.assetId).toString()}
                             renderItem={renderAsset}
                             contentContainerStyle={{ paddingBottom: 20 }}
-                            // This ensures the FlatList fills the remaining body space
                             style={{ flex: 1 }}
+                            onEndReached={handleLoadMore}
+                            onEndReachedThreshold={0.3}
+                            ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#A9C6E4" style={{ marginVertical: 16 }} /> : null}
                         />
                     </View>
                 </View>
@@ -555,11 +607,16 @@ const styles = StyleSheet.create({
 },
 
 topActionRow: {
-                flexDirection : "row",
+        flexDirection: 'row',
         gap: 12,
         marginBottom: 20,
         width: '100%',
-    alignItems: 'stretch',
+        alignItems: 'stretch',
+    },
+    topActionRowMobile: {
+        gap: 12,
+        marginBottom: 20,
+        width: '100%',
     },
     searchContainer: {
         flex: 1.5,
@@ -761,10 +818,42 @@ topActionRow: {
     cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(159, 207, 255, 0.22)',
         paddingBottom: 10,
-        marginBottom: 10,
+        marginBottom: 12,
+    },
+    cardInfoGrid: {
+        marginBottom: 15,
+        paddingHorizontal: 4,
+    },
+    infoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    infoCol: {
+        flex: 1,
+    },
+    infoLabel: {
+        fontSize: 10,
+        color: '#A9C6E4',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        fontWeight: 'bold',
+        marginBottom: 2,
+    },
+    infoValue: {
+        fontSize: 13,
+        color: '#E6F3FF',
+        fontWeight: '600',
+    },
+    cardActionsRow: {
+        flexDirection: 'row',
+        gap: 10,
+        justifyContent: 'space-between',
+        marginTop: 5,
     },
     indexBadge: {
         backgroundColor: globalColors.brandPrimary,

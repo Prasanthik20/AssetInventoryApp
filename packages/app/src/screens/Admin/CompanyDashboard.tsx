@@ -121,7 +121,7 @@ const CompanyDashboard: React.FC<Props> = ({
     [width, height],
   );
   // 3. Use the strongly-typed navigation hook
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [totalAssets, setTotalAssets] = useState<number | null>(null);
   const [totalUsers, setTotalUsers] = useState<number | null>(null);
   const [officeAssets, setOfficeAssets] = useState<number | null>(null);
@@ -138,13 +138,15 @@ const CompanyDashboard: React.FC<Props> = ({
   const [notifications, setNotifications] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [totalCategories, setTotalCategories] = useState<number>(0);
+  const [subscription, setSubscription] = useState<any>(null);
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${baseURL}/api/auth/users`);
-      const data = await res.json();
+      const response = await axios.get(`${baseURL}/api/auth/users`);
+      const data = response.data;
 
-      if (res.ok && Array.isArray(data.users)) {
+      if (Array.isArray(data.users)) {
         setUsers(data.users);
         setTotalUsers(data.count);
       } else {
@@ -183,20 +185,23 @@ const CompanyDashboard: React.FC<Props> = ({
   // ------------------------------------
   const fetchDashboardData = async () => {
     try {
-      // Axios returns a response object; the actual data is in .data
-      const response = await axios.get(`${baseURL}/api/dashboard/metrics`);
-
+      const response = await axios.get(`${baseURL}/api/dashboard`);
       const data = response.data;
 
       setTotalAssets(data.totalAssets);
+      setTotalUsers(data.totalUsers);
       setOfficeAssets(data.officeAssets);
       setFieldAssets(data.fieldAssets);
+      setUnassignedAssets(data.unassignedAssets);
+      setAssignedAssets(data.assignedAssets);
+      setOverdueAssets(data.overdueAssets);
+      setUnderMaintenanceAssets(data.underMaintenanceAssets);
+      setFieldLocationStats(data.fieldLocationStats || []);
+      setTotalCategories(data.totalCategories || 0);
+      setSubscription(data.subscription || null);
+      
     } catch (error: any) {
-      // Axios gives you more detail on errors (e.g., error.response.data)
-      console.log(
-        'Dashboard API Error:',
-        error.response?.data || error.message,
-      );
+      console.log('Dashboard API Error:', error.response?.data || error.message);
     } finally {
       setLoading(false);
     }
@@ -226,7 +231,7 @@ const CompanyDashboard: React.FC<Props> = ({
     if (!user?.employeeId) return;
     try {
       const response = await axios.get(`${baseURL}/api/notifications/admin`, {
-        params: { id: user.employeeId },
+        params: { id: user.employeeId }
       });
       console.log('Employee ID:', user?.employeeId);
 
@@ -236,65 +241,18 @@ const CompanyDashboard: React.FC<Props> = ({
     }
   };
 
-  const fetchAssetAnalytics = async () => {
-    try {
-      const response = await axios.get(`${baseURL}/api/assets`);
-      const assets = response.data?.assets || response.data || [];
-
-      const normalizeStatus = (value: unknown) =>
-        String(value || '')
-          .toLowerCase()
-          .replace(/[\s_-]+/g, ' ')
-          .trim();
-
-      let unassigned = 0;
-      let assigned = 0;
-      let overdue = 0;
-      let underMaintenance = 0;
-      const locationCounts: Record<string, number> = {};
-
-      assets.forEach((asset: any) => {
-        const status = normalizeStatus(asset.status);
-
-        if (status === 'unassigned') unassigned += 1;
-        if (status === 'assigned') assigned += 1;
-        if (status === 'overdue') overdue += 1;
-        if (status === 'under maintenance' || status === 'maintenance') {
-          underMaintenance += 1;
-        }
-
-        if (status === 'assigned' || status === 'overdue') {
-          const locationKey =
-            (asset?.location || 'Unknown').toString().trim() || 'Unknown';
-          locationCounts[locationKey] = (locationCounts[locationKey] || 0) + 1;
-        }
-      });
-
-      const locationEntries = Object.entries(locationCounts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([location, count]) => ({
-          location,
-          count: Number(count),
-        }));
-
-      setUnassignedAssets(unassigned);
-      setAssignedAssets(assigned);
-      setOverdueAssets(overdue);
-      setUnderMaintenanceAssets(underMaintenance);
-      setFieldLocationStats(locationEntries);
-    } catch (error) {
-      console.error('Asset analytics fetch error:', error);
-      setUnassignedAssets(0);
-      setAssignedAssets(0);
-      setOverdueAssets(0);
-      setUnderMaintenanceAssets(0);
-      setFieldLocationStats([]);
-    }
-  };
 
   const hideNotification = async (id: number) => {
     try {
-      await axios.put(`${baseURL}/api/notifications/hide`, { id });
+      const token = await AsyncStorage.getItem('token');
+      await axios.put(`${baseURL}/api/notifications/hide`, 
+        { id },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
 
       setNotifications(prev => prev.filter(item => item.id !== id));
     } catch (error) {
@@ -324,14 +282,22 @@ const CompanyDashboard: React.FC<Props> = ({
     }
 
     try {
-      await axios.post(`${baseURL}/api/assets/confirm-return`, {
-        notificationId,
-        ...(hasAssignmentId ? { assignmentId } : { assetId }),
-        confirmedByEmployeeId,
-      });
+      const token = await AsyncStorage.getItem('token');
+      await axios.post(`${baseURL}/api/assets/confirm-return`, 
+        {
+          notificationId,
+          ...(hasAssignmentId ? { assignmentId } : { assetId }),
+          confirmedByEmployeeId,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
       setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
       await fetchGlobalNotifications();
-      await fetchAssetAnalytics();
+      await fetchDashboardData();
     } catch (error) {
       console.error('Admin confirm return error:', error);
     }
@@ -356,7 +322,6 @@ const CompanyDashboard: React.FC<Props> = ({
     useCallback(() => {
       fetchUsers();
       fetchDashboardData();
-      fetchAssetAnalytics();
       fetchGlobalNotifications();
     }, []),
   );
@@ -420,6 +385,42 @@ const CompanyDashboard: React.FC<Props> = ({
                 )}
               </View>
 
+              {/* 🛡️ SUBSCRIPTION USAGE WIDGET */}
+              {subscription && (
+                <View style={[styles.metricBox, { width: '100%', marginBottom: 16, padding: 16, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E3A8A' }}>
+                      {subscription.plan} Plan - {subscription.status.toUpperCase()}
+                    </Text>
+                    <Text style={{ fontSize: 14, color: '#3B82F6' }}>
+                      Renews: {new Date(subscription.endDate).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  
+                  {/* Users Progress Bar */}
+                  <View style={{ marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#475569' }}>User Limits</Text>
+                      <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '600' }}>{totalUsers} / {subscription.maxUsers === 999999 ? 'Unlimited' : subscription.maxUsers}</Text>
+                    </View>
+                    <View style={{ height: 6, backgroundColor: '#DBEAFE', borderRadius: 3, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', width: `${subscription.userUsagePercent}%`, backgroundColor: subscription.userUsagePercent > 80 ? '#EF4444' : '#3B82F6' }} />
+                    </View>
+                  </View>
+
+                  {/* Assets Progress Bar */}
+                  <View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: '#475569' }}>Asset Limits</Text>
+                      <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '600' }}>{totalAssets} / {subscription.maxAssets === 999999 ? 'Unlimited' : subscription.maxAssets}</Text>
+                    </View>
+                    <View style={{ height: 6, backgroundColor: '#DBEAFE', borderRadius: 3, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', width: `${subscription.assetUsagePercent}%`, backgroundColor: subscription.assetUsagePercent > 80 ? '#EF4444' : '#10B981' }} />
+                    </View>
+                  </View>
+                </View>
+              )}
+
               {/* Metrics Grid - 4 in a row on Web */}
               <View style={styles.metricsGrid}>
                 <View style={styles.metricBox}>
@@ -446,6 +447,18 @@ const CompanyDashboard: React.FC<Props> = ({
                     <Text style={styles.metricLabel}>Total Users</Text>
                   </TouchableOpacity>
                   <Text style={styles.metricValue}>{totalUsers ?? 0}</Text>
+                </View>
+
+                <View style={styles.metricBox}>
+                  <TouchableOpacity
+                    style={styles.metricRow}
+                    activeOpacity={0.8}
+                    onPress={() => navigation.navigate('CustomCategoryBuilder')}
+                  >
+                    <SafeIonicons name="folder-open-outline" size={24} color="#8B5CF6" />
+                    <Text style={styles.metricLabel}>Total Categories</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.metricValue}>{totalCategories}</Text>
                 </View>
 
                 <View style={styles.metricBox}>

@@ -138,9 +138,9 @@ export function addStyles(isMobileLayout: boolean) {
     formBody: {
       flexDirection: 'row',
       gap: 20,
-      flex: 1,
+      flex: isMobileLayout ? undefined : 1,
     },
-    formColumn: { flex: 1, width: '100%' },
+    formColumn: { flex: isMobileLayout ? undefined : 1, width: '100%' },
     sectionTitle: {
       fontSize: 14,
       fontWeight: '800',

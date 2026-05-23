@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.anonymous.assetinventoryapp'
+    namespace 'com.asq.assetledger'
     defaultConfig {
-        applicationId 'com.anonymous.assetinventoryapp'
+        applicationId 'com.asq.assetledger'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

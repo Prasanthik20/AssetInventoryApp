@@ -1,6 +1,7 @@
 # OSX
 #
 .DS_Store
+.bundle
 
 # Xcode
 #
@@ -37,8 +38,10 @@ local.properties
 *.keystore
 !debug.keystore
 .kotlin/
-deploy/
-*.log
+**/packages/app/android/
+**/packages/app/ios/
+**/packages/server/node_modules/
+
 
 !scripts/deploy_final
 # node.js
@@ -81,3 +84,8 @@ yarn-error.log
 !.yarn/versions
 
 /generated/prisma
+
+/.sixth/
+/.bundle/
+.vscode
+/.expo/

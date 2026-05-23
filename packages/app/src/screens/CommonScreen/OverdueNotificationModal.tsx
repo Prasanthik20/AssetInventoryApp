@@ -8,12 +8,14 @@ import {
     TextInput,
     ScrollView,
     Image,
+    Platform,
     Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { globalColors } from '../../styles/globalStyles';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 interface Props {
     visible: boolean;
@@ -48,56 +50,63 @@ const OverdueNotificationModal: React.FC<Props> = ({
         }
     }, [visible]);
 
-    const handlePickProofImages = async () => {
-        Alert.alert(
-            "Attach Proof",
-            "Take photos or choose from gallery",
-            [
-                { text: "Camera", onPress: () => launchCamera() },
-                { text: "Gallery", onPress: () => launchLibrary() },
-                { text: "Cancel", style: "cancel" }
-            ]
-        );
-    };
-
-    const launchCamera = async () => {
+    const pickImage = async (useCamera: boolean) => {
         try {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-                setErrorText('Camera permission is required.');
-                return;
+            if (useCamera) {
+                const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+                if (permissionResult.status !== 'granted') {
+                    setErrorText('Camera permission is required to attach proof images.');
+                    return;
+                }
+            } else {
+                const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (permissionResult.status !== 'granted') {
+                    setErrorText('Media library permission is required to attach proof images.');
+                    return;
+                }
             }
 
-            const result = await ImagePicker.launchCameraAsync({
+            const options: ImagePicker.ImagePickerOptions = {
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                quality: 0.5,
-                base64: true,
-            });
-
-            processResult(result);
-        } catch (error) {
-            console.error('Camera error:', error);
-            setErrorText('Failed to open camera.');
-        }
-    };
-
-    const launchLibrary = async () => {
-        try {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                setErrorText('Media library permission is required.');
-                return;
-            }
-
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsMultipleSelection: true,
+                allowsEditing: useCamera && Platform.OS === 'ios',
+                allowsMultipleSelection: !useCamera,
                 selectionLimit: 0,
-                quality: 0.5,
+                quality: 0.2,
                 base64: true,
-            });
+            };
 
-            processResult(result);
+            const result = useCamera
+                ? await ImagePicker.launchCameraAsync(options)
+                : await ImagePicker.launchImageLibraryAsync(options);
+
+            if (result.canceled) {
+                return;
+            }
+
+            const selectedImages: string[] = [];
+            for (const asset of result.assets) {
+                let base64 = asset.base64;
+                if (!base64 && asset.uri) {
+                    try {
+                        base64 = await FileSystem.readAsStringAsync(asset.uri, {
+                            encoding: 'base64' as any,
+                        });
+                    } catch (err) {
+                        console.warn("Error reading file manually:", err);
+                    }
+                }
+                if (base64) {
+                    selectedImages.push(`data:image/jpeg;base64,${base64}`);
+                }
+            }
+
+            if (selectedImages.length === 0) {
+                setErrorText('Could not process selected images. Please try again.');
+                return;
+            }
+
+            setProofImages((prev) => [...prev, ...selectedImages]);
+            setErrorText('');
         } catch (error) {
             console.error('Library error:', error);
             setErrorText('Failed to select images.');
@@ -121,6 +130,22 @@ const OverdueNotificationModal: React.FC<Props> = ({
             } else {
                 setErrorText('No valid images processed.');
             }
+        }
+    };
+
+    const handlePickProofImages = () => {
+        if (Platform.OS === 'web') {
+            pickImage(false);
+        } else {
+            Alert.alert(
+                "Upload Proof Images",
+                "Choose an option",
+                [
+                    { text: "Take Photo", onPress: () => pickImage(true) },
+                    { text: "Choose from Gallery", onPress: () => pickImage(false) },
+                    { text: "Cancel", style: "cancel" }
+                ]
+            );
         }
     };
 
