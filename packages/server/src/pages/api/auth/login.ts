@@ -65,8 +65,22 @@ export default async function loginCoreHandler(
       return;
     }
 
+    let subscriptionExpired = false;
+    let subscriptionStatus = 'active';
+
     // 🕒 Check subscription status for non-Super Admins
     if (user.roleName !== 'Super Admin' && user.tenantId) {
+      const tenantSql = 'SELECT status FROM "Tenants" WHERE id = $1 LIMIT 1';
+      const tenantRes = await query(tenantSql, [user.tenantId]);
+      const tenantStatus = tenantRes.rows[0]?.status;
+
+      if (tenantStatus === 'suspended') {
+        res.status(403).json({ 
+          message: 'Your organization account has been suspended. Please contact the Super Admin.' 
+        });
+        return;
+      }
+
       const subSql = `
         SELECT status, "endDate" 
         FROM "Subscriptions" 
@@ -78,14 +92,8 @@ export default async function loginCoreHandler(
       const sub = subResult.rows[0];
 
       if (sub) {
-        const isExpired = sub.status === 'expired' || (sub.endDate && new Date(sub.endDate) < new Date());
-        if (isExpired) {
-          res.status(403).json({ 
-            message: 'Organization subscription expired. Please contact your administrator for renewal.',
-            subscriptionExpired: true
-          });
-          return;
-        }
+        subscriptionExpired = sub.status === 'expired' || (sub.endDate && new Date(sub.endDate) < new Date());
+        subscriptionStatus = sub.status;
       }
     }
 
@@ -102,7 +110,11 @@ export default async function loginCoreHandler(
     res.status(200).json({
       message: 'Login successful!',
       token,
-      user,
+      user: {
+        ...user,
+        subscriptionExpired,
+        subscriptionStatus
+      },
     });
   } catch (error) {
     console.error('Login API Error:', error);
