@@ -2,6 +2,7 @@ import type { NextApiResponse } from 'next';
 import query from "@/lib/db";
 import { setCorsHeaders } from "@/lib/corsHeaders";
 import { withAuth, AuthenticatedRequest } from "@/lib/apiHandler";
+import { withSubscriptionLimit } from "@/lib/subscription";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   // Set CORS headers
@@ -201,4 +202,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 }
 
-export default withAuth(handler);
+export default withSubscriptionLimit(handler, 'assets');

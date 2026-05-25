@@ -2,6 +2,7 @@ import type { NextApiResponse } from "next";
 import query from "@/lib/db";
 import bcrypt from "bcrypt";
 import { withAuth, AuthenticatedRequest } from "@/lib/apiHandler";
+import { withSubscriptionLimit } from "@/lib/subscription";
 
 async function addUserHandler(
   req: AuthenticatedRequest,
@@ -77,4 +78,4 @@ async function addUserHandler(
   }
 }
 
-export default withAuth(addUserHandler);
+export default withSubscriptionLimit(addUserHandler, 'users');
