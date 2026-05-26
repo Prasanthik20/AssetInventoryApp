@@ -119,7 +119,7 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                 ]}
               >
                 <Image
-                  source={require('../../assets/nscllp.png')}
+                  source={require('../../assets/Asq_Logo_IV.png')}
                   style={[styles.image, isMobileLayout && styles.imageMobile]}
                   resizeMode="contain"
                 />

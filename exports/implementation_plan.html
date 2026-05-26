@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SaaS Subscription & Super Admin System — Implementation Plan</title>
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  
+  <style>
+    /* ==========================================================================
+       CORE STYLING & VARIABLES (DARK MODE GLASSMORPHISM FOR SCREEN)
+       ========================================================================== */
+    :root {
+      --bg-color: #030a13;
+      --panel-bg: rgba(7, 24, 42, 0.75);
+      --border-color: rgba(34, 211, 238, 0.15);
+      --border-glow: rgba(34, 211, 238, 0.05);
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent-cyan: #22d3ee;
+      --accent-cyan-glow: rgba(34, 211, 238, 0.4);
+      --accent-emerald: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-rose: #f43f5e;
+      --font-family: 'Inter', sans-serif;
+      --font-headers: 'Outfit', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: var(--font-family);
+      line-height: 1.6;
+      font-size: 15px;
+      padding: 40px 20px;
+      background-image: 
+        radial-gradient(circle at 10% 10%, rgba(34, 211, 238, 0.03) 0%, transparent 40%),
+        radial-gradient(circle at 80% 80%, rgba(52, 211, 153, 0.03) 0%, transparent 40%);
+      background-attachment: fixed;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    /* Print instruction banner */
+    .print-banner {
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 0 15px rgba(34, 211, 238, 0.1);
+    }
+    
+    .print-banner-text h4 {
+      font-family: var(--font-headers);
+      color: var(--accent-cyan);
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+    .print-banner-text p {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .print-btn {
+      background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+      color: #020617;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-family: var(--font-headers);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(6, 182, 212, 0.3);
+      transition: all 0.2s ease;
+    }
+    .print-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 15px rgba(6, 182, 212, 0.5);
+    }
+
+    /* Document Header */
+    .doc-header {
+      text-align: center;
+      margin-bottom: 50px;
+      padding-bottom: 30px;
+      border-bottom: 1px solid var(--border-color);
+      position: relative;
+    }
+    .doc-header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 150px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    }
+    .doc-title {
+      font-family: var(--font-headers);
+      font-weight: 800;
+      font-size: 32px;
+      background: linear-gradient(135deg, #ffffff 30%, var(--accent-cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+    .doc-subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      font-weight: 400;
+    }
+
+    /* Typography Elements */
+    h2 {
+      font-family: var(--font-headers);
+      font-size: 22px;
+      color: var(--accent-cyan);
+      margin-top: 40px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: 8px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+    }
+    h3 {
+      font-family: var(--font-headers);
+      font-size: 17px;
+      color: #ffffff;
+      margin-top: 25px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    h4 {
+      font-family: var(--font-headers);
+      font-size: 15px;
+      color: var(--accent-cyan);
+      margin-top: 20px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    p {
+      margin-bottom: 16px;
+      color: var(--text-main);
+      font-size: 14.5px;
+    }
+
+    /* Frosted Glass Panels */
+    .card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-color);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 25px;
+      box-shadow: inset 0 0 20px var(--border-glow);
+    }
+
+    /* Lists */
+    ul, ol {
+      margin-left: 20px;
+      margin-bottom: 20px;
+    }
+    li {
+      margin-bottom: 8px;
+      color: var(--text-main);
+    }
+    li strong {
+      color: var(--accent-cyan);
+    }
+
+    /* Callout Boxes (GitHub Alerts) */
+    .callout {
+      border-left: 4px solid;
+      padding: 16px;
+      border-radius: 0 12px 12px 0;
+      margin-bottom: 20px;
+    }
+    .callout-important {
+      border-left-color: var(--accent-cyan);
+      background: rgba(34, 211, 238, 0.05);
+    }
+    .callout-warning {
+      border-left-color: var(--accent-amber);
+      background: rgba(251, 191, 36, 0.05);
+    }
+    .callout-caution {
+      border-left-color: var(--accent-rose);
+      background: rgba(244, 63, 94, 0.05);
+    }
+    .callout-note {
+      border-left-color: var(--accent-emerald);
+      background: rgba(52, 211, 153, 0.05);
+    }
+    .callout-title {
+      font-family: var(--font-headers);
+      font-weight: 700;
+      margin-bottom: 6px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .callout-important .callout-title { color: var(--accent-cyan); }
+    .callout-warning .callout-title { color: var(--accent-amber); }
+    .callout-caution .callout-title { color: var(--accent-rose); }
+    .callout-note .callout-title { color: var(--accent-emerald); }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 25px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+    }
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 13.5px;
+    }
+    th {
+      background-color: rgba(18, 45, 73, 0.9);
+      color: var(--accent-cyan);
+      font-family: var(--font-headers);
+      font-weight: 700;
+      border-bottom: 1px solid var(--border-color);
+    }
+    td {
+      background-color: rgba(7, 24, 42, 0.4);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      color: var(--text-main);
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Diagrams & Visual Media Cards */
+    .visual-card {
+      background: rgba(7, 24, 42, 0.95);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 20px;
+      margin: 30px 0;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5), inset 0 0 30px rgba(34,211,238,0.08);
+    }
+    .visual-img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      display: block;
+      margin-bottom: 15px;
+    }
+    .visual-caption {
+      text-align: center;
+      font-family: var(--font-headers);
+      font-weight: 600;
+      color: var(--accent-cyan);
+      font-size: 14px;
+    }
+
+    /* Code Blocks */
+    pre {
+      background-color: #01060e;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 16px;
+      overflow-x: auto;
+      margin-bottom: 25px;
+    }
+    code {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: #38bdf8;
+    }
+    p > code {
+      background: rgba(255,255,255,0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent-cyan);
+    }
+
+    /* Sprint/Roadmap UI Elements */
+    .sprint-list {
+      list-style-type: none;
+      margin-left: 0;
+    }
+    .sprint-item {
+      position: relative;
+      padding-left: 24px;
+      margin-bottom: 16px;
+    }
+    .sprint-item::before {
+      content: '⚡';
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--accent-amber);
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+      margin: 40px 0;
+    }
+
+    /* ==========================================================================
+       PRINT STYLING (AUTOMATIC VIA MEDIA QUERY AND PRINT DIALOG)
+       ========================================================================== */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        font-size: 12pt !important;
+        line-height: 1.5 !important;
+        padding: 0 !important;
+      }
+      
+      .container {
+        max-width: 100% !important;
+      }
+
+      .print-banner {
+        display: none !important; /* hide helper banner in print */
+      }
+
+      .doc-header {
+        margin-bottom: 30px !important;
+        padding-bottom: 15px !important;
+        border-bottom: 2px solid #0f172a !important;
+      }
+      
+      .doc-header::after {
+        display: none !important;
+      }
+
+      .doc-title {
+        color: #0f172a !important;
+        background: none !important;
+        -webkit-text-fill-color: initial !important;
+        font-size: 24pt !important;
+        font-weight: 800 !important;
+      }
+
+      .doc-subtitle {
+        color: #475569 !important;
+        font-size: 11pt !important;
+      }
+
+      h2 {
+        color: #0f172a !important;
+        border-bottom: 2px solid #0f172a !important;
+        font-size: 16pt !important;
+        margin-top: 30px !important;
+        page-break-after: avoid;
+      }
+
+      h3 {
+        color: #1e293b !important;
+        font-size: 13pt !important;
+        margin-top: 20px !important;
+        page-break-after: avoid;
+      }
+
+      p, li {
+        color: #334155 !important;
+        font-size: 10.5pt !important;
+      }
+
+      .card {
+        background: none !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        border-radius: 8px !important;
+        padding: 15px !important;
+        margin-bottom: 15px !important;
+        page-break-inside: avoid;
+      }
+
+      .callout {
+        border-left: 4px solid !important;
+        border-radius: 0 4px 4px 0 !important;
+        box-shadow: none !important;
+        page-break-inside: avoid;
+      }
+      .callout-important { border-left-color: #06b6d4 !important; background: #f0fdfa !important; }
+      .callout-warning { border-left-color: #d97706 !important; background: #fffbeb !important; }
+      .callout-caution { border-left-color: #e11d48 !important; background: #fff1f2 !important; }
+      .callout-note { border-left-color: #059669 !important; background: #f0fdf4 !important; }
+      
+      .callout-title {
+        font-weight: bold !important;
+      }
+      .callout-important .callout-title { color: #0891b2 !important; }
+      .callout-warning .callout-title { color: #b45309 !important; }
+      .callout-rose .callout-title { color: #be123c !important; }
+      .callout-note .callout-title { color: #047857 !important; }
+
+      pre {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        padding: 10pt !important;
+        page-break-inside: avoid;
+      }
+      
+      code {
+        color: #0f172a !important;
+        font-size: 8.5pt !important;
+      }
+      p > code {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+      }
+
+      table {
+        border: 1px solid #cbd5e1 !important;
+        page-break-inside: avoid;
+      }
+      th {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+      }
+      td {
+        background: #ffffff !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        color: #334155 !important;
+      }
+
+      .visual-card {
+        background: none !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: none !important;
+        padding: 10px !important;
+        page-break-inside: avoid;
+      }
+      .visual-img {
+        border: 1px solid #cbd5e1 !important;
+      }
+      .visual-caption {
+        color: #0f172a !important;
+        font-size: 10pt !important;
+      }
+
+      .divider {
+        border-bottom: 1px dashed #cbd5e1 !important;
+        background: none !important;
+        height: 0 !important;
+        margin: 20px 0 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Screen Export Assist Bar -->
+    <div class="print-banner">
+      <div class="print-banner-text">
+        <h4>📄 Document Ready for PDF/Doc Export</h4>
+        <p>This implementation blueprint has been pre-rendered into high-fidelity HTML and styled for optimal print layouts. Click "Export PDF" below or press <strong>Cmd + P</strong> to save.</p>
+      </div>
+      <button class="print-btn" onclick="window.print()">EXPORT PDF</button>
+    </div>
+
+    <!-- Header Block -->
+    <div class="doc-header">
+      <h1 class="doc-title">SYSTEM IMPLEMENTATION PLAN</h1>
+      <p class="doc-subtitle">Multi-Tenant Subscription Engine & Super Admin Control System Cockpit</p>
+    </div>
+
+    <!-- Executive Overview -->
+    <div class="card">
+      <h2>Goal Description</h2>
+      <p>Introduce an enterprise-grade Multi-Tenant Subscription and Billing System that automatically enforces usage limits (users, assets, storage) and validity dates. Accompanying this is a comprehensive Super Admin Control System allowing full tenancy lifecycle control, billing verification, plan adjustments, override features, and system auditability.</p>
+    </div>
+
+    <!-- Decisions Matrix (GitHub Alerts Callouts) -->
+    <h2>User Review Required</h2>
+    
+    <div class="callout callout-important">
+      <div class="callout-title">1. Tenant Isolation Method (Logical Sharing)</div>
+      <p>We recommend a <strong>Shared Database with Logical Isolation</strong> (<code>tenantId</code> column and application-level query enforcement). Since your Prisma schema and tables (<code>Tenants</code>, <code>Users</code>, <code>Asset_Details</code>, etc.) are already designed with <code>tenantId</code> fields, this is the most natural fit. However, for high-compliance enterprise clients, we recommend introducing a hybrid model where <strong>Enterprise</strong> plans can be routed to a <strong>Dedicated Database</strong> via dynamic connection pool switching in backend middleware.</p>
+    </div>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">2. Auto-Restricting Write Access on Over-Limit</div>
+      <p>When a limit is hit (e.g. Max Assets exceeded), all <em>write</em> API endpoints (<code>POST</code>, <code>PUT</code>, <code>PATCH</code>) for assets will throw a <code>403 Forbidden</code> error with error code <code>LIMIT_EXCEEDED</code>, forcing the app to show a banner. Read operations (<code>GET</code>) will remain functional. A <strong>7-Day Grace Period</strong> is configured by default post-expiry during which writes are permitted but alert overlays display at login.</p>
+    </div>
+
+    <div class="callout callout-caution">
+      <div class="callout-title">3. Mobile Registration Verification</div>
+      <p>Registration must block access until an organization is registered. On mobile, we will enforce a check upon login: if the user does not have a <code>tenantId</code> linked, or if their Tenant is marked as <code>PENDING_ONBOARDING</code>, they will be redirected to an onboarding flow. This requires changes in both the API login endpoint and the Expo router.</p>
+    </div>
+
+    <div class="callout callout-note">
+      <div class="callout-title">4. Payment Processing Options</div>
+      <p>For Indian markets, Razorpay or Cashfree is standard. For international, Stripe. In order to launch quickly and scale securely, we support both automated PG integrations and a manual <strong>"Upload Bank Transfer Screenshot"</strong> workflow. Approvals are triggered instantly in the Super Admin Cockpit upon validation.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Technical Architecture -->
+    <h2>SaaS Technical Architecture Design</h2>
+    <p>Below is the visual microservices and datastore infrastructure layout mapping the end-to-end data route of the SaaS engine:</p>
+    
+    <!-- EMBEDDED DIAGRAM 1: TECHNICAL BLUEPRINT -->
+    <div class="visual-card">
+      <img src="tech_architecture_blueprint.png" alt="Multi-Tenant SaaS Application Technical Architecture" class="visual-img">
+      <div class="visual-caption">Figure 1.1: System Flow Blueprint from Client App down to PostgreSQL Isolation Layer</div>
+    </div>
+
+    <div class="card">
+      <h3>Core Architectural Accomplishments</h3>
+      <ul>
+        <li><strong>Tenant Isolation Strategy</strong>: Logical database partitioning enforced through custom application-level Prisma filters. Additionally, raw database row-level security (RLS) is ready to configure using <code>ALTER TABLE "Asset_Details" ENABLE ROW LEVEL SECURITY</code>.</li>
+        <li><strong>Dual-Database Portability</strong>: Out-of-the-box support for a cost-effective multi-tenant shared database for Starter/Pro tiers, alongside dynamic connection pool switching for routing Enterprise clients to secure, dedicated databases.</li>
+      </ul>
+    </div>
+
+    <!-- Tenant Lifecycle & Warning Infographic -->
+    <h2>Subscription Lifecycle and State Machine</h2>
+    <p>The tenant lifecycle operates under six standard states (Trialing, Active, Expired, Grace Period, Suspended, and Disabled). Banners adapt dynamically based on resource usage:</p>
+
+    <!-- EMBEDDED DIAGRAM 2: SUBSCRIPTION INFOGRAPHIC -->
+    <div class="visual-card">
+      <img src="subscription_states_lifecycle.png" alt="Multi-Tenant Subscription Lifecycle dashboard" class="visual-img">
+      <div class="visual-caption">Figure 1.2: Resource Warning Banners and Hard Lockdown Tiers Dashboard Interface Flow</div>
+    </div>
+
+    <div class="card">
+      <h3>Usage Limit Warning Protocol</h3>
+      <ul>
+        <li><strong>70% Consumption</strong>: Non-intrusive dismissible cyan banner appears on the dashboard warning of incoming tier limits.</li>
+        <li><strong>90% Consumption</strong>: Persistent amber warning banner remains visible on all screens. Automail alert dispatched.</li>
+        <li><strong>100% Limit / Expired Expiration</strong>: Imminent lockdown. Disables database writes for assets, operators, and dynamic category extensions. Launches un-dismissible billing lock screen overlay.</li>
+      </ul>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Database Schema Definition -->
+    <h2>Database Schema Design (PostgreSQL Prisma Model)</h2>
+    <p>Below is the production-ready schema mappings. These additive additions integrate manual bank uploads, custom feature toggles, support channels, and auditing records safely:</p>
+    
+    <pre><code>// ==========================================
+// Tenant & Subscription Schema Core
+// ==========================================
+
+model Tenants {
+  id               String               @id @default(uuid())
+  name             String
+  organizationType String?
+  institutionId    String?
+  gstNumber        String?
+  address          String?
+  country          String?
+  state            String?
+  city             String?
+  postalCode       String?
+  status           String               @default("active") // "active", "expired", "suspended", "grace", "trialing", "disabled"
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  users               Users[]
+  subscriptions       Subscriptions[]
+  Asset_Details       Asset_Details[]
+  Category            Category[]
+  Status              Status[]
+  Asset_Assignments   Asset_Assignments[]
+  Notifications       Notifications[]
+  AssetCategoryFields AssetCategoryFields[]
+  
+  renewalRequests     RenewalRequests[]
+  payments            Payments[]
+  invoices            Invoices[]
+  auditLogs           AuditLogs[]
+  featureFlags        TenantFeatureFlags[]
+}
+
+model Plans {
+  id        String   @id
+  name      String
+  maxUsers  Int
+  maxAssets Int
+  maxStorage BigInt   @default(2147483648) // 2GB
+  price     Decimal  @db.Decimal(10, 2)
+  currency  String   @default("INR")
+  features  Json?    // Stores granular toggles (e.g. customCategories: true)
+  createdAt DateTime @default(now())
+
+  subscriptions Subscriptions[]
+}
+
+model Subscriptions {
+  id                     String    @id @default(uuid())
+  tenantId               String
+  planId                 String
+  startDate              DateTime  @default(now())
+  endDate                DateTime?
+  status                 String    @default("trialing") // "active", "expired", "past_due", "canceled"
+  paymentProvider        String?   // "manual", "stripe", "razorpay"
+  providerSubscriptionId String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  tenant Tenants @relation(fields: [tenantId], references: [id])
+  plan   Plans   @relation(fields: [planId], references: [id])
+
+  @@index([tenantId])
+}
+
+model RenewalRequests {
+  id             String    @id @default(uuid())
+  tenantId       String
+  planId         String
+  requestedDate  DateTime  @default(now())
+  transactionId  String    @unique
+  paymentProofUrl String
+  remarks        String?
+  status         String    @default("submitted") // "submitted", "reviewing", "approved", "rejected"
+  rejectionReason String?
+  reviewedBy     String?   
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant Tenants @relation(fields: [tenantId], references: [id])
+  
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Payments {
+  id            String   @id @default(uuid())
+  tenantId      String
+  amount        Decimal  @db.Decimal(10, 2)
+  currency      String   @default("INR")
+  status        String   @default("completed") // "pending", "completed"
+  paymentMethod String   // "bank_transfer", "upi", "card"
+  transactionId String   @unique
+  paymentDate   DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  tenant Tenants @relation(fields: [tenantId], references: [id])
+  
+  @@index([tenantId])
+}</code></pre>
+
+    <div class="card">
+      <h3>High-Performance Relational Indexing Plan</h3>
+      <p>To guarantee sub-millisecond query execution as tenant records scale, compound indexes are established on:</p>
+      <ul>
+        <li><strong>Asset_Details</strong>: Compound index on <code>("tenantId", "categoryId", "status_id")</code> for instant dashboard categorizations.</li>
+        <li><strong>Asset_Assignments</strong>: Compound index on <code>("tenantId", "operator_employeeId", "status")</code> for lightning-fast operator lists.</li>
+        <li><strong>AuditLogs</strong>: Compound index on <code>("tenantId", "createdAt")</code> to process real-time admin audit logs.</li>
+      </ul>
+    </div>
+
+    <!-- Super Admin Module Table -->
+    <h2>Super Admin Console Dashboard Modules</h2>
+    <p>A comprehensive control panel allowing total management of the platform:</p>
+    
+    <table>
+      <thead>
+        <tr>
+          <th>Module</th>
+          <th>Description</th>
+          <th>UI Components</th>
+          <th>API Route</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Global Statistics</strong></td>
+          <td>Quick health metrics of SaaS.</td>
+          <td>MRR counters, count grids (Active Tenants, Platform Assets).</td>
+          <td><code>GET /api/superadmin/stats</code></td>
+        </tr>
+        <tr>
+          <td><strong>Tenant Directory</strong></td>
+          <td>Directory of all client companies.</td>
+          <td>Paginated table with status controls and "View Profile" drawers.</td>
+          <td><code>GET /api/superadmin/tenants</code></td>
+        </tr>
+        <tr>
+          <td><strong>Renewal Approval</strong></td>
+          <td>Verify bank receipt screenshots.</td>
+          <td>Receipt preview overlay panel with Approve/Reject actions.</td>
+          <td><code>POST /api/superadmin/renewals/:id/action</code></td>
+        </tr>
+        <tr>
+          <td><strong>Billing & Invoices</strong></td>
+          <td>Export financial ledgers.</td>
+          <td>Invoices ledger grid, printable PDF downloads, CSV exports.</td>
+          <td><code>GET /api/superadmin/billing</code></td>
+        </tr>
+        <tr>
+          <td><strong>Usage Analytics</strong></td>
+          <td>Tracks platform storage and assets.</td>
+          <td>Limit progress indicators, warning feeds for high-usage tiers.</td>
+          <td><code>GET /api/superadmin/usage</code></td>
+        </tr>
+        <tr>
+          <td><strong>Plan Catalog CRUD</strong></td>
+          <td>Add or modify system packages.</td>
+          <td>Add/Edit forms configuring max limits and feature switches.</td>
+          <td><code>POST /api/superadmin/plans</code></td>
+        </tr>
+        <tr>
+          <td><strong>Feature Toggles</strong></td>
+          <td>Granularly toggle advanced features.</td>
+          <td>Switches for Barcode Scanners, Dynamic Category Fields.</td>
+          <td><code>PUT /api/superadmin/features</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="divider"></div>
+
+    <!-- REST API Endpoints -->
+    <h2>API Design Specifications</h2>
+
+    <h3>1. Fetch Plan Usage & Subscription Status</h3>
+    <p><strong>Route:</strong> <code>GET /api/subscription/status</code> (Scoped to caller <code>tenantId</code>)</p>
+    <pre><code>{
+  "tenantId": "e1a90c1f-db90-410a-8bf8-0fb50fa89ad1",
+  "companyName": "Naveen Survey and Constructions",
+  "subscription": {
+    "planId": "starter",
+    "planName": "Starter Plan",
+    "status": "active",
+    "daysRemaining": 341
+  },
+  "limits": {
+    "assets": { "used": 1240, "max": 2500, "percentage": 49.6 },
+    "users": { "used": 12, "max": 25, "percentage": 48.0 },
+    "storage": { "usedBytes": 12589990620, "maxBytes": 26843545600, "percentage": 46.9 }
+  }
+}</code></pre>
+
+    <h3>2. Process Tenant Renewal</h3>
+    <p><strong>Route:</strong> <code>POST /api/superadmin/renewals/:requestId/action</code> (Super Admin Only)</p>
+    <pre><code>{
+  "action": "approve",
+  "remarks": "HDFC Payment proof validated. Upgrade confirmed.",
+  "overrideLimits": {
+    "maxAssets": 5000
+  }
+}</code></pre>
+
+    <div class="divider"></div>
+
+    <!-- Phased Rollout Roadmap -->
+    <h2>Phased Development Roadmap</h2>
+    <p>We propose a structured, 5-week execution timeline mapped to the sprint goals below:</p>
+
+    <div class="card">
+      <ul class="sprint-list">
+        <li class="sprint-item"><strong>Sprint 1: Multi-Tenant Foundation (Week 1)</strong>
+          <br>Prisma DB migration executions, Tenant isolated model implementations, core JWT updates.
+        </li>
+        <li class="sprint-item"><strong>Sprint 2: Mobile Registration & Onboarding (Week 2)</strong>
+          <br>Transaction-safe <code>/api/auth/register-tenant</code> deployment and client registration interfaces.
+        </li>
+        <li class="sprint-item"><strong>Sprint 3: Usage Limit Warning Systems (Week 3)</strong>
+          <br>Redis count microservices, warning banners, hard lock modals, background BullMQ dispatch handlers.
+        </li>
+        <li class="sprint-item"><strong>Sprint 4: Super Admin Cockpit Integration (Week 4)</strong>
+          <br>Global stats aggregation, client profile updates, bank proof approvals, package catalog configurations.
+        </li>
+        <li class="sprint-item"><strong>Sprint 5: Go-Live & E2E Validation (Week 5)</strong>
+          <br>Multi-tenant access security checks, stress testing, containerization, staging-to-production deployment.
+        </li>
+      </ul>
+    </div>
+
+    <!-- Verification Section -->
+    <h2>Verification & Quality Assurance Plan</h2>
+    <div class="card">
+      <h3>Automated Validation</h3>
+      <p><strong>Cross-Tenant Security Test</strong>: Integration script logs in with Tenant A's token, then attempts to view/modify Tenant B's equipment records. Expects <code>403 Forbidden</code> or <code>404 Not Found</code>.</p>
+      <p><strong>Resource Overrun Test</strong>: Continuous scripting loops executing asset additions until limits are breached. Validates that the API halts writes and responds with <code>LIMIT_EXCEEDED</code> status code.</p>
+      
+      <h3>Manual Testing Flow</h3>
+      <p>Super Admin registers a test tenant, logs in as that tenant and triggers an expired subscription scenario, validates the write lockdown, uploads a manual billing screenshot, returns to Super Admin dashboard to approve the receipt, and confirms that database access is instantly restored.</p>
+    </div>
+
+  </div>
+
+</body>
+</html>

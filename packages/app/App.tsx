@@ -203,6 +203,7 @@ function AppStack({ user, setUser }: any) {
       case "Operator":
         return "OperatorDashboard";
       case "SuperAdmin":
+      case "Super Admin":
         return "SuperAdminDashboard";
       default:
         return "CompanyDashboard";
@@ -243,9 +244,18 @@ function AppStack({ user, setUser }: any) {
       )}
       />
 
+      <Stack.Screen name="SuperAdminDashboard">
+        {(props) => (
+          <SuperAdminDashboard
+            {...props}
+            setUser={setUser}
+          />
+        )}
+      </Stack.Screen>
+
       <Stack.Screen
-        name="SuperAdminDashboard"
-        component={SuperAdminDashboard}
+        name="AddCompany"
+        component={AddCompanyScreen}
       />
 
       <Stack.Screen

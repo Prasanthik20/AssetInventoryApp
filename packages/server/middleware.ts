@@ -9,6 +9,7 @@ const ALLOWED_ORIGINS = new Set([
   'http://127.0.0.1:3000',
   'http://127.0.0.1:8081',
   'http://127.0.0.1:8082',
+  'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net',
 ]);
 
 export function middleware(req: NextRequest) {

@@ -23,6 +23,7 @@ function getAllowedOrigins(): Set<string> {
     'http://127.0.0.1:3000',
     'http://127.0.0.1:8081',
     'http://127.0.0.1:8082',
+    'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net',
   ];
 
   return new Set([...defaults, ...fromEnv]);

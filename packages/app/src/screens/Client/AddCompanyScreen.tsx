@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import AppSnackbar from '../../components/common/AppSnackbar';
 import { baseURL, RootStackParamList } from "../../navigation/types";
 
@@ -99,8 +100,18 @@ export default function AddCompanyScreen() {
 
       if (response.ok) {
         showSnackbar("Organization registered successfully!", 'success');
-        setTimeout(() => {
-          navigation.navigate('CompanyLogin');
+        setTimeout(async () => {
+          try {
+            const userData = await AsyncStorage.getItem("user");
+            const currentUser = userData ? JSON.parse(userData) : null;
+            if (currentUser && (currentUser.roleName === 'Super Admin' || currentUser.role === 'Super Admin')) {
+              navigation.navigate('SuperAdminDashboard' as any);
+            } else {
+              navigation.navigate('CompanyLogin');
+            }
+          } catch (e) {
+            navigation.navigate('CompanyLogin');
+          }
         }, 2000);
       } else {
         showSnackbar(result.message || "Registration failed", 'error');
