@@ -6,11 +6,11 @@ import { useNavigation } from '@react-navigation/native';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import { globalColors } from '../..//styles/globalStyles';
 import AppSnackbar from 'src/components/common/AppSnackbar';
+import { toPersistentDataUrl } from '../../utils/imageHelper';
 
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
@@ -103,7 +103,7 @@ const ReturnAssetScreen: React.FC = () => {
             }
 
             const options: ImagePicker.ImagePickerOptions = {
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: isBarcode ? ['images'] : ['images', 'videos'],
                 allowsEditing: useCamera ? Platform.OS === 'ios' : !isBarcode,
                 allowsMultipleSelection: !useCamera && !isBarcode,
                 aspect: isBarcode ? [4, 3] : undefined,
@@ -118,18 +118,13 @@ const ReturnAssetScreen: React.FC = () => {
             if (!result.canceled && result.assets[0]) {
                 const photos: string[] = [];
                 for (const asset of result.assets) {
-                    let base64 = asset.base64;
-                    if (!base64 && asset.uri) {
-                        try {
-                            base64 = await FileSystem.readAsStringAsync(asset.uri, {
-                                encoding: 'base64' as any,
-                            });
-                        } catch (err) {
-                            console.warn("Error reading file manually:", err);
+                    try {
+                        const dataUrl = await toPersistentDataUrl(asset.uri, asset.mimeType || undefined);
+                        if (dataUrl) {
+                            photos.push(dataUrl);
                         }
-                    }
-                    if (base64) {
-                        photos.push(`data:image/jpeg;base64,${base64}`);
+                    } catch (err) {
+                        console.warn("Error processing image:", err);
                     }
                 }
 

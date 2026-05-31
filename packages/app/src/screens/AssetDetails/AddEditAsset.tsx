@@ -13,45 +13,12 @@ import useAssetMeta from "../../hooks/useAssetMeta";
 import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { addStyles } from './addstyles';
+import { toPersistentDataUrl } from '../../utils/imageHelper';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, "AddEditAsset">;
 type AddEditRouteProp = RouteProp<RootStackParamList, "AddEditAsset">;
 
-const inferMimeType = (uri: string, explicitMimeType?: string): string => {
-    if (explicitMimeType) return explicitMimeType;
-
-    const cleanUri = uri.split('?')[0].toLowerCase();
-    if (cleanUri.endsWith('.png')) return 'image/png';
-    if (cleanUri.endsWith('.webp')) return 'image/webp';
-    if (cleanUri.endsWith('.heic')) return 'image/heic';
-    if (cleanUri.endsWith('.gif')) return 'image/gif';
-    return 'image/jpeg';
-};
-
-const toPersistentDataUrl = async (uri: string, mimeType?: string): Promise<string> => {
-    if (!uri) return '';
-    if (uri.startsWith('data:')) return uri;
-
-    const resolvedMimeType = inferMimeType(uri, mimeType);
-
-    if (Platform.OS === 'web') {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        return await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(String(reader.result || ''));
-            reader.onerror = () => reject(new Error('Failed to convert blob to data URL'));
-            reader.readAsDataURL(blob);
-        });
-    }
-
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: 'base64' as any,
-    });
-    return `data:${resolvedMimeType};base64,${base64}`;
-};
 
 /**
  * Reusable Modal for Pickers
@@ -71,8 +38,8 @@ const CustomPickerModal = ({ visible, title, data, onSelect, onClose, keyLabel, 
           data={data}
           keyExtractor={(_, index) => index.toString()}
           renderItem={({ item }) => (
-            <TouchableOpacity 
-              style={styles.modalItem} 
+            <TouchableOpacity
+              style={styles.modalItem}
               onPress={() => onSelect(item)}
             >
               <Text style={styles.modalItemText}>{keyLabel ? item[keyLabel] : item}</Text>
@@ -143,7 +110,7 @@ const AddEditAsset: React.FC = () => {
         purchaseDate: editAsset.purchaseDate ? editAsset.purchaseDate.split('T')[0] : "",
         warrantyExpiry: editAsset.warrantyExpiry ? editAsset.warrantyExpiry.split('T')[0] : "",
       });
-      
+
       // If dynamicValues are provided in editAsset (from detail screen), populate them
       if (editAsset.dynamicValues) {
         const values: Record<string, string> = {};
@@ -212,48 +179,187 @@ const AddEditAsset: React.FC = () => {
   const handleInputChange = (field: keyof Asset, value: any) =>
     setAssetData((prev) => ({ ...prev, [field]: value }));
 
-  const pickImage = async (useCamera: boolean, field: 'photoURL' | 'barcode') => {
+  // const pickImage = async (useCamera: boolean, field: 'photoURL' | 'barcode') => {
+  //   try {
+  //     if (useCamera) {
+  //       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+  //       if (!permissionResult.granted) {
+  //         showSnackbar("Please allow access to your camera.", 'error');
+  //         return;
+  //       }
+  //     } else {
+  //       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  //       if (!permissionResult.granted) {
+  //         showSnackbar("Please allow access to your photo library.", 'error');
+  //         return;
+  //       }
+  //     }
+
+  //     const options: ImagePicker.ImagePickerOptions = {
+  //       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  //       allowsEditing: true,
+  //       aspect: [4, 3],
+  //       quality: 0.5,
+  //     };
+
+  //     const result = useCamera 
+  //       ? await ImagePicker.launchCameraAsync(options)
+  //       : await ImagePicker.launchImageLibraryAsync(options);
+
+  //     if (!result.canceled && result.assets[0]) {
+  //       try {
+  //         const dataURL = await toPersistentDataUrl(
+  //           result.assets[0].uri,
+  //           result.assets[0].mimeType || undefined
+  //         );
+  //         handleInputChange(field, dataURL);
+  //       } catch (readError) {
+  //         console.warn(`Could not read ${field} file, using URI:`, readError);
+  //         handleInputChange(field, result.assets[0].uri);
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error(`Error picking ${field} image:`, error);
+  //     showSnackbar(`Failed to select ${field === 'barcode' ? 'barcode' : 'image'}.`, 'error');
+  //   }
+  // };
+
+  const pickImage = async (
+    useCamera: boolean,
+    field: 'photoURL' | 'barcode'
+  ) => {
     try {
+      // Request Permissions
       if (useCamera) {
-        const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permissionResult.granted) {
-          showSnackbar("Please allow access to your camera.", 'error');
+        const permission =
+          await ImagePicker.requestCameraPermissionsAsync();
+
+        if (!permission.granted) {
+          showSnackbar(
+            "Please allow access to your camera.",
+            "error"
+          );
           return;
         }
       } else {
-        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permissionResult.granted) {
-          showSnackbar("Please allow access to your photo library.", 'error');
+        const permission =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+        if (!permission.granted) {
+          showSnackbar(
+            "Please allow access to your photo library.",
+            "error"
+          );
           return;
         }
       }
 
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: Platform.OS === 'ios',
-        aspect: field === 'barcode' ? [4, 1] : [1, 1],
-        quality: 0.2,
+        allowsEditing: useCamera,
+        quality: 0.5,
+        base64: true,
+        allowsMultipleSelection: false,
       };
 
-      const result = useCamera 
+      const result = useCamera
         ? await ImagePicker.launchCameraAsync(options)
         : await ImagePicker.launchImageLibraryAsync(options);
 
-      if (!result.canceled && result.assets[0]) {
-        try {
-          const dataURL = await toPersistentDataUrl(
-            result.assets[0].uri,
-            result.assets[0].mimeType || undefined
-          );
-          handleInputChange(field, dataURL);
-        } catch (readError) {
-          console.warn(`Could not read ${field} file, using URI:`, readError);
-          handleInputChange(field, result.assets[0].uri);
-        }
+      console.log(
+        `${field} picker result:`,
+        JSON.stringify(result, null, 2)
+      );
+
+      if (result.canceled) {
+        return;
       }
-    } catch (error) {
-      console.error(`Error picking ${field} image:`, error);
-      showSnackbar(`Failed to select ${field === 'barcode' ? 'barcode' : 'image'}.`, 'error');
+
+      if (!result.assets || result.assets.length === 0) {
+        showSnackbar(
+          "No image selected.",
+          "error"
+        );
+        return;
+      }
+
+      const asset = result.assets[0];
+
+      console.log("Selected Asset:", asset);
+
+      // First preference: Expo Base64
+      if (asset.base64) {
+        const mimeType =
+          asset.mimeType || "image/jpeg";
+
+        const dataUrl =
+          `data:${mimeType};base64,${asset.base64}`;
+
+        handleInputChange(field, dataUrl);
+
+        return;
+      }
+
+      // Fallback for Android release builds
+      try {
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+
+        const base64Data = await new Promise<string>(
+          (resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onloadend = () => {
+              const result =
+                reader.result as string;
+
+              const extracted =
+                result.split(",")[1];
+
+              resolve(extracted);
+            };
+
+            reader.onerror = reject;
+
+            reader.readAsDataURL(blob);
+          }
+        );
+
+        const mimeType =
+          asset.mimeType || "image/jpeg";
+
+        const dataUrl =
+          `data:${mimeType};base64,${base64Data}`;
+
+        handleInputChange(field, dataUrl);
+      } catch (conversionError) {
+        console.error(
+          "Base64 conversion failed:",
+          conversionError
+        );
+
+        // Final fallback
+        handleInputChange(field, asset.uri);
+
+        showSnackbar(
+          "Image selected using URI fallback.",
+          "success"
+        );
+      }
+    } catch (error: any) {
+      console.error(
+        `Error picking ${field} image:`,
+        error
+      );
+
+      showSnackbar(
+        error?.message ||
+        `Failed to select ${field === "barcode"
+          ? "barcode"
+          : "image"
+        }.`,
+        "error"
+      );
     }
   };
 
@@ -455,17 +561,17 @@ const AddEditAsset: React.FC = () => {
               </View>
             </View>
 
-            <ScrollView 
-            scrollEnabled={isMobileLayout} // Keep internal scroll on mobile/native and narrow web
-            showsVerticalScrollIndicator={false} 
-            contentContainerStyle={{ flexGrow: 1 }}
-          >
+            <ScrollView
+              scrollEnabled={isMobileLayout} // Keep internal scroll on mobile/native and narrow web
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ flexGrow: 1 }}
+            >
               <View style={[styles.formBody, isMobileLayout && { flexDirection: 'column', gap: 0 }]}>
-                
+
                 {/* Column 1 */}
                 <View style={styles.formColumn}>
                   <Text style={styles.sectionTitle}>General Details</Text>
-                  
+
                   <Text style={styles.label}>Asset Name</Text>
                   <View style={styles.inputGroup}>
                     <Feather name="truck" size={16} color="#22D3EE" style={styles.inputIcon} />
@@ -493,24 +599,24 @@ const AddEditAsset: React.FC = () => {
                   <Text style={styles.label}>Model Number</Text>
                   <View style={styles.inputGroup}>
                     <Feather name="package" size={16} color="#22D3EE" style={styles.inputIcon} />
-                    <TextInput 
-                      style={styles.textInput} 
-                      placeholder="Model #" 
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Model #"
                       placeholderTextColor="#999"
-                      value={assetData.modelNumber} 
-                      onChangeText={v => handleInputChange('modelNumber', v)} 
+                      value={assetData.modelNumber}
+                      onChangeText={v => handleInputChange('modelNumber', v)}
                     />
                   </View>
 
                   <Text style={styles.label}>Serial Number</Text>
                   <View style={styles.inputGroup}>
                     <Feather name="package" size={16} color="#22D3EE" style={styles.inputIcon} />
-                    <TextInput 
-                      style={styles.textInput} 
-                      placeholder="Serial Number" 
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Serial Number"
                       placeholderTextColor="#999"
-                      value={assetData.serialNumber} 
-                      onChangeText={v => handleInputChange('serialNumber', v)} 
+                      value={assetData.serialNumber}
+                      onChangeText={v => handleInputChange('serialNumber', v)}
                     />
                   </View>
 
@@ -527,11 +633,11 @@ const AddEditAsset: React.FC = () => {
                               {field.fieldName} {field.isRequired ? '*' : ''}
                             </Text>
                             <View style={styles.inputGroup}>
-                              <Feather 
-                                name={field.fieldType === 'number' ? 'hash' : field.fieldType === 'date' ? 'calendar' : 'edit-3'} 
-                                size={16} 
-                                color="#22D3EE" 
-                                style={styles.inputIcon} 
+                              <Feather
+                                name={field.fieldType === 'number' ? 'hash' : field.fieldType === 'date' ? 'calendar' : 'edit-3'}
+                                size={16}
+                                color="#22D3EE"
+                                style={styles.inputIcon}
                               />
                               {field.fieldType === 'date' && Platform.OS === 'web' ? (
                                 <input
@@ -563,13 +669,13 @@ const AddEditAsset: React.FC = () => {
                   <Text style={styles.sectionTitle}>Acquisition Info</Text>
 
                   <Text style={styles.label}>Asset Photo</Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.imageUploadBox}
                     onPress={handleImageUpload}
                   >
                     {assetData.photoURL ? (
-                      <Image 
-                        source={{ uri: assetData.photoURL }} 
+                      <Image
+                        source={{ uri: assetData.photoURL }}
                         style={styles.photoPreview}
                       />
                     ) : (
@@ -596,8 +702,8 @@ const AddEditAsset: React.FC = () => {
                       onChange={(e) => handleInputChange('purchaseDate', e.target.value)}
                     />
                   ) : (
-                    <TouchableOpacity 
-                      style={styles.inputGroup} 
+                    <TouchableOpacity
+                      style={styles.inputGroup}
                       onPress={() => setShowPurchasePicker(true)}
                     >
                       <Feather name="calendar" size={16} color="#22D3EE" />
@@ -615,8 +721,8 @@ const AddEditAsset: React.FC = () => {
                       onChange={(e) => handleInputChange('warrantyExpiry', e.target.value)}
                     />
                   ) : (
-                    <TouchableOpacity 
-                      style={styles.inputGroup} 
+                    <TouchableOpacity
+                      style={styles.inputGroup}
                       onPress={() => setShowWarrantyPicker(true)}
                     >
                       <Feather name="shield" size={16} color="#22D3EE" />
@@ -627,24 +733,24 @@ const AddEditAsset: React.FC = () => {
                   <Text style={styles.label}>Purchase Price</Text>
                   <View style={styles.inputGroup}>
                     <Feather name="dollar-sign" size={16} color="#22D3EE" style={styles.inputIcon} />
-                    <TextInput 
-                      style={styles.textInput} 
-                      placeholder="0.00" 
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="0.00"
                       placeholderTextColor="#999"
-                      value={assetData.price} 
-                      onChangeText={v => handleInputChange('price', v)} 
-                      keyboardType="numeric" 
+                      value={assetData.price}
+                      onChangeText={v => handleInputChange('price', v)}
+                      keyboardType="numeric"
                     />
                   </View>
 
                   <Text style={styles.label}>Barcode Image</Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.imageUploadBox}
                     onPress={handleBarcodeUpload}
                   >
                     {assetData.barcode ? (
-                      <Image 
-                        source={{ uri: assetData.barcode }} 
+                      <Image
+                        source={{ uri: assetData.barcode }}
                         style={styles.barcodePreview}
                       />
                     ) : (
@@ -669,7 +775,7 @@ const AddEditAsset: React.FC = () => {
         </View>
 
         {/* Picker Modals */}
-        <CustomPickerModal 
+        <CustomPickerModal
           visible={showCategoryPicker}
           title="Select Category"
           data={categories}
@@ -682,7 +788,7 @@ const AddEditAsset: React.FC = () => {
           onClose={() => setShowCategoryPicker(false)}
         />
 
-        <CustomPickerModal 
+        <CustomPickerModal
           visible={showStatusPicker}
           title="Select Status"
           data={statuses}
@@ -695,7 +801,7 @@ const AddEditAsset: React.FC = () => {
           onClose={() => setShowStatusPicker(false)}
         />
 
-        <CustomPickerModal 
+        <CustomPickerModal
           visible={showLocationPicker}
           title="Select Location"
           data={locations}

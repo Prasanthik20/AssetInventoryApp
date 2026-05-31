@@ -359,18 +359,18 @@ const AssignAssetScreen: React.FC = () => {
   };
 
   const onAssignedChange = (event: any, selectedDate?: Date) => {
-  setShowAssignedPicker(false); // Close picker
-  if (selectedDate) {
-    setAssignedDate(selectedDate.toISOString().split('T')[0]);
-  }
-};
+    setShowAssignedPicker(false); // Close picker
+    if (selectedDate) {
+      setAssignedDate(selectedDate.toISOString().split('T')[0]);
+    }
+  };
 
-const onDueChange = (event: any, selectedDate?: Date) => {
-  setShowDuePicker(false); // Close picker
-  if (selectedDate) {
-    setDueDate(selectedDate.toISOString().split('T')[0]);
-  }
-};
+  const onDueChange = (event: any, selectedDate?: Date) => {
+    setShowDuePicker(false); // Close picker
+    if (selectedDate) {
+      setDueDate(selectedDate.toISOString().split('T')[0]);
+    }
+  };
 
   const toAssetId = (value: unknown) => Number(value);
   const toAssetKey = (value: unknown) => String(toAssetId(value));
@@ -408,42 +408,174 @@ const onDueChange = (event: any, selectedDate?: Date) => {
     });
   }, [assets, assetSearchQuery, assetCategoryFilter]);
 
-  const pickImage = async (useCamera: boolean, isBarcode: boolean, targetAssetId?: number | string) => {
+  // const pickImage = async (useCamera: boolean, isBarcode: boolean, targetAssetId?: number | string) => {
+  //   const hasTargetAsset =
+  //     targetAssetId !== undefined &&
+  //     targetAssetId !== null &&
+  //     !Number.isNaN(toAssetId(targetAssetId));
+  //   const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+
+  //   try {
+  //     if (hasTargetAsset && targetKey) {
+  //       if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+  //       else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+  //     } else {
+  //       if (isBarcode) setBarcodeLoading(true);
+  //       else setPhotoLoading(true);
+  //     }
+
+  //     if (useCamera) {
+  //       const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  //       if (status !== 'granted') {
+  //         showSnackbar('Camera permission is required.', 'error');
+  //         return;
+  //       }
+  //     } else {
+  //       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  //       if (status !== 'granted') {
+  //         showSnackbar('Media library permission is required.', 'error');
+  //         return;
+  //       }
+  //     }
+
+  //     const options: ImagePicker.ImagePickerOptions = {
+  //       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  //       allowsEditing: !useCamera ? false : true, // allow multi-select for photos in library
+  //       allowsMultipleSelection: false,
+  //       aspect: isBarcode ? [4, 3] : undefined,
+  //       quality: 0.2,
+  //       base64: false,
+  //     };
+  //     // Disable editing/aspect if we are selecting multiple images from the gallery
+  //     if (options.allowsMultipleSelection) {
+  //       delete options.allowsEditing;
+  //       delete options.aspect;
+  //     }
+
+  //     const result = useCamera
+  //       ? await ImagePicker.launchCameraAsync(options)
+  //       : await ImagePicker.launchImageLibraryAsync(options);
+
+  //     if (!result.canceled && result.assets[0]) {
+  //       const photos: string[] = [];
+  //       for (const asset of result.assets) {
+  //         let base64 = asset.base64;
+  //         if (!base64 && asset.uri) {
+  //           try {
+  //             base64 = await FileSystem.readAsStringAsync(asset.uri, {
+  //               encoding: 'base64' as any,
+  //             });
+  //           } catch (err) {
+  //             console.warn("Error reading file manually:", err);
+  //           }
+  //         }
+  //         if (base64) {
+  //           photos.push(`data:image/jpeg;base64,${base64}`);
+  //         }
+  //       }
+
+  //       if (photos.length > 0) {
+  //         const primaryPhoto = photos[0];
+  //         if (isBarcode) {
+  //           if (hasTargetAsset && targetKey) {
+  //             setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
+  //             showSnackbar('Barcode saved for selected asset.', 'success');
+  //           } else {
+  //             setBarcodeURL(primaryPhoto);
+  //             showSnackbar('Barcode image will be attached to the assignment.', 'success');
+  //           }
+  //         } else {
+  //           if (hasTargetAsset && targetKey) {
+  //             setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
+  //             setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
+  //             showSnackbar('Photo saved for selected asset.', 'success');
+  //           } else {
+  //             setPhoto(primaryPhoto);
+  //             setPhotoBatch(photos);
+  //             showSnackbar('Photo will be attached to the assignment.', 'success');
+  //           }
+  //         }
+  //       } else {
+  //         showSnackbar('Failed to process image.', 'error');
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error('Picker error:', error);
+  //     showSnackbar('Failed to open camera or image library.', 'error');
+  //   } finally {
+  //     if (hasTargetAsset && targetKey) {
+  //       if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+  //       else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+  //     } else {
+  //       if (isBarcode) setBarcodeLoading(false);
+  //       else setPhotoLoading(false);
+  //     }
+  //   }
+  // };
+
+  const pickImage = async (
+    useCamera: boolean,
+    isBarcode: boolean,
+    targetAssetId?: number | string
+  ) => {
     const hasTargetAsset =
       targetAssetId !== undefined &&
       targetAssetId !== null &&
       !Number.isNaN(toAssetId(targetAssetId));
-    const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+
+    const targetKey = hasTargetAsset
+      ? toAssetKey(targetAssetId)
+      : null;
 
     try {
+      // Loading State
       if (hasTargetAsset && targetKey) {
-        if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
-        else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+        if (isBarcode) {
+          setAssetBarcodeLoadingMap((prev) => ({
+            ...prev,
+            [targetKey]: true,
+          }));
+        } else {
+          setAssetPhotoLoadingMap((prev) => ({
+            ...prev,
+            [targetKey]: true,
+          }));
+        }
       } else {
         if (isBarcode) setBarcodeLoading(true);
         else setPhotoLoading(true);
       }
 
+      // Permissions
       if (useCamera) {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-          showSnackbar('Camera permission is required.', 'error');
+        const permission =
+          await ImagePicker.requestCameraPermissionsAsync();
+
+        if (!permission.granted) {
+          showSnackbar(
+            "Camera permission is required.",
+            "error"
+          );
           return;
         }
       } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          showSnackbar('Media library permission is required.', 'error');
+        const permission =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+        if (!permission.granted) {
+          showSnackbar(
+            "Media library permission is required.",
+            "error"
+          );
           return;
         }
       }
 
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: useCamera ? Platform.OS === 'ios' : !isBarcode, // allow multi-select for photos in library
-        allowsMultipleSelection: !useCamera && !isBarcode,
-        aspect: isBarcode ? [4, 3] : undefined,
-        quality: 0.2,
+        allowsEditing: useCamera,
+        allowsMultipleSelection: false,
+        quality: 0.5,
         base64: true,
       };
 
@@ -451,56 +583,148 @@ const onDueChange = (event: any, selectedDate?: Date) => {
         ? await ImagePicker.launchCameraAsync(options)
         : await ImagePicker.launchImageLibraryAsync(options);
 
-      if (!result.canceled && result.assets[0]) {
-        const photos: string[] = [];
-        for (const asset of result.assets) {
-          let base64 = asset.base64;
-          if (!base64 && asset.uri) {
-            try {
-              base64 = await FileSystem.readAsStringAsync(asset.uri, {
-                encoding: 'base64' as any,
-              });
-            } catch (err) {
-              console.warn("Error reading file manually:", err);
-            }
-          }
-          if (base64) {
-            photos.push(`data:image/jpeg;base64,${base64}`);
+      console.log(
+        "Image Picker Result:",
+        JSON.stringify(result, null, 2)
+      );
+
+      if (result.canceled) {
+        return;
+      }
+
+      if (!result.assets || result.assets.length === 0) {
+        showSnackbar(
+          "No image selected.",
+          "error"
+        );
+        return;
+      }
+
+      const photos: string[] = [];
+
+      for (const asset of result.assets) {
+        console.log("Selected Asset:", asset);
+
+        let base64Data = asset.base64;
+
+        // Fallback for Android release builds
+        if (!base64Data && asset.uri) {
+          try {
+            const response = await fetch(asset.uri);
+            const blob = await response.blob();
+
+            base64Data = await new Promise<string>(
+              (resolve, reject) => {
+                const reader = new FileReader();
+
+                reader.onloadend = () => {
+                  const result = reader.result as string;
+
+                  const extracted =
+                    result.split(",")[1];
+
+                  resolve(extracted);
+                };
+
+                reader.onerror = reject;
+
+                reader.readAsDataURL(blob);
+              }
+            );
+          } catch (err) {
+            console.error(
+              "Fallback Base64 conversion failed:",
+              err
+            );
           }
         }
 
-        if (photos.length > 0) {
-          const primaryPhoto = photos[0];
-          if (isBarcode) {
-            if (hasTargetAsset && targetKey) {
-              setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
-              showSnackbar('Barcode saved for selected asset.', 'success');
-            } else {
-              setBarcodeURL(primaryPhoto);
-              showSnackbar('Barcode image will be attached to the assignment.', 'success');
-            }
-          } else {
-            if (hasTargetAsset && targetKey) {
-              setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
-              setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
-              showSnackbar('Photo saved for selected asset.', 'success');
-            } else {
-              setPhoto(primaryPhoto);
-              setPhotoBatch(photos);
-              showSnackbar('Photo will be attached to the assignment.', 'success');
-            }
-          }
-        } else {
-          showSnackbar('Failed to process image.', 'error');
+        if (base64Data) {
+          photos.push(
+            `data:image/jpeg;base64,${base64Data}`
+          );
         }
       }
-    } catch (error) {
-      console.error('Picker error:', error);
-      showSnackbar('Failed to open camera or image library.', 'error');
+
+      if (photos.length === 0) {
+        showSnackbar(
+          "Failed to process image.",
+          "error"
+        );
+        return;
+      }
+
+      const primaryPhoto = photos[0];
+
+      if (isBarcode) {
+        if (hasTargetAsset && targetKey) {
+          setAssetBarcodeMap((prev) => ({
+            ...prev,
+            [targetKey]: primaryPhoto,
+          }));
+
+          showSnackbar(
+            "Barcode saved for selected asset.",
+            "success"
+          );
+        } else {
+          setBarcodeURL(primaryPhoto);
+
+          showSnackbar(
+            "Barcode image attached successfully.",
+            "success"
+          );
+        }
+      } else {
+        if (hasTargetAsset && targetKey) {
+          setAssetPhotoMap((prev) => ({
+            ...prev,
+            [targetKey]: primaryPhoto,
+          }));
+
+          setAssetPhotoBatchMap((prev) => ({
+            ...prev,
+            [targetKey]: photos,
+          }));
+
+          showSnackbar(
+            "Photo saved for selected asset.",
+            "success"
+          );
+        } else {
+          setPhoto(primaryPhoto);
+          setPhotoBatch(photos);
+
+          showSnackbar(
+            "Photo attached successfully.",
+            "success"
+          );
+        }
+      }
+    } catch (error: any) {
+      console.error(
+        "Image Picker Error:",
+        error
+      );
+
+      showSnackbar(
+        error?.message ||
+        "Failed to open camera or image library.",
+        "error"
+      );
     } finally {
       if (hasTargetAsset && targetKey) {
-        if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
-        else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+        if (isBarcode) {
+          setAssetBarcodeLoadingMap((prev) => ({
+            ...prev,
+            [targetKey]: false,
+          }));
+        } else {
+          setAssetPhotoLoadingMap((prev) => ({
+            ...prev,
+            [targetKey]: false,
+          }));
+        }
       } else {
         if (isBarcode) setBarcodeLoading(false);
         else setPhotoLoading(false);
@@ -569,31 +793,31 @@ const onDueChange = (event: any, selectedDate?: Date) => {
     });
   };
   const renderAssetItem = ({ item }: { item: Asset }) => {
-  const isSelected = selectedAssets.some((a) => a.assetId === item.assetId);
+    const isSelected = selectedAssets.some((a) => a.assetId === item.assetId);
 
-  return (
-    <TouchableOpacity
-      style={[
-        styles.assetRow,
-        isSelected && { backgroundColor: 'rgba(52, 211, 153, 0.16)', borderColor: '#34D399', borderWidth: 1 },
-      ]}
-      onPress={() => toggleAssetSelection(item)}
-    >
-      <Ionicons
-        name={isSelected ? "checkbox" : "square-outline"}
-        size={24}
-        color="#34D399"
-      />
-      <View style={{ marginLeft: 10 }}>
-        <Text style={{ fontWeight: '600', color: '#E6F3FF' }}>{item.assetName}</Text>
-        {/* Show Serial Number or Barcode so they aren't identical */}
-        <Text style={{ fontSize: 12, color: '#A9C6E4' }}>
-          S/N: {item.serialNumber || 'N/A'} | ID: {item.assetId}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-};
+    return (
+      <TouchableOpacity
+        style={[
+          styles.assetRow,
+          isSelected && { backgroundColor: 'rgba(52, 211, 153, 0.16)', borderColor: '#34D399', borderWidth: 1 },
+        ]}
+        onPress={() => toggleAssetSelection(item)}
+      >
+        <Ionicons
+          name={isSelected ? "checkbox" : "square-outline"}
+          size={24}
+          color="#34D399"
+        />
+        <View style={{ marginLeft: 10 }}>
+          <Text style={{ fontWeight: '600', color: '#E6F3FF' }}>{item.assetName}</Text>
+          {/* Show Serial Number or Barcode so they aren't identical */}
+          <Text style={{ fontSize: 12, color: '#A9C6E4' }}>
+            S/N: {item.serialNumber || 'N/A'} | ID: {item.assetId}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
   if (loading) {
     return (
       <View style={styles.centeredView}>
@@ -625,20 +849,20 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           </View>
 
           {/* FORM */}
-          <ScrollView 
-          contentContainerStyle={[
-            styles.formScrollContainer,
-            isMobileLayout && { paddingHorizontal: 15 } // Tighter padding for phones
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
+          <ScrollView
+            contentContainerStyle={[
+              styles.formScrollContainer,
+              isMobileLayout && { paddingHorizontal: 15 } // Tighter padding for phones
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
             {/* TOGGLE COLUMN FOR MOBILE: 
              'row' for Web, 'column' for Mobile 
           */}
-          <View style={[
-            styles.formBody, 
-            { flexDirection: isMobileLayout ? 'column' : 'row', gap: isMobileLayout ? 0 : 25 }
-          ]}>
+            <View style={[
+              styles.formBody,
+              { flexDirection: isMobileLayout ? 'column' : 'row', gap: isMobileLayout ? 0 : 25 }
+            ]}>
 
               {/* LEFT COLUMN */}
               <View style={styles.formColumn}>
@@ -714,7 +938,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               </View>
 
               {/* RIGHT COLUMN */}
-              <View style={[styles.formColumn, isMobileLayout && { marginTop: 10 }]}> 
+              <View style={[styles.formColumn, isMobileLayout && { marginTop: 10 }]}>
 
                 {/* ASSIGNED DATE */}
                 <Text style={styles.label}>Assigned Date</Text>
@@ -932,9 +1156,9 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
           {/* FOOTER */}
           <View style={[
-          styles.footer, 
-          isMobileLayout && { justifyContent: 'center', paddingBottom: 30 }
-        ]}>
+            styles.footer,
+            isMobileLayout && { justifyContent: 'center', paddingBottom: 30 }
+          ]}>
             <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
               <Text style={[styles.buttonText, { color: '#A9C6E4' }]}>Cancel</Text>
             </TouchableOpacity>
@@ -951,7 +1175,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       {/* ------------------- ASSET MODAL ------------------- */}
       <Modal visible={assetModal} transparent animationType="slide">
         <Pressable style={styles.modalOverlay} onPress={() => setAssetModal(false)}>
-          <Pressable style={styles.modalContent} onPress={() => {}}>
+          <Pressable style={styles.modalContent} onPress={() => { }}>
             <Text style={styles.modalTitle}>Select Assets</Text>
 
             <AssetFiltersBar

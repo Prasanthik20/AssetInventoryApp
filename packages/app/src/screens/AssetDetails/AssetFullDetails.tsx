@@ -7,12 +7,12 @@ import { Asset, RootStackParamList, baseURL } from '../../navigation/types';
 import useAssetMeta from "../../hooks/useAssetMeta";
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
-import * as FileSystem from 'expo-file-system';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import assetStyles from './asset.styles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { globalColors } from '../../styles/globalStyles';
 import AppSnackbar from 'src/components/common/AppSnackbar';
+import { toPersistentDataUrl } from '../../utils/imageHelper';
 
 
 type AssetFullDetailsRouteProp = RouteProp<
@@ -95,47 +95,6 @@ const formatDate = (dateValue?: string | Date | null) => {
     : date.toLocaleDateString();
 };
 
-const inferMimeType = (uri: string, explicitMimeType?: string): string => {
-    if (explicitMimeType) return explicitMimeType;
-
-    const cleanUri = uri.split('?')[0].toLowerCase();
-    if (cleanUri.endsWith('.png')) return 'image/png';
-    if (cleanUri.endsWith('.webp')) return 'image/webp';
-    if (cleanUri.endsWith('.heic')) return 'image/heic';
-    if (cleanUri.endsWith('.gif')) return 'image/gif';
-    return 'image/jpeg';
-};
-
-const toPersistentDataUrl = async (uri: string, mimeType?: string): Promise<string> => {
-    if (!uri) return '';
-    if (uri.startsWith('data:')) return uri;
-
-    const resolvedMimeType = inferMimeType(uri, mimeType);
-
-    if (Platform.OS === 'web') {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        if (blob.type) {
-            return await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(String(reader.result || ''));
-                reader.onerror = () => reject(new Error('Failed to convert blob to data URL'));
-                reader.readAsDataURL(blob);
-            });
-        }
-        return await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(String(reader.result || ''));
-            reader.onerror = () => reject(new Error('Failed to convert blob to data URL'));
-            reader.readAsDataURL(blob);
-        });
-    }
-
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: 'base64' as any,
-    });
-    return `data:${resolvedMimeType};base64,${base64}`;
-};
 
 const AssetFullDetails: React.FC = () => {
     const navigation = useNavigation<any>();
@@ -316,35 +275,14 @@ const AssetFullDetails: React.FC = () => {
     const handleDynamicValueChange = (fieldId: any, val: string) => {
         setDynamicValues(prev => prev.map(dv => dv.fieldId == fieldId ? { ...dv, value: val } : dv));
     };
-    
+
     const pickImage = async (useCamera: boolean, isBarcode: boolean) => {
         try {
-            if (useCamera) {
-                const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-                if (!permissionResult.granted) {
-                    showSnackbar("Please allow access to your camera.", 'error');
-                    return;
-                }
-            } else {
-                const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                if (!permissionResult.granted) {
-                    showSnackbar("Please allow access to your photo library.", 'error');
-                    return;
-                }
-            }
+            const result = useCamera 
+                ? await ImagePicker.launchCameraAsync({ quality: 0.5 }) 
+                : await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
 
-            const options: ImagePicker.ImagePickerOptions = {
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: Platform.OS === 'ios',
-                aspect: isBarcode ? [4, 1] : [1, 1],
-                quality: 0.2,
-            };
-
-            const result = useCamera
-                ? await ImagePicker.launchCameraAsync(options)
-                : await ImagePicker.launchImageLibraryAsync(options);
-
-            if (!result.canceled && result.assets[0]) {
+            if (!result.canceled) {
                 try {
                     const dataURL = await toPersistentDataUrl(
                         result.assets[0].uri,

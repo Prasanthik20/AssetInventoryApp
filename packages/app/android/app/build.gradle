@@ -87,15 +87,18 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.asq.assetledger'
+    namespace 'com.assetmgmt.com'
     defaultConfig {
-        applicationId 'com.asq.assetledger'
+        applicationId 'com.assetmgmt.com'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", "${newArchEnabled}"
+        buildConfigField "boolean", "IS_HERMES_ENABLED", "${hermesEnabled}"
+        buildConfigField "boolean", "IS_EDGE_TO_EDGE_ENABLED", "${edgeToEdgeEnabled}"
     }
     signingConfigs {
         debug {
