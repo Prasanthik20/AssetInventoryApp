@@ -32,6 +32,13 @@ model Tenants {
   Asset_Assignments Asset_Assignments[]
   Notifications     Notifications[]
   AssetCategoryFields AssetCategoryFields[]
+  
+  // Custom Extensions for SaaS Tracking
+  renewalRequests     RenewalRequests[]
+  payments            Payments[]
+  invoices            Invoices[]
+  auditLogs           AuditLogs[]
+  featureFlags        TenantFeatureFlags[]
 }
 
 model Plans {
@@ -218,4 +225,125 @@ model AssetDynamicValues {
   value            String?
   asset            Asset_Details        @relation(fields: [assetId], references: [id])
   field            AssetCategoryFields  @relation(fields: [fieldId], references: [id])
+}
+
+// ==========================================
+// Billing & Renewal Workflows
+// ==========================================
+
+model RenewalRequests {
+  id             String    @id @default(uuid())
+  tenantId       String
+  planId         String
+  requestedDate  DateTime  @default(now())
+  transactionId  String    @unique
+  paymentProofUrl String
+  remarks        String?
+  status         String    @default("submitted") // "submitted", "reviewing", "approved", "rejected"
+  rejectionReason String?
+  reviewedBy     String?   // SuperAdmin User ID
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant Tenants @relation(fields: [tenantId], references: [id])
+  
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Payments {
+  id            String   @id @default(uuid())
+  tenantId      String
+  amount        Decimal  @db.Decimal(10, 2)
+  currency      String   @default("INR")
+  status        String   @default("completed") // "pending", "completed", "failed", "refunded"
+  paymentMethod String   // "bank_transfer", "upi", "card"
+  transactionId String   @unique
+  paymentDate   DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  tenant Tenants @relation(fields: [tenantId], references: [id])
+  
+  @@index([tenantId])
+}
+
+model Invoices {
+  id          String   @id @default(uuid())
+  tenantId    String
+  invoiceNo   String   @unique // Auto-generated "INV-YYYY-XXXX"
+  amount      Decimal  @db.Decimal(10, 2)
+  tax         Decimal  @db.Decimal(10, 2) @default(0)
+  total       Decimal  @db.Decimal(10, 2)
+  status      String   @default("paid") // "unpaid", "paid", "voided"
+  dueDate     DateTime
+  paidDate    DateTime?
+  pdfUrl      String?
+  createdAt   DateTime @default(now())
+
+  tenant Tenants @relation(fields: [tenantId], references: [id])
+  
+  @@index([tenantId])
+}
+
+// ==========================================
+// System Governance & Customizations
+// ==========================================
+
+model TenantFeatureFlags {
+  id          String   @id @default(uuid())
+  tenantId    String
+  featureKey  String   // "barcodes", "custom_categories", "sso", "dynamic_fields"
+  isEnabled   Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenants @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, featureKey])
+}
+
+model AuditLogs {
+  id         String   @id @default(uuid())
+  tenantId   String
+  userId     BigInt
+  action     String   // "CREATE_ASSET", "LOGIN", "EXPORT_EXCEL", "RENEWAL_REQUEST"
+  entityName String   // "Asset_Details", "Subscriptions"
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  tenant Tenants @relation(fields: [tenantId], references: [id])
+  
+  @@index([tenantId, createdAt])
+}
+
+model SupportTickets {
+  id          String   @id @default(uuid())
+  tenantId    String
+  userId      BigInt
+  subject     String
+  description String
+  priority    String   @default("medium") // "low", "medium", "high", "critical"
+  status      String   @default("open") // "open", "in_progress", "resolved", "closed"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  messages    SupportTicketMessages[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model SupportTicketMessages {
+  id          String   @id @default(uuid())
+  ticketId    String
+  senderId    BigInt   // ID of User sending message
+  isAgent     Boolean  @default(false) // True if sent by SuperAdmin
+  message     String
+  createdAt   DateTime @default(now())
+
+  ticket SupportTickets @relation(fields: [ticketId], references: [id])
 }

@@ -62,13 +62,16 @@ export default async function registerTenantHandler(
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', NOW(), NOW())
     `, [tenantId, organization.name, organization.type, organization.gst, organization.address, organization.country, organization.state, organization.city, organization.postalCode]);
 
-    // B. Ensure 'trial' plan exists
-    const trialPlanResult = await client.query('SELECT id FROM "Plans" WHERE id = $1', ['trial']);
+    // B. Ensure 'free-trial' plan exists
+    const trialPlanResult = await client.query('SELECT id FROM "Plans" WHERE id = $1', ['free-trial']);
     if (trialPlanResult.rows.length === 0) {
-      const features = JSON.stringify({ reports: 'basic', support: 'email', storage: 'limited' });
+      const features = JSON.stringify({
+        trialDays: 30, storage: '2GB', reports: 'basic', support: 'email',
+        dashboard: 'basic', qrCode: false, apiAccess: false, customCategories: false
+      });
       await client.query(`
         INSERT INTO "Plans" (id, name, "maxUsers", "maxAssets", price, currency, features, "createdAt")
-        VALUES ('trial', 'Free Trial', 3, 25, 0, 'INR', $1::jsonb, NOW())
+        VALUES ('free-trial', 'Free Trial', 5, 100, 0.00, 'INR', $1::jsonb, NOW())
       `, [features]);
     }
 
@@ -77,7 +80,7 @@ export default async function registerTenantHandler(
     const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     await client.query(`
       INSERT INTO "Subscriptions" (id, "tenantId", "planId", "startDate", "endDate", status, "createdAt", "updatedAt")
-      VALUES ($1, $2, 'trial', NOW(), $3, 'trialing', NOW(), NOW())
+      VALUES ($1, $2, 'free-trial', NOW(), $3, 'trialing', NOW(), NOW())
     `, [subscriptionId, tenantId, endDate.toISOString()]);
 
     // D. Ensure 'Tenant Admin' role exists

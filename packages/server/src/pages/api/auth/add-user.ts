@@ -2,6 +2,7 @@ import type { NextApiResponse } from 'next';
 import query from '@/lib/db';
 import crypto from 'crypto';
 import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
+import { withSubscriptionLimit } from '@/lib/subscription';
 
 /**
  * Securely hashes a password using Node's native crypto module.
@@ -76,4 +77,4 @@ async function addUserHandler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 }
 
-export default withAuth(addUserHandler);
+export default withSubscriptionLimit(addUserHandler, 'users');
