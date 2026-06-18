@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Asq Asset Ledger",
+    "name": "ASQ Asset Ledger",
     "slug": "asset-inventory-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/asq.png",
+    "icon": "./src/assets/asq_icon_with_text_v3.png",
     "platforms": [
       "android",
       "ios",
@@ -38,10 +38,10 @@
           "action": "android.media.action.IMAGE_CAPTURE"
         }
       ],
-      "icon": "./src/assets/asq.png",
+      "icon": "./src/assets/asq_icon_with_text_v3.png",
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/asq.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./src/assets/asq_icon_with_text_v3.png",
+        "backgroundColor": "#08122E"
       }
     },
     "ios": {

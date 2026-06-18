@@ -558,18 +558,8 @@ const AssignAssetScreen: React.FC = () => {
           );
           return;
         }
-      } else {
-        const permission =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (!permission.granted) {
-          showSnackbar(
-            "Media library permission is required.",
-            "error"
-          );
-          return;
-        }
       }
+      // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
 
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,

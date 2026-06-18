@@ -241,23 +241,13 @@ const AddEditAsset: React.FC = () => {
           );
           return;
         }
-      } else {
-        const permission =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (!permission.granted) {
-          showSnackbar(
-            "Please allow access to your photo library.",
-            "error"
-          );
-          return;
-        }
       }
+      // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
 
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: useCamera,
-        quality: 0.5,
+        quality: 0.3,       // Compress aggressively to keep payload under server limit
         base64: true,
         allowsMultipleSelection: false,
       };

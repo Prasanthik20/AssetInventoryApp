@@ -58,26 +58,21 @@ const OverdueNotificationModal: React.FC<Props> = ({
                     setErrorText('Camera permission is required to attach proof images.');
                     return;
                 }
-            } else {
-                const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                if (permissionResult.status !== 'granted') {
-                    setErrorText('Media library permission is required to attach proof images.');
-                    return;
-                }
             }
+            // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
 
             const options: ImagePicker.ImagePickerOptions = {
-                mediaTypes: ['images', 'videos'],
+                mediaTypes: ['images'],
                 allowsEditing: true,                 // Enable editing to allow cropping and prevent native crash,
-                 allowsMultipleSelection: !useCamera,
+                allowsMultipleSelection: !useCamera,
                 selectionLimit: 0,
                 quality: 0.2,
                 base64: true,
             };
 
-             // Disable editing/aspect if we are selecting multiple images from the gallery
+            // Disable editing/aspect if we are selecting multiple images from the gallery
             if (options.allowsMultipleSelection) {
-               delete options.allowsEditing;
+                delete options.allowsEditing;
                 delete options.aspect;
             }
 

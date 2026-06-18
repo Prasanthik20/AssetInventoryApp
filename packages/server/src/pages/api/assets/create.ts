@@ -195,11 +195,19 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     console.error("FULL DATABASE ERROR:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       message: error.message,
       detail: error.detail || "Check console for full error logs"
     });
   }
 }
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
 
 export default withSubscriptionLimit(handler, 'assets');

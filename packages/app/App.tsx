@@ -81,20 +81,20 @@ function App(): React.JSX.Element {
   // Set browser tab title for web and prevent navigation from changing it
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      document.title = 'ASQ - NSCLLP Asset Management';
-      
+      document.title = 'ASQ - Asset Management';
+
       // Monitor for title changes and reset if needed
       const observer = new MutationObserver(() => {
-        if (document.title !== 'ASQ - NSCLLP Asset Management') {
-          document.title = 'ASQ - NSCLLP Asset Management';
+        if (document.title !== 'ASQ - Asset Management') {
+          document.title = 'ASQ - Asset Management';
         }
       });
-      
+
       observer.observe(document.head, {
         childList: true,
         subtree: true,
       });
-      
+
       return () => observer.disconnect();
     }
   }, []);
@@ -154,7 +154,7 @@ function App(): React.JSX.Element {
   const onNavigationStateChange = () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       setTimeout(() => {
-        document.title = 'ASQ - NSCLLP Asset Management';
+        document.title = 'ASQ - Asset Management';
       }, 0);
     }
   };
@@ -231,17 +231,17 @@ function AppStack({ user, setUser }: any) {
           <SupervisorDashboard
             {...props}      // pass navigation & route props
             user={user}     // your state from App.tsx
-            setUser={setUser}  />
-  )}
+            setUser={setUser} />
+        )}
       />
 
       <Stack.Screen name="OperatorDashboard"
-      children={(props) => (
+        children={(props) => (
           <OperatorDashboard
             {...props}      // pass navigation & route props
             user={user}     // your state from App.tsx
-            setUser={setUser}  /> // optional: if you need logout functionality
-      )}
+            setUser={setUser} /> // optional: if you need logout functionality
+        )}
       />
 
       <Stack.Screen name="SuperAdminDashboard">
@@ -273,7 +273,7 @@ function AppStack({ user, setUser }: any) {
         component={CustomCategoryBuilder}
       />
 
-     {/* ===== ASSET SCREENS ===== */}
+      {/* ===== ASSET SCREENS ===== */}
       <Stack.Screen
         name="TotalAssetDetails"
         component={TotalAssetDetails}
