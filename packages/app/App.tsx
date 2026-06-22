@@ -4,6 +4,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import "./src/config/api"; // Initializes global Axios interceptors
 
 import { RootStackParamList } from "./src/navigation/types";
@@ -160,12 +161,14 @@ function App(): React.JSX.Element {
   };
 
   return (
-    <NavigationContainer
-      linking={linking}
-      onStateChange={onNavigationStateChange}
-    >
-      {user ? <AppStack user={user} setUser={setUser} /> : <AuthStack setUser={setUser} />}
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer
+        linking={linking}
+        onStateChange={onNavigationStateChange}
+      >
+        {user ? <AppStack user={user} setUser={setUser} /> : <AuthStack setUser={setUser} />}
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 

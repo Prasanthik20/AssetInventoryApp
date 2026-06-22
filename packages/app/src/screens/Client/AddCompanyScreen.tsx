@@ -6,11 +6,12 @@ import {
   TouchableOpacity,
   ImageBackground,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Platform,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -132,80 +133,89 @@ export default function AddCompanyScreen() {
       blurRadius={10}
     >
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-          <View style={styles.formCard}>
-            <Text style={styles.header}>🏢 SaaS Organization Registration</Text>
-            
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Organization Details</Text>
-              <View style={styles.divider} />
-            </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, width: '100%' }}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.formCard}>
+              <Text style={styles.header}>🏢 SaaS Organization Registration</Text>
+              
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Organization Details</Text>
+                <View style={styles.divider} />
+              </View>
 
-            <View style={styles.row}>
-              <Input label="Organization Name *" value={orgName} onChange={setOrgName} placeholder="Enter org name" />
-              <Input label="Organization Type" value={orgType} onChange={setOrgType} placeholder="e.g. Hospital, Corporate" />
-            </View>
+              <View style={styles.row}>
+                <Input label="Organization Name *" value={orgName} onChange={setOrgName} placeholder="Enter org name" />
+                <Input label="Organization Type" value={orgType} onChange={setOrgType} placeholder="e.g. Hospital, Corporate" />
+              </View>
 
-            <View style={styles.row}>
-              <Input label="Institution ID (Opt)" value={institutionId} onChange={setInstitutionId} placeholder="Enter ID" />
-              <Input label="GST Number (Opt)" value={gstNumber} onChange={setGstNumber} placeholder="Enter GST" />
-            </View>
+              <View style={styles.row}>
+                <Input label="Institution ID (Opt)" value={institutionId} onChange={setInstitutionId} placeholder="Enter ID" />
+                <Input label="GST Number (Opt)" value={gstNumber} onChange={setGstNumber} placeholder="Enter GST" />
+              </View>
 
-            <Input label="Address" value={address} onChange={setAddress} placeholder="Enter full address" multiline />
+              <Input label="Address" value={address} onChange={setAddress} placeholder="Enter full address" multiline />
 
-            <View style={styles.row}>
-              <Input label="Country" value={country} onChange={setCountry} placeholder="India" />
-              <Input label="State" value={state} onChange={setState} placeholder="Enter state" />
-            </View>
+              <View style={styles.row}>
+                <Input label="Country" value={country} onChange={setCountry} placeholder="India" />
+                <Input label="State" value={state} onChange={setState} placeholder="Enter state" />
+              </View>
 
-            <View style={styles.row}>
-              <Input label="City" value={city} onChange={setCity} placeholder="Enter city" />
-              <Input label="Postal Code" value={postalCode} onChange={setPostalCode} placeholder="Enter code" keyboardType="numeric" />
-            </View>
+              <View style={styles.row}>
+                <Input label="City" value={city} onChange={setCity} placeholder="Enter city" />
+                <Input label="Postal Code" value={postalCode} onChange={setPostalCode} placeholder="Enter code" keyboardType="numeric" />
+              </View>
 
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Primary Admin User</Text>
-              <View style={styles.divider} />
-            </View>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Primary Admin User</Text>
+                <View style={styles.divider} />
+              </View>
 
-            <View style={styles.row}>
-              <Input label="Full Name *" value={fullName} onChange={setFullName} placeholder="Enter full name" />
-              <Input label="Designation" value={designation} onChange={setDesignation} placeholder="e.g. IT Manager" />
-            </View>
+              <View style={styles.row}>
+                <Input label="Full Name *" value={fullName} onChange={setFullName} placeholder="Enter full name" />
+                <Input label="Designation" value={designation} onChange={setDesignation} placeholder="e.g. IT Manager" />
+              </View>
 
-            <View style={styles.row}>
-              <Input label="Email Address *" value={email} onChange={setEmail} placeholder="admin@org.com" keyboardType="email-address" />
-              <Input label="Mobile Number" value={mobileNumber} onChange={setMobileNumber} placeholder="Enter mobile" keyboardType="phone-pad" />
-            </View>
+              <View style={styles.row}>
+                <Input label="Email Address *" value={email} onChange={setEmail} placeholder="admin@org.com" keyboardType="email-address" />
+                <Input label="Mobile Number" value={mobileNumber} onChange={setMobileNumber} placeholder="Enter mobile" keyboardType="phone-pad" />
+              </View>
 
-            <View style={styles.row}>
-              <Input label="Password *" value={password} onChange={setPassword} placeholder="••••••••" secureTextEntry />
-              <Input label="Confirm Password *" value={confirmPassword} onChange={setConfirmPassword} placeholder="••••••••" secureTextEntry />
-            </View>
+              <View style={styles.row}>
+                <Input label="Password *" value={password} onChange={setPassword} placeholder="••••••••" secureTextEntry />
+                <Input label="Confirm Password *" value={confirmPassword} onChange={setConfirmPassword} placeholder="••••••••" secureTextEntry />
+              </View>
 
-            <View style={styles.buttonRow}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.createButton}
-                onPress={handleRegister}
-                disabled={loading}
-              >
-                <LinearGradient
-                  colors={["#00c6ff", "#0072ff"]}
-                  style={styles.createGradient}
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.createButton}
+                  onPress={handleRegister}
+                  disabled={loading}
                 >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.createText}>REGISTER & ACTIVATE TRIAL</Text>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
+                  <LinearGradient
+                    colors={["#00c6ff", "#0072ff"]}
+                    style={styles.createGradient}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.createText}>REGISTER & ACTIVATE TRIAL</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
       <AppSnackbar
         visible={snackbar.visible}

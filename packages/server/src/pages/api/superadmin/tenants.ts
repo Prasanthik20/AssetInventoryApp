@@ -1,5 +1,5 @@
 import type { NextApiResponse } from 'next';
-import query from '@/lib/db';
+import query, { pool } from '@/lib/db';
 import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -54,7 +54,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       return res.status(400).json({ message: 'Tenant ID, status, and target plan ID are required.' });
     }
 
-    const { pool } = require('@/lib/db');
     let client;
 
     try {

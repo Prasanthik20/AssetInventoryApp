@@ -7,10 +7,12 @@ import {
   Image,
   StyleSheet,
   ImageBackground,
-  SafeAreaView,
   Platform,
   useWindowDimensions,
+  ScrollView,
+  KeyboardAvoidingView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Checkbox from "expo-checkbox";
 import { useNavigation } from "@react-navigation/native";
@@ -59,91 +61,104 @@ export default function LoginScreen() {
 
   return (
     <ImageBackground
-          source={require("../../assets/Company-bg.webp")} // 👈 place your background image in /assets folder
-          style={styles.backgroundImage}
-          resizeMode="cover"
-          blurRadius={7}
+      source={require("../../assets/Company-bg.webp")} // 👈 place your background image in /assets folder
+      style={styles.backgroundImage}
+      resizeMode="cover"
+      blurRadius={7}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, width: '100%' }}
         >
-      <SafeAreaView style={[styles.container, isMobileLayout && { flexDirection: 'column', width: '94%' }]}>
-        {/* Left Section */}
-        <View style={[styles.leftCard, isMobileLayout && { width: '100%', marginBottom: 8 }]}>
-          <Image
-            source={{
-              uri: "https://cdn-icons-png.flaticon.com/512/3064/3064197.png",
-            }}
-            style={styles.icon}
-          />
-          <Text style={styles.title}>SUPER ADMIN</Text>
-          <Text style={styles.subtitle}>PLATFORM ACCESS</Text>
-        </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={[styles.container, isMobileLayout && { flexDirection: 'column', width: '94%' }]}>
+              {/* Left Section */}
+              <View style={[styles.leftCard, isMobileLayout && { width: '100%', marginBottom: 8 }]}>
+                <Image
+                  source={{
+                    uri: "https://cdn-icons-png.flaticon.com/512/3064/3064197.png",
+                  }}
+                  style={styles.icon}
+                />
+                <Text style={styles.title}>SUPER ADMIN</Text>
+                <Text style={styles.subtitle}>PLATFORM ACCESS</Text>
+              </View>
 
-        {/* Right Section */}
-        <View style={[styles.rightCard, isMobileLayout && { width: '100%' }]}>
-          <Text style={styles.header}>Super Admin Login</Text>
+              {/* Right Section */}
+              <View style={[styles.rightCard, isMobileLayout && { width: '100%' }]}>
+                <Text style={styles.header}>Super Admin Login</Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#7FA2C8"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor="#7FA2C8"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                />
 
-          <View style={styles.passwordFieldContainer}>
-            <TextInput
-              style={[styles.input, styles.passwordInput]}
-              placeholder="Password"
-              placeholderTextColor="#7FA2C8"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity
-              style={styles.eyeButton}
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              <Feather
-                name={showPassword ? 'eye-off' : 'eye'}
-                size={18}
-                color="#A9C6E4"
-              />
-            </TouchableOpacity>
-          </View>
+                <View style={styles.passwordFieldContainer}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    placeholder="Password"
+                    placeholderTextColor="#7FA2C8"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <Feather
+                      name={showPassword ? 'eye-off' : 'eye'}
+                      size={18}
+                      color="#A9C6E4"
+                    />
+                  </TouchableOpacity>
+                </View>
 
-          <View style={styles.rememberRow}>
-            <Checkbox value={remember} onValueChange={setRemember} color="#22D3EE" />
-            <Text style={styles.rememberText}>Remember Me</Text>
-          </View>
+                <View style={styles.rememberRow}>
+                  <Checkbox value={remember} onValueChange={setRemember} color="#22D3EE" />
+                  <Text style={styles.rememberText}>Remember Me</Text>
+                </View>
 
-          <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-            <LinearGradient
-              colors={["#0EA5E9", "#0F766E"]}
-              style={styles.buttonGradient}
-            >
-              <Text style={styles.loginText}>LOG IN</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+                <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+                  <LinearGradient
+                    colors={["#0EA5E9", "#0F766E"]}
+                    style={styles.buttonGradient}
+                  >
+                    <Text style={styles.loginText}>LOG IN</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
 
-           {/* 🌟 Company User Login Button */}
-          <TouchableOpacity
-                style={{ marginTop: 10 }}
-                onPress={() => navigation.navigate("CompanyLogin" as never)}
-            >
-            <Text style={{ color: "#A9C6E4", textAlign: "center" }}>
-                Go to Users Login →
-            </Text>
-          </TouchableOpacity>
+                {/* 🌟 Company User Login Button */}
+                <TouchableOpacity
+                  style={{ marginTop: 10 }}
+                  onPress={() => navigation.navigate("CompanyLogin" as never)}
+                >
+                  <Text style={{ color: "#A9C6E4", textAlign: "center" }}>
+                    Go to Users Login →
+                  </Text>
+                </TouchableOpacity>
 
-          {/* <View style={styles.platformIcons}>
-            <Text style={styles.platformText}>🌐 Web   📱 Android   🍎 iOS</Text>
-          </View> */}
+                {/* <View style={styles.platformIcons}>
+                  <Text style={styles.platformText}>🌐 Web   📱 Android   🍎 iOS</Text>
+                </View> */}
 
-          {/* <Text style={styles.mockHint}>
-            Demo: admin@super.com / 12345
-          </Text> */}
-        </View>
+                {/* <Text style={styles.mockHint}>
+                  Demo: admin@super.com / 12345
+                </Text> */}
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
       <AppSnackbar
         visible={snackbar.visible}
@@ -286,5 +301,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 10,
     textAlign: "center",
+  },
+  safeArea: {
+    flex: 1,
+    width: "100%",
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 20,
   },
 });

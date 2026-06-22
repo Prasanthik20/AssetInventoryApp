@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
   ImageBackground,
-  SafeAreaView,
   Platform,
   useWindowDimensions,
   ActivityIndicator,
   TextInput,
   Switch,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -276,7 +276,8 @@ export default function SuperAdminDashboard({ setUser }: any) {
       resizeMode="cover"
       blurRadius={5}
     >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={[styles.dashboardContainer, isMobileLayout && { width: '96%', padding: 14, borderRadius: 16 }]}>
           {/* Header */}
           <View style={[styles.headerRow, isMobileLayout && { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
@@ -670,6 +671,7 @@ export default function SuperAdminDashboard({ setUser }: any) {
           </View>
         </View>
       )}
+      </SafeAreaView>
     </ImageBackground>
   );
 }
