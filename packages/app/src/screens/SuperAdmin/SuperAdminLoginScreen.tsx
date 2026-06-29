@@ -18,6 +18,7 @@ import Checkbox from "expo-checkbox";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from '@expo/vector-icons';
 import AppSnackbar from 'src/components/common/AppSnackbar';
+import { spacing } from "src/theme";
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -68,30 +69,50 @@ export default function LoginScreen() {
     >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
+          // Use 'padding' for iOS and 'height' for Android to handle the keyboard correctly
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1, width: '100%' }}
         >
           <ScrollView
-            contentContainerStyle={styles.scrollContainer}
+            // flexGrow: 1 allows content to center when small, but scroll when keyboard opens
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <View style={[styles.container, isMobileLayout && { flexDirection: 'column', width: '94%' }]}>
-              {/* Left Section */}
-              <View style={[styles.leftCard, isMobileLayout && { width: '100%', marginBottom: 8 }]}>
+            <View
+              style={isMobileLayout ? styles.loginContainerMobile : styles.loginContainer}
+            >
+              {/* Left Decorative Panel */}
+              <View
+                style={isMobileLayout ? styles.leftPanelMobile : styles.leftPanel}
+              >
                 <Image
-                  source={{
-                    uri: "https://cdn-icons-png.flaticon.com/512/3064/3064197.png",
-                  }}
-                  style={styles.icon}
+                  source={require('../../assets/Asq_Logo_IV.png')}
+                  style={isMobileLayout ? styles.imageMobile : styles.image}
+                  resizeMode="contain"
                 />
-                <Text style={styles.title}>SUPER ADMIN</Text>
-                <Text style={styles.subtitle}>PLATFORM ACCESS</Text>
+                <Text
+                  style={isMobileLayout ? styles.leftTitleMobile : styles.leftTitle}
+                >
+                  A SQUARE TECHNOLOGIES
+                </Text>
+                <Text style={styles.leftSubtitle}>SECURE ASSET MANAGEMENT</Text>
               </View>
-
-              {/* Right Section */}
-              <View style={[styles.rightCard, isMobileLayout && { width: '100%' }]}>
-                <Text style={styles.header}>Super Admin Login</Text>
+              <View
+                style={isMobileLayout ? styles.rightPanelMobile : styles.rightPanel}
+              >
+                <View style={styles.logoContainer}>
+                  <Image
+                    source={require('../../assets/Login_logo.jpg')}
+                    style={isMobileLayout ? styles.logoMobile : styles.logo}
+                  />
+                  <Text
+                    style={isMobileLayout ? styles.welcomeMobile : styles.welcome}
+                  >
+                    Welcome !
+                  </Text>
+                  <Text style={styles.signInText}>Super Admin</Text>
+                </View>
 
                 <TextInput
                   style={styles.input}
@@ -102,7 +123,6 @@ export default function LoginScreen() {
                   value={email}
                   onChangeText={setEmail}
                 />
-
                 <View style={styles.passwordFieldContainer}>
                   <TextInput
                     style={[styles.input, styles.passwordInput]}
@@ -112,6 +132,7 @@ export default function LoginScreen() {
                     value={password}
                     onChangeText={setPassword}
                   />
+
                   <TouchableOpacity
                     style={styles.eyeButton}
                     onPress={() => setShowPassword(!showPassword)}
@@ -122,39 +143,33 @@ export default function LoginScreen() {
                       color="#A9C6E4"
                     />
                   </TouchableOpacity>
-                </View>
 
-                <View style={styles.rememberRow}>
-                  <Checkbox value={remember} onValueChange={setRemember} color="#22D3EE" />
-                  <Text style={styles.rememberText}>Remember Me</Text>
                 </View>
+                <View style={isMobileLayout ? { flexDirection: 'column', gap: 10, width: '100%' } : { flexDirection: "row", gap: 10, alignItems: 'center', justifyContent: "space-around" }}>
 
-                <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-                  <LinearGradient
-                    colors={["#0EA5E9", "#0F766E"]}
-                    style={styles.buttonGradient}
+                  <TouchableOpacity style={[styles.loginButton, isMobileLayout && { width: '100%' }]} onPress={handleLogin}>
+                    <LinearGradient
+                      colors={["#0EA5E9", "#0F766E"]}
+                      style={styles.buttonGradient}
+                    >
+                      <Text style={styles.loginText}>LOG IN</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  {/* 🌟 Company User Login Button */}
+                  <TouchableOpacity style={[styles.loginButton, isMobileLayout && { width: '100%' }]}
+                    onPress={() => navigation.navigate("CompanyLogin" as never)}
                   >
-                    <Text style={styles.loginText}>LOG IN</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                    <LinearGradient
+                      colors={["#235972ff", "#3aaca2ff"]}
+                      style={styles.buttonGradient}
+                    >
 
-                {/* 🌟 Company User Login Button */}
-                <TouchableOpacity
-                  style={{ marginTop: 10 }}
-                  onPress={() => navigation.navigate("CompanyLogin" as never)}
-                >
-                  <Text style={{ color: "#A9C6E4", textAlign: "center" }}>
-                    Go to Users Login →
-                  </Text>
-                </TouchableOpacity>
+                      <Text style={styles.loginText}>User Login</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
 
-                {/* <View style={styles.platformIcons}>
-                  <Text style={styles.platformText}>🌐 Web   📱 Android   🍎 iOS</Text>
-                </View> */}
-
-                {/* <Text style={styles.mockHint}>
-                  Demo: admin@super.com / 12345
-                </Text> */}
               </View>
             </View>
           </ScrollView>
@@ -184,18 +199,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   container: {
-    flexDirection: "row",
+    // flexDirection: "row",
     backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
-    width: "90%",
-    maxWidth: 950,
+    // width: "90%",
+    // maxWidth: 950,
   },
   leftCard: {
     flex: 1,
-    backgroundColor: "rgba(18, 45, 73, 0.82)",
-    borderWidth: 1,
-    borderColor: 'rgba(159, 207, 255, 0.22)',
+    // backgroundColor: "rgba(18, 45, 73, 0.82)",
+    // borderWidth: 1,
+    // borderColor: 'rgba(159, 207, 255, 0.22)',
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
@@ -208,20 +223,20 @@ const styles = StyleSheet.create({
   },
   rightCard: {
     flex: 1,
-    backgroundColor: "rgba(7, 24, 42, 0.9)",
-    borderWidth: 1,
-    borderColor: 'rgba(159, 207, 255, 0.22)',
+    // backgroundColor: "rgba(7, 24, 42, 0.9)",
+    // borderWidth: 1,
+    // borderColor: 'rgba(159, 207, 255, 0.22)',
     borderRadius: 20,
     padding: 30,
-    margin: 10,
+    margin: 20,
     shadowColor: "#001325",
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 6,
   },
   icon: {
-    width: 120,
-    height: 120,
+    width: 30,
+    height: 30,
     marginBottom: 20,
   },
   title: {
@@ -241,28 +256,7 @@ const styles = StyleSheet.create({
     marginBottom: 25,
     textAlign: "center",
   },
-  input: {
-    backgroundColor: "rgba(18, 45, 73, 0.86)",
-    borderWidth: 1,
-    borderColor: 'rgba(159, 207, 255, 0.22)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 15,
-    color: "#E6F3FF",
-  },
-  passwordFieldContainer: {
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  passwordInput: {
-    paddingRight: 46,
-  },
-  eyeButton: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    padding: 2,
-  },
+
   rememberRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -272,30 +266,7 @@ const styles = StyleSheet.create({
     color: "#A9C6E4",
     marginLeft: 8,
   },
-  loginButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-    marginBottom: 20,
-    elevation: 5,
-  },
-  buttonGradient: {
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  loginText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  platformIcons: {
-    alignItems: "center",
-    marginTop: 10,
-  },
-  platformText: {
-    color: "#A9C6E4",
-    fontSize: 14,
-    opacity: 0.9,
-  },
+
   mockHint: {
     color: "#000000ff",
     fontSize: 12,
@@ -305,11 +276,201 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     width: "100%",
+    backgroundColor: '#071425',
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 20,
+  },
+
+  // new
+  loginContainer: {
+    flexDirection: 'row',
+    width: '75%',
+    minHeight: 550,
+    alignSelf: 'center',
+    maxWidth: 1000,
+    backgroundColor: 'rgba(7, 24, 42, 0.84)',
+    borderRadius: 30,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
+    // Add vertical margin so it doesn't touch screen edges on small phones
+    marginVertical: 40,
+    elevation: 10,
+  },
+  loginContainerMobile: {
+    flexDirection: 'column',
+    width: '92%',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(7, 24, 42, 0.84)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
+    marginVertical: 20,
+    elevation: 10,
+  },
+  leftPanel: {
+    // flex: 1.2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(18, 45, 73, 0.7)',
+  },
+  leftPanelMobile: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    backgroundColor: 'rgba(18, 45, 73, 0.7)',
+  },
+  image: {
+    width: 300,
+    height: 150,
+  },
+  imageMobile: {
+    width: 200,
+    height: 80,
+  },
+  leftTitle: {
+    fontSize: 26,
+    color: '#E6F3FF',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  leftTitleMobile: {
+    fontSize: 20,
+    color: '#E6F3FF',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  leftSubtitle: {
+    fontSize: 16,
+    color: '#A9C6E4',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  rightPanel: {
+    flex: 1,
+    backgroundColor: 'rgba(7, 24, 42, 0.92)',
+    padding: 50,
+    justifyContent: 'center',
+  },
+  rightPanelMobile: {
+    padding: 20,
+    backgroundColor: 'rgba(7, 24, 42, 1)',
+    justifyContent: 'flex-start',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: Platform.OS === 'web' ? 15 : 25,
+  },
+  logo: {
+    width: 80,
+    height: 70,
+    marginBottom: 10,
+    borderRadius: 8,
+  },
+  logoMobile: {
+    width: 60,
+    height: 50,
+    marginBottom: 10,
+    borderRadius: 8,
+  },
+  welcome: {
+    color: '#E6F3FF',
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  welcomeMobile: {
+    color: '#E6F3FF',
+    fontSize: 22,
+    fontWeight: '600',
+  },
+  signInText: {
+    color: '#A9C6E4',
+    fontSize: 15,
+    marginTop: 2,
+  },
+  input: {
+    backgroundColor: 'rgba(18, 45, 73, 0.86)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
+    color: '#E6F3FF',
+  },
+  passwordFieldContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 14,
+    top: 14,
+    padding: 2,
+  },
+  loginButton: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    elevation: 5,
+    width: "50%"
+  },
+  buttonGradient: {
+    // paddingVertical: 15,
+    padding: 15,
+    alignItems: 'center',
+  },
+  loginText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  linkText: {
+    textAlign: 'center',
+    color: '#A9C6E4',
+    marginTop: 0,
+  },
+  platformIcons: {
+    alignItems: 'center',
+    marginTop: 'auto',
+    paddingTop: 20,
+  },
+  platformText: {
+    color: '#A9C6E4',
+    fontSize: 14,
+  },
+  forgotPasswordContainer: {
+    alignSelf: 'flex-end',
+    marginBottom: 15,
+  },
+  forgotPasswordText: {
+    color: '#22D3EE',
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  registerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 25,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 20,
+  },
+  registerText: {
+    color: '#A9C6E4',
+    fontSize: 15,
+  },
+  registerLink: {
+    color: '#0EA5E9',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
 });

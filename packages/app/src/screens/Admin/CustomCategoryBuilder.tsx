@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { baseURL } from '../../navigation/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Category {
   id: string;
@@ -54,8 +55,17 @@ export default function CustomCategoryBuilder() {
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState('text'); // text, date, number
 
+  const [isSubscriptionExpired, setIsSubscriptionExpired] = useState(false);
+
   useEffect(() => {
     fetchCategories();
+    const checkSubscription = async () => {
+      const expired = await AsyncStorage.getItem('isSubscriptionExpired');
+      if (expired) {
+        setIsSubscriptionExpired(JSON.parse(expired));
+      }
+    };
+    checkSubscription();
   }, []);
 
   const fetchCategories = async () => {
@@ -148,13 +158,15 @@ export default function CustomCategoryBuilder() {
           <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.title}>Asset Categories</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setNewCatModalVisible(true)}
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.addButtonText}>New Category</Text>
-        </TouchableOpacity>
+        {!isSubscriptionExpired && (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setNewCatModalVisible(true)}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.addButtonText}>New Category</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.layout}>
@@ -209,9 +221,11 @@ export default function CustomCategoryBuilder() {
                   ))}
                 </View>
 
-                <TouchableOpacity style={styles.saveFieldButton} onPress={handleAddField}>
-                  <Text style={styles.saveFieldText}>Add Field</Text>
-                </TouchableOpacity>
+                {!isSubscriptionExpired && (
+                  <TouchableOpacity style={styles.saveFieldButton} onPress={handleAddField}>
+                    <Text style={styles.saveFieldText}>Add Field</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {fieldsLoading ? (

@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const supervisorResult = await query(
-      `SELECT "employeeId", "fullName"
+      `SELECT "employeeId", "fullName", "tenantId"
        FROM "Users"
        WHERE "employeeId" = $1
        LIMIT 1`,
@@ -73,6 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const supervisorName = String(supervisorResult.rows[0]?.fullName || supervisorEmployeeId);
+    const tenantId = supervisorResult.rows[0]?.tenantId || null;
 
     const adminResult = await query(
       `SELECT DISTINCT u."employeeId"
@@ -111,16 +112,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
 
       for (const adminId of adminIds) {
+        const replyPayload = {
+            kind: 'return_notification',
+            message: `Return pending confirmation by admin.`,
+            tenantId: tenantId,
+            returnedDate: new Date().toISOString()
+        };
+
         await query(
           `INSERT INTO "Notifications"
-            ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
-           VALUES ($1, NULL, $2, $3, $4, $5, 'unread', NOW())`,
+            ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
+           VALUES ($1, NULL, $2, $3, $4, $5, 'unread', NOW(), $6)`,
           [
             assetId,
             supervisorEmployeeId,
             adminId,
             `Asset ${assetId} has been returned by supervisor ${supervisorName}.`,
-            `Return pending confirmation by admin.`,
+            JSON.stringify(replyPayload),
+            tenantId,
           ],
         );
       }

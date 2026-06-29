@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ImageBackground,
   FlatList,
   TouchableOpacity,
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import axios from 'axios';
 import { useNavigation, useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
@@ -397,19 +397,22 @@ const FieldAssets: React.FC = () => {
             )}
           </View>
 
-          <FlatList
-            data={filteredAssets}
-            renderItem={renderAsset}
-            keyExtractor={item => item.id.toString()}
-            contentContainerStyle={renderStyles.listContainer}
-            refreshing={loading}
-            onRefresh={fetchAssets}
-            ListEmptyComponent={
-              <Text style={renderStyles.emptyText}>
-                No assets found in the field.
-              </Text>
-            }
-          />
+          <View style={{ flex: 1 }}>
+            <FlatList
+              data={filteredAssets}
+              renderItem={renderAsset}
+              keyExtractor={item => item.id.toString()}
+              style={{ flex: 1 }}
+              contentContainerStyle={renderStyles.listContainer}
+              refreshing={loading}
+              onRefresh={fetchAssets}
+              ListEmptyComponent={
+                <Text style={renderStyles.emptyText}>
+                  No assets found in the field.
+                </Text>
+              }
+            />
+          </View>
 
           {selectedAsset && (
             <OverdueNotificationModal
@@ -543,7 +546,7 @@ const renderStyles = StyleSheet.create({
   picker: {
     width: '100%',
     height: 45,
-    color: '#0a0a0a',
+    color: '#E6F3FF',
   },
   searchInput: {
     flex: 1,

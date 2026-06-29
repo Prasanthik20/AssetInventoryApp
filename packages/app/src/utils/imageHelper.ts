@@ -15,17 +15,52 @@ export const inferMimeType = (uri: string, explicitMimeType?: string): string =>
 export const toPersistentDataUrl = async (uri: string, mimeType?: string): Promise<string> => {
   if (!uri) return '';
   if (uri.startsWith('data:')) return uri;
+  if (uri.startsWith('http://') || uri.startsWith('https://')) return uri;
 
   const resolvedMimeType = inferMimeType(uri, mimeType);
 
   if (Platform.OS === 'web') {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(new Error('Failed to convert blob to data URL'));
-      reader.readAsDataURL(blob);
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = uri;
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800;
+          const MAX_HEIGHT = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(uri);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          resolve(dataUrl);
+        } catch (e) {
+          console.warn('Canvas compression failed, falling back to original:', e);
+          resolve(uri);
+        }
+      };
+      img.onerror = () => {
+        resolve(uri); // fallback to original uri
+      };
     });
   }
 

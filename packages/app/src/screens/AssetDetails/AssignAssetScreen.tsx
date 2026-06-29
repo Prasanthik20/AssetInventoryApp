@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ImageBackground,
   FlatList,
   TouchableOpacity,
@@ -17,6 +16,7 @@ import {
   useWindowDimensions,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -1183,22 +1183,22 @@ const AssignAssetScreen: React.FC = () => {
               containerStyle={{ marginBottom: 12 }}
               searchContainerStyle={{
                 backgroundColor: 'rgba(18, 45, 73, 0.86)',
-                borderColor: 'rgba(159, 207, 255, 0.22)',
-                minHeight: 42,
+                borderColor: 'rgba(255, 255, 255, 1)',
               }}
               searchInputStyle={{
                 color: '#E6F3FF',
               }}
               pickerWrapperStyle={{
                 marginBottom: 0,
-                minHeight: 42,
+                height: 44,
                 backgroundColor: 'rgba(18, 45, 73, 0.86)',
                 borderColor: 'rgba(159, 207, 255, 0.22)',
               }}
               pickerStyle={{
                 fontSize: 14,
                 color: '#E6F3FF',
-                backgroundColor: 'rgba(18, 45, 73, 0.86)',
+                backgroundColor: 'transparent',
+                height: Platform.OS === 'android' ? 50 : '100%',
               }}
               pickerItemColor="#0F172A"
             />
@@ -1207,6 +1207,7 @@ const AssignAssetScreen: React.FC = () => {
               data={filteredAssets}
               keyExtractor={(item, index) => `asset-${item.assetId}-${index}`}
               renderItem={renderAssetItem}
+              style={{ flex: 1, marginTop: 10 }}
               ListEmptyComponent={
                 <Text style={styles.helperText}>No assets found for this search.</Text>
               }

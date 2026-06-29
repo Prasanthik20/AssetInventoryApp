@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Platform, ImageBackground, ScrollView, Image, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform, ImageBackground, ScrollView, Image, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';

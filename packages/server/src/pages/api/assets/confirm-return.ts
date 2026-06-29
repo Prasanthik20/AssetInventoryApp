@@ -173,6 +173,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .map((row: { employeeId: unknown }) => toValidEmployeeId(row.employeeId))
       .filter((id: number | null): id is number => id !== null);
 
+    const confirmerResult = await query(
+      `SELECT "tenantId" FROM "Users" WHERE "employeeId" = $1 LIMIT 1`,
+      [parsedConfirmedBy]
+    );
+    const tenantId = confirmerResult.rows[0]?.tenantId || null;
+
     const recipients = new Set<number>([
       ...adminIds,
       ...(resolvedSupervisorEmployeeId ? [resolvedSupervisorEmployeeId] : []),
@@ -180,17 +186,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ]);
 
     for (const receiverId of recipients) {
+      const replyPayload = {
+        kind: 'return_notification',
+        message: `Asset ${resolvedAssetId} is now unassigned after return confirmation.`,
+        tenantId: tenantId,
+        returnedDate: new Date().toISOString()
+      };
+
       await query(
         `INSERT INTO "Notifications"
-        ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
-        VALUES ($1, $2, $3, $4, $5, $6, 'received', NOW())`,
+        ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
+        VALUES ($1, $2, $3, $4, $5, $6, 'received', NOW(), $7)`,
         [
           resolvedAssetId,
           hasAssignmentId ? parsedAssignmentId : null,
           parsedConfirmedBy,
           receiverId,
           `Return confirmed for asset ${resolvedAssetId}.`,
-          `Asset ${resolvedAssetId} is now unassigned after return confirmation.`,
+          JSON.stringify(replyPayload),
+          tenantId,
         ],
       );
     }

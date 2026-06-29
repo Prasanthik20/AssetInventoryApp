@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground, FlatList, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, FlatList, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { baseURL,Asset } from 'src/navigation/types';
@@ -107,23 +108,26 @@ const OfficeAssets: React.FC = () => {
           />
 
           {/* Asset List using the new finalDisplayAssets */}
-          <FlatList
-            data={finalDisplayAssets}
-            keyExtractor={item => item.id.toString()}
-            contentContainerStyle={styles.listContainer}
-            renderItem={({ item }) => (
-              <View style={styles.assetRow}>
-                <Ionicons name="business-outline" size={24} color="#22D3EE" style={styles.assetIcon} />
-                <View style={styles.assetInfo}>
-                  <Text style={styles.assetName}>{item.assetName} ({item.barcode})</Text>
-                  <Text style={styles.assetSubtext}>Serial No: {item.serialNumber || 'N/A'}</Text>
-                  <Text style={styles.assetSubtext}>Last User: {item.assignedTo || 'N/A'}</Text>
-                  <Text style={styles.assetSubtext}>Location: {item.location || 'N/A'}</Text>
+          <View style={{ flex: 1 }}>
+            <FlatList
+              data={finalDisplayAssets}
+              keyExtractor={item => item.id.toString()}
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.listContainer}
+              renderItem={({ item }) => (
+                <View style={styles.assetRow}>
+                  <Ionicons name="business-outline" size={24} color="#22D3EE" style={styles.assetIcon} />
+                  <View style={styles.assetInfo}>
+                    <Text style={styles.assetName}>{item.assetName} ({item.barcode})</Text>
+                    <Text style={styles.assetSubtext}>Serial No: {item.serialNumber || 'N/A'}</Text>
+                    <Text style={styles.assetSubtext}>Last User: {item.assignedTo || 'N/A'}</Text>
+                    <Text style={styles.assetSubtext}>Location: {item.location || 'N/A'}</Text>
+                  </View>
                 </View>
-              </View>
-            )}
-            ListEmptyComponent={<Text style={styles.emptyText}>No assets found.</Text>}
-          />
+              )}
+              ListEmptyComponent={<Text style={styles.emptyText}>No assets found.</Text>}
+            />
+          </View>
         </View>
       </SafeAreaView>
     </ImageBackground>

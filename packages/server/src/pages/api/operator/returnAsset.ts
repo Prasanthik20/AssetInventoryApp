@@ -117,12 +117,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             receiverEmployeeId: number,
             reason: string,
             reply?: string,
+            tenantId?: string | null,
         ): Promise<void> => {
             await query(
                 `INSERT INTO "Notifications"
-                 ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
-                 VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW())`,
-                [assetId, assignmentId, senderEmployeeId, receiverEmployeeId, reason, reply ?? null],
+                 ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
+                 VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW(), $7)`,
+                [assetId, assignmentId, senderEmployeeId, receiverEmployeeId, reason, reply ?? null, tenantId ?? null],
             );
         };
 
@@ -139,6 +140,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const resolvedOperatorEmployeeId = await resolveEmployeeId(incomingOperatorId, 'operator');
         const operatorName = await resolveDisplayName(resolvedOperatorEmployeeId);
+        
+        const tenantIdResult = await query(`SELECT "tenantId" FROM "Users" WHERE "employeeId" = $1 LIMIT 1`, [resolvedOperatorEmployeeId]);
+        const tenantId = tenantIdResult.rows[0]?.tenantId || null;
         const adminEmployeeIds = await fetchAdminEmployeeIds();
         const adminEmployeeIdSet = new Set(adminEmployeeIds);
 
@@ -228,7 +232,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     "returned_date" = NOW(),
                     "photoURL" = COALESCE($3, "photoURL"),
                     "barcodeURL" = COALESCE($4, "barcodeURL"),
-                    "serialNoVerified" = true
+                    "serialNoVerified" = true,
+                    "tenantId" = COALESCE("tenantId", $6)
                                 WHERE id = COALESCE($5, (
                     SELECT id
                     FROM "Asset_Assignments"
@@ -250,6 +255,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                                                                         media.photoURL ?? null,
                                                                         media.barcodeURL ?? null,
                                                                         Number.isFinite(targetAssignmentId) ? Number(targetAssignmentId) : null,
+                                                                        tenantId,
                                                                 ]
             );
 
@@ -304,9 +310,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 }
 
                 const reason = `Asset ${assetId} has been returned by ${operatorName}.`;
-                const reply = adminEmployeeIdSet.has(receiverEmployeeId)
+                const replyMessageString = adminEmployeeIdSet.has(receiverEmployeeId)
                     ? `Return pending confirmation: Asset ${assetId} was returned by ${operatorName} and is now with ${assigningSupervisorName}.`
                     : `Return pending confirmation: ${operatorName} returned asset ${assetId}. Please confirm final return.`;
+                
+                const replyPayload = {
+                    kind: 'return_notification',
+                    message: replyMessageString,
+                    tenantId: tenantId,
+                    returnedDate: new Date().toISOString()
+                };
 
                 await createNotification(
                     assetId,
@@ -314,7 +327,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     resolvedOperatorEmployeeId,
                     receiverEmployeeId,
                     reason,
-                    reply,
+                    JSON.stringify(replyPayload),
+                    tenantId
                 );
             }
         }

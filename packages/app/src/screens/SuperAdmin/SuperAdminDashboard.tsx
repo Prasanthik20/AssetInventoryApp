@@ -19,6 +19,7 @@ import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { Picker } from "@react-native-picker/picker";
 import { baseURL } from '../../navigation/types';
 
 interface Company {
@@ -30,6 +31,12 @@ interface Company {
   planId?: string;
   organizationType?: string;
   createdAt?: string;
+  endDate?: string;
+  startDate: string;
+  adminName?: string;
+  adminEmail?: string;
+  adminPhone?: string;
+  adminAddress?: string;
 }
 
 interface PlanPackage {
@@ -40,6 +47,16 @@ interface PlanPackage {
   price: number;
   currency: string;
   features?: any;
+}
+
+interface PlatformAsset {
+  id: string;
+  name: string;
+  serialNo: string;
+  assetId: string;
+  status: string;
+  location: string;
+  tenantName: string;
 }
 
 export default function SuperAdminDashboard({ setUser }: any) {
@@ -57,11 +74,22 @@ export default function SuperAdminDashboard({ setUser }: any) {
   });
   const [companies, setCompanies] = useState<Company[]>([]);
   const [plans, setPlans] = useState<PlanPackage[]>([]);
+
+  // Sort states
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
+
   // Modals & Profile overlay states
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [isDetailsModalVisible, setIsDetailsModalVisible] = useState(false);
   const [isPlansModalVisible, setIsPlansModalVisible] = useState(false);
-  
+  const [isAssetsVisible, setIsAssetsVisible] = useState(false);
+
+  // Platform Assets states
+  const [platformAssets, setPlatformAssets] = useState<PlatformAsset[]>([]);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [selectedTenantFilter, setSelectedTenantFilter] = useState('all');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
+
   // Tenant Profile Editor fields
   const [profileStatus, setProfileStatus] = useState("active");
   const [profilePlanId, setProfilePlanId] = useState("free-trial");
@@ -114,9 +142,31 @@ export default function SuperAdminDashboard({ setUser }: any) {
     }
   };
 
+  const fetchPlatformAssets = async () => {
+    setLoadingAssets(true);
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+      const headers = { Authorization: `Bearer ${token}` };
+      const queryParams = `tenantId=${selectedTenantFilter}&status=${selectedStatusFilter}`;
+      const res = await axios.get(`${baseURL}/api/superadmin/assets?${queryParams}`, { headers });
+      setPlatformAssets(res.data.assets || []);
+    } catch (e) {
+      console.error('Fetch platform assets error:', e);
+    } finally {
+      setLoadingAssets(false);
+    }
+  };
+
   useEffect(() => {
     fetchSuperAdminData();
   }, []);
+
+  useEffect(() => {
+    if (isAssetsVisible) {
+      fetchPlatformAssets();
+    }
+  }, [isAssetsVisible, selectedTenantFilter, selectedStatusFilter]);
 
   const handleLogout = async () => {
     try {
@@ -172,7 +222,7 @@ export default function SuperAdminDashboard({ setUser }: any) {
       setEditorMaxAssets(String(plan.maxAssets));
       setEditorPrice(String(plan.price));
       setEditorCurrency(plan.currency || "INR");
-      
+
       const features = plan.features || {};
       setEditorFeatures({
         storage: features.storage || "2GB",
@@ -236,35 +286,60 @@ export default function SuperAdminDashboard({ setUser }: any) {
     }
   };
 
-  const renderCompanyItem = ({ item } : { item : Company }) => (
-    <View style={[styles.tableRow, isMobileLayout && { flexWrap: 'wrap', rowGap: 6, paddingHorizontal: 10 }]}>
-      <Text style={[styles.tableCell, styles.companyName]}>{item.name}</Text>
-      <Text style={styles.tableCell}>{item.planName}</Text>
-      <Text style={[styles.tableCell, { textTransform: 'capitalize', fontWeight: 'bold', color: item.status === 'active' ? '#34D399' : '#EF4444' }]}>
-        {item.status}
-      </Text>
-      <Text style={styles.tableCell}>{item.assetsCount}</Text>
-      <View style={{ flex: 1, alignItems: 'flex-start', justifyContent: 'center' }}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => {
-            setSelectedCompany(item);
-            setProfileStatus(item.status);
-            setProfilePlanId(item.planId || "free-trial");
-            setIsDetailsModalVisible(true);
-          }}
-        >
-          <Text style={styles.actionText}>View</Text>
-        </TouchableOpacity>
+  const renderCompanyItem = ({ item }: { item: Company }) => {
+    let statusText = item.status;
+    let statusColor = item.status === 'active' ? '#34D399' : '#EF4444';
+    let isWarning = false;
+
+    if (item.endDate) {
+      const end = new Date(item.endDate);
+      const now = new Date();
+      const diffTime = end.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 0) {
+        statusText = 'Expired';
+        statusColor = '#EF4444';
+      } else if (diffDays <= 7) {
+        statusText = `Expiring (${diffDays}d)`;
+        statusColor = '#F59E0B'; // Warning orange
+        isWarning = true;
+      }
+    }
+
+    return (
+      <View style={[styles.tableRow, isMobileLayout && { flexWrap: 'wrap', rowGap: 6, paddingHorizontal: 10 }]}>
+        <Text style={[styles.tableCell, styles.companyName]}>{item.name}</Text>
+        <Text style={styles.tableCell}>{item.planName}</Text>
+        <View style={[styles.tableCell, { flexDirection: 'row', alignItems: 'center' }]}>
+          <Text style={{ textTransform: 'capitalize', fontWeight: 'bold', color: statusColor }}>
+            {statusText}
+          </Text>
+          {isWarning && <Ionicons name="warning" size={14} color="#F59E0B" style={{ marginLeft: 4 }} />}
+        </View>
+        <Text style={styles.tableCell}>{item.assetsCount}</Text>
+        <View style={{ flex: 1, alignItems: 'flex-start', justifyContent: 'center' }}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => {
+              setSelectedCompany(item);
+              setProfileStatus(statusText === 'Expired' ? 'expired' : item.status);
+              setProfilePlanId(item.planId || "free-trial");
+              setIsDetailsModalVisible(true);
+            }}
+          >
+            <Text style={styles.actionText}>View</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#07182a', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#22D3EE" />
-        <Text style={{ color: '#A9C6E4', marginTop: 12 }}>Loading SaaS metrics...</Text>
+        <Text style={{ color: '#A9C6E4', marginTop: 12 }}>Loading Asset metrics...</Text>
       </View>
     );
   }
@@ -278,399 +353,535 @@ export default function SuperAdminDashboard({ setUser }: any) {
     >
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={[styles.dashboardContainer, isMobileLayout && { width: '96%', padding: 14, borderRadius: 16 }]}>
-          {/* Header */}
-          <View style={[styles.headerRow, isMobileLayout && { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
-            <View>
-              <Text style={styles.headerTitle}>Super Admin Control Panel</Text>
-              <Text style={{ color: '#A9C6E4', fontSize: 13, marginTop: 2 }}>Platform Management Console</Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-              <View style={styles.adminBadge}>
-                <Ionicons name="person-circle-outline" size={20} color="#22D3EE" />
-                <Text style={[styles.adminText, { color: '#22D3EE', fontWeight: 'bold' }]}>Super Admin</Text>
+          <View style={[styles.dashboardContainer, isMobileLayout && { width: '96%', padding: 14, borderRadius: 16 }]}>
+            {/* Header */}
+            <View style={[styles.headerRow, isMobileLayout && { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
+              <View>
+                <Text style={styles.headerTitle}>Super Admin Control Panel</Text>
+                <Text style={{ color: '#A9C6E4', fontSize: 13, marginTop: 2 }}>Platform Management Console</Text>
               </View>
-              <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                <Ionicons name="log-out-outline" size={20} color="#FF4D4D" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Top Stats Grid */}
-          <View style={styles.statsRow}>
-            <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-              <MaterialIcons name="business" size={26} color="#22D3EE" />
-              <Text style={styles.statNumber}>{stats.totalTenants}</Text>
-              <Text style={styles.statLabel}>Total Organizations</Text>
-            </View>
-            <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-              <Ionicons name="checkmark-done" size={26} color="#34D399" />
-              <Text style={styles.statNumber}>{stats.activeSubscriptions}</Text>
-              <Text style={styles.statLabel}>Paid Subscriptions</Text>
-            </View>
-            <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-              <Ionicons name="time-outline" size={26} color="#F59E0B" />
-              <Text style={styles.statNumber}>{stats.pendingRenewals}</Text>
-              <Text style={styles.statLabel}>Pending Renewal Requests</Text>
-            </View>
-            <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-              <Ionicons name="cube-outline" size={26} color="#EC4899" />
-              <Text style={styles.statNumber}>{stats.totalAssetsOnPlatform}</Text>
-              <Text style={styles.statLabel}>Platform Assets Logged</Text>
-            </View>
-          </View>
-
-          {/* Client Companies Listing */}
-          <View style={styles.tableContainer}>
-            <Text style={styles.sectionTitle}>Registered Organizations</Text>
-            {!isMobileLayout && <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderText, { flex: 2, textAlign: 'left', paddingLeft: 8 }]}>Client Name</Text>
-              <Text style={styles.tableHeaderText}>Active Plan</Text>
-              <Text style={styles.tableHeaderText}>Status</Text>
-              <Text style={styles.tableHeaderText}>Live Assets</Text>
-              <Text style={styles.tableHeaderText}>Action</Text>
-            </View>}
-            <FlatList
-              data={companies}
-              keyExtractor={(item, index) => item.id + '-' + index}
-              renderItem={renderCompanyItem}
-              scrollEnabled={false}
-              ListEmptyComponent={
-                <Text style={{ color: '#A9C6E4', textAlign: 'center', marginVertical: 20 }}>No companies registered on the platform.</Text>
-              }
-            />
-          </View>
-
-          {/* Quick Action Operations */}
-          <View style={[styles.actionsContainer, isMobileLayout && { flexDirection: 'column', gap: 8 }]}>
-            <TouchableOpacity style={styles.actionPrimary} onPress={() => navigation.navigate("AddCompany" as never)}>
-              <LinearGradient colors={["#0EA5E9", "#0F766E"]} style={styles.gradientButton}>
-                <Text style={styles.actionBtnText}>Add New Organization</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionSecondary} onPress={() => setIsPlansModalVisible(true)}>
-              <LinearGradient colors={["#3B82F6", "#1D4ED8"]} style={styles.gradientButton}>
-                <Text style={styles.actionBtnText}>Configure Plan Packages</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* ================= MODAL: ORGANIZATIONAL PROFILE DETAILS OVERLAY ================= */}
-      {isDetailsModalVisible && selectedCompany && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🏢 Organization Profile</Text>
-              <TouchableOpacity onPress={() => setIsDetailsModalVisible(false)}>
-                <Ionicons name="close-circle-outline" size={26} color="#FF4D4D" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>Organization Name</Text>
-                <Text style={styles.modalValue}>{selectedCompany.name}</Text>
-              </View>
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>System Identifier (Tenant ID)</Text>
-                <Text style={[styles.modalValue, { fontSize: 12, color: '#A9C6E4', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]}>
-                  {selectedCompany.id}
-                </Text>
-              </View>
-
-              {/* Status Select Radio Row */}
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>Account Lifecycle Status</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                  {['active', 'suspended', 'expired'].map((st) => (
-                    <TouchableOpacity
-                      key={st}
-                      style={[
-                        styles.statusSelectBtn,
-                        profileStatus === st && { 
-                          backgroundColor: st === 'active' ? '#10B981' : st === 'suspended' ? '#EF4444' : '#F59E0B', 
-                          borderColor: 'transparent' 
-                        }
-                      ]}
-                      onPress={() => setProfileStatus(st)}
-                    >
-                      <Text style={[styles.statusSelectText, profileStatus === st && { color: '#fff', fontWeight: 'bold' }]}>
-                        {st.toUpperCase()}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                <View style={styles.adminBadge}>
+                  <Ionicons name="person-circle-outline" size={20} color="#22D3EE" />
+                  <Text style={[styles.adminText, { color: '#22D3EE', fontWeight: 'bold' }]}>Super Admin</Text>
                 </View>
+                <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+                  <Ionicons name="log-out-outline" size={20} color="#FF4D4D" />
+                </TouchableOpacity>
               </View>
+            </View>
 
-              {/* Plan Select Button Row */}
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>Subscription Package</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                  {plans.map((pl) => (
-                    <TouchableOpacity
-                      key={pl.id}
-                      style={[
-                        styles.planSelectBtn,
-                        profilePlanId === pl.id && { backgroundColor: '#22D3EE', borderColor: 'transparent' }
-                      ]}
-                      onPress={() => setProfilePlanId(pl.id)}
-                    >
-                      <Text style={[styles.planSelectText, profilePlanId === pl.id && { color: '#07182a', fontWeight: 'bold' }]}>
-                        {pl.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+            {/* Top Stats Grid */}
+            <View style={styles.statsRow}>
+              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
+                <MaterialIcons name="business" size={26} color="#22D3EE" />
+                <Text style={styles.statNumber}>{stats.totalTenants}</Text>
+                <Text style={styles.statLabel}>Total Organizations</Text>
               </View>
+              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
+                <Ionicons name="checkmark-done" size={26} color="#34D399" />
+                <Text style={styles.statNumber}>{stats.activeSubscriptions}</Text>
+                <Text style={styles.statLabel}>Paid Subscriptions</Text>
+              </View>
+              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
+                <Ionicons name="time-outline" size={26} color="#F59E0B" />
+                <Text style={styles.statNumber}>{stats.pendingRenewals}</Text>
+                <Text style={styles.statLabel}>Pending Renewal Requests</Text>
+              </View>
+              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
+                <TouchableOpacity onPress={() => setIsAssetsVisible(true)}>
+                  <Ionicons name="cube-outline" size={26} color="#EC4899" />
+                  <Text style={styles.statNumber}>{stats.totalAssetsOnPlatform}</Text>
+                  <Text style={styles.statLabel}>Platform Assets Logged</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>Organization Type</Text>
-                <Text style={styles.modalValue}>{selectedCompany.organizationType || 'Standard Client'}</Text>
+            {/* Client Companies Listing */}
+            <View style={styles.tableContainer}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Registered Organizations</Text>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(18, 45, 73, 0.86)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(159, 207, 255, 0.22)' }}
+                  onPress={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                >
+                  <Text style={{ color: '#A9C6E4', marginRight: 5, fontSize: 12 }}>Sort by Assets</Text>
+                  <Ionicons name={sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'} size={14} color="#A9C6E4" />
+                </TouchableOpacity>
               </View>
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>Live Assets Logged</Text>
-                <Text style={styles.modalValue}>{selectedCompany.assetsCount} Active Assets</Text>
-              </View>
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>Registered Date</Text>
-                <Text style={styles.modalValue}>
-                  {selectedCompany.createdAt ? new Date(selectedCompany.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'}
-                </Text>
-              </View>
-            </ScrollView>
-            
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 15 }}>
-              <TouchableOpacity style={[styles.modalCloseBtn, { flex: 1, backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.2)' }]} onPress={() => setIsDetailsModalVisible(false)}>
-                <Text style={[styles.modalCloseText, { color: '#fff' }]}>Cancel</Text>
+              {!isMobileLayout && <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderText, { flex: 2, textAlign: 'left', paddingLeft: 8 }]}>Client Name</Text>
+                <Text style={styles.tableHeaderText}>Active Plan</Text>
+                <Text style={styles.tableHeaderText}>Status</Text>
+                <Text style={styles.tableHeaderText}>Live Assets</Text>
+                <Text style={styles.tableHeaderText}>Action</Text>
+              </View>}
+              <FlatList
+                data={[...companies].sort((a, b) => {
+                  if (!sortOrder) return 0;
+                  return sortOrder === 'asc' ? a.assetsCount - b.assetsCount : b.assetsCount - a.assetsCount;
+                })}
+                keyExtractor={(item, index) => item.id + '-' + index}
+                renderItem={renderCompanyItem}
+                scrollEnabled={false}
+                ListEmptyComponent={
+                  <Text style={{ color: '#A9C6E4', textAlign: 'center', marginVertical: 20 }}>No companies registered on the platform.</Text>
+                }
+              />
+            </View>
+
+            {/* Quick Action Operations */}
+            <View style={[styles.actionsContainer, isMobileLayout && { flexDirection: 'column', gap: 8 }]}>
+              <TouchableOpacity style={styles.actionPrimary} onPress={() => navigation.navigate("AddCompany" as never)}>
+                <LinearGradient colors={["#0EA5E9", "#0F766E"]} style={styles.gradientButton}>
+                  <Text style={styles.actionBtnText}>Add New Organization</Text>
+                </LinearGradient>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalCloseBtn, { flex: 1 }]} onPress={handleSaveProfile} disabled={updatingProfile}>
-                {updatingProfile ? (
-                  <ActivityIndicator size="small" color="#22D3EE" />
-                ) : (
-                  <Text style={styles.modalCloseText}>Save Updates</Text>
-                )}
+
+              <TouchableOpacity style={styles.actionSecondary} onPress={() => setIsPlansModalVisible(true)}>
+                <LinearGradient colors={["#3B82F6", "#1D4ED8"]} style={styles.gradientButton}>
+                  <Text style={styles.actionBtnText}>Configure Plan Packages</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      )}
+        </ScrollView>
 
-      {/* ================= MODAL: PLANS PACKAGES OVERVIEW OVERLAY ================= */}
-      {isPlansModalVisible && (
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { width: Platform.OS === 'web' ? '60%' : '92%', maxWidth: 700 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📦 Platform Plan Catalog</Text>
-              <TouchableOpacity onPress={() => openPlanEditor(null)} style={styles.addPlanHeaderBtn}>
-                <Ionicons name="add-circle-outline" size={20} color="#34D399" />
-                <Text style={{ color: '#34D399', fontWeight: 'bold', marginLeft: 4 }}>Add Plan</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setIsPlansModalVisible(false)}>
-                <Ionicons name="close-circle-outline" size={26} color="#FF4D4D" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
-              {plans.map((plan) => {
-                const features = plan.features || {};
-                return (
-                  <View key={plan.id} style={styles.planOverviewCard}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.planName}>{plan.name}</Text>
-                        <TouchableOpacity onPress={() => openPlanEditor(plan)}>
-                          <Feather name="edit-2" size={14} color="#22D3EE" />
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={styles.planPrice}>₹{parseFloat(String(plan.price)).toLocaleString()} /mo</Text>
-                    </View>
-                    <Text style={styles.planLimits}>
-                      Limits: {plan.maxUsers === 999999 ? 'Unlimited' : plan.maxUsers} Users | {plan.maxAssets === 999999 ? 'Unlimited' : plan.maxAssets} Assets | {features.storage || '2GB'} Storage
-                    </Text>
-                    <Text style={styles.planFeatures}>
-                      Support: {features.support || 'email'} | Reports: {features.reports || 'basic'} | 
-                      QR: {features.qrCode ? 'Yes' : 'No'} | Dynamic Fields: {features.dynamicFields ? 'Yes' : 'No'}
-                    </Text>
+        {/* ================= MODAL: ORGANIZATIONAL PROFILE DETAILS OVERLAY ================= */}
+        {isDetailsModalVisible && selectedCompany && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>🏢 Organization Profile</Text>
+                <TouchableOpacity onPress={() => setIsDetailsModalVisible(false)}>
+                  <Ionicons name="close-circle-outline" size={26} color="#FF4D4D" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Organization Name</Text>
+                  <Text style={styles.modalValue}>{selectedCompany.name}</Text>
+                </View>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>System Identifier (Tenant ID)</Text>
+                  <Text style={[styles.modalValue, { fontSize: 12, color: '#A9C6E4', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]}>
+                    {selectedCompany.id}
+                  </Text>
+                </View>
+
+                {/* Status Select Radio Row */}
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Account Lifecycle Status</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                    {['active', 'suspended', 'expired'].map((st) => (
+                      <TouchableOpacity
+                        key={st}
+                        style={[
+                          styles.statusSelectBtn,
+                          profileStatus === st && {
+                            backgroundColor: st === 'active' ? '#10B981' : st === 'suspended' ? '#EF4444' : '#F59E0B',
+                            borderColor: 'transparent'
+                          }
+                        ]}
+                        onPress={() => setProfileStatus(st)}
+                      >
+                        <Text style={[styles.statusSelectText, profileStatus === st && { color: '#fff', fontWeight: 'bold' }]}>
+                          {st.toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                );
-              })}
-            </ScrollView>
-            <TouchableOpacity style={[styles.modalCloseBtn, { marginTop: 15 }]} onPress={() => setIsPlansModalVisible(false)}>
-              <Text style={styles.modalCloseText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+                </View>
 
-      {/* ================= MODAL: ADD / EDIT PLAN WORKFLOW FORM OVERLAY ================= */}
-      {isPlanEditorVisible && (
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { width: Platform.OS === 'web' ? '50%' : '94%', maxWidth: 600 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingPlan ? '✍️ Modify Plan Details' : '➕ Create Custom Package'}</Text>
-              <TouchableOpacity onPress={() => setIsPlanEditorVisible(false)}>
-                <Ionicons name="close-circle-outline" size={26} color="#FF4D4D" />
-              </TouchableOpacity>
+                {/* Plan Select Button Row */}
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Subscription Package</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                    {plans.map((pl) => (
+                      <TouchableOpacity
+                        key={pl.id}
+                        style={[
+                          styles.planSelectBtn,
+                          profilePlanId === pl.id && { backgroundColor: '#22D3EE', borderColor: 'transparent' }
+                        ]}
+                        onPress={() => setProfilePlanId(pl.id)}
+                      >
+                        <Text style={[styles.planSelectText, profilePlanId === pl.id && { color: '#07182a', fontWeight: 'bold' }]}>
+                          {pl.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Organization Type</Text>
+                  <Text style={styles.modalValue}>{selectedCompany.organizationType || 'Standard Client'}</Text>
+                </View>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Live Assets Logged</Text>
+                  <Text style={styles.modalValue}>{selectedCompany.assetsCount} Active Assets</Text>
+                </View>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Registered Date</Text>
+                  <Text style={styles.modalValue}>
+                    {selectedCompany.createdAt ? new Date(selectedCompany.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'}
+                  </Text>
+                </View>
+
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Plan Start Date</Text>
+                  <Text style={styles.modalValue}>
+                    {selectedCompany.startDate ? new Date(selectedCompany.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Plan End Date</Text>
+                  <Text style={styles.modalValue}>
+                    {selectedCompany.endDate ? new Date(selectedCompany.endDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'}
+                  </Text>
+                </View>
+
+                <Text style={[styles.sectionTitle, { fontSize: 15, marginTop: 10, marginBottom: 10, borderLeftWidth: 0, paddingLeft: 0 }]}>Primary Admin Details</Text>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Admin Name</Text>
+                  <Text style={styles.modalValue}>{selectedCompany.adminName || 'N/A'}</Text>
+                </View>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Admin Email</Text>
+                  <Text style={styles.modalValue}>{selectedCompany.adminEmail || 'N/A'}</Text>
+                </View>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Admin Phone</Text>
+                  <Text style={styles.modalValue}>{selectedCompany.adminPhone || 'N/A'}</Text>
+                </View>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Admin Address</Text>
+                  <Text style={styles.modalValue}>{selectedCompany.adminAddress || 'N/A'}</Text>
+                </View>
+
+              </ScrollView>
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 15 }}>
+                <TouchableOpacity style={[styles.modalCloseBtn, { flex: 1, backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.2)' }]} onPress={() => setIsDetailsModalVisible(false)}>
+                  <Text style={[styles.modalCloseText, { color: '#fff' }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalCloseBtn, { flex: 1 }]} onPress={handleSaveProfile} disabled={updatingProfile}>
+                  {updatingProfile ? (
+                    <ActivityIndicator size="small" color="#22D3EE" />
+                  ) : (
+                    <Text style={styles.modalCloseText}>Save Updates</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-            <ScrollView style={{ maxHeight: 450 }} showsVerticalScrollIndicator={false}>
-              
-              <View style={styles.editorRow}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.formLabel}>Plan ID (URL Safe) *</Text>
-                  <TextInput 
-                    style={[styles.formInput, editingPlan && { opacity: 0.5, backgroundColor: 'rgba(255,255,255,0.05)' }]} 
-                    value={editorId} 
-                    onChangeText={setEditorId} 
-                    placeholder="e.g. starter"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                    editable={!editingPlan}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.formLabel}>Plan Name *</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={editorName} 
-                    onChangeText={setEditorName} 
-                    placeholder="e.g. Starter Plan"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                  />
-                </View>
+          </View>
+        )}
+
+        {/* ================= MODAL: PLANS PACKAGES OVERVIEW OVERLAY ================= */}
+        {isPlansModalVisible && (
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { width: Platform.OS === 'web' ? '60%' : '92%', maxWidth: 700 }]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>📦 Platform Plan Catalog</Text>
+                <TouchableOpacity onPress={() => openPlanEditor(null)} style={styles.addPlanHeaderBtn}>
+                  <Ionicons name="add-circle-outline" size={20} color="#34D399" />
+                  <Text style={{ color: '#34D399', fontWeight: 'bold', marginLeft: 4 }}>Add Plan</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setIsPlansModalVisible(false)}>
+                  <Ionicons name="close-circle-outline" size={26} color="#FF4D4D" />
+                </TouchableOpacity>
               </View>
-
-              <View style={styles.editorRow}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.formLabel}>Max Active Users *</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={editorMaxUsers} 
-                    onChangeText={setEditorMaxUsers} 
-                    keyboardType="numeric"
-                    placeholder="e.g. 25"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.formLabel}>Max Assets Limit *</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={editorMaxAssets} 
-                    onChangeText={setEditorMaxAssets} 
-                    keyboardType="numeric"
-                    placeholder="e.g. 2500"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.editorRow}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.formLabel}>Price (Monthly) *</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={editorPrice} 
-                    onChangeText={setEditorPrice} 
-                    keyboardType="numeric"
-                    placeholder="e.g. 4999.00"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.formLabel}>Currency</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={editorCurrency} 
-                    onChangeText={setEditorCurrency} 
-                    placeholder="INR"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.divider} />
-              <Text style={[styles.sectionTitle, { fontSize: 15, marginTop: 10, marginBottom: 10 }]}>Feature Toggles & Infrastructure</Text>
-
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>QR Code & Barcodes</Text>
-                <Switch 
-                  value={editorFeatures.qrCode} 
-                  onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, qrCode: v }))} 
-                  trackColor={{ false: '#767577', true: '#22D3EE' }}
-                />
-              </View>
-
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Custom Categories</Text>
-                <Switch 
-                  value={editorFeatures.customCategories} 
-                  onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, customCategories: v }))} 
-                  trackColor={{ false: '#767577', true: '#22D3EE' }}
-                />
-              </View>
-
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Dynamic Metadata Fields (EAV)</Text>
-                <Switch 
-                  value={editorFeatures.dynamicFields} 
-                  onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, dynamicFields: v }))} 
-                  trackColor={{ false: '#767577', true: '#22D3EE' }}
-                />
-              </View>
-
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Audit logs governance</Text>
-                <Switch 
-                  value={editorFeatures.auditLogs} 
-                  onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, auditLogs: v }))} 
-                  trackColor={{ false: '#767577', true: '#22D3EE' }}
-                />
-              </View>
-
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>REST API Developer Access</Text>
-                <Switch 
-                  value={editorFeatures.apiAccess} 
-                  onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, apiAccess: v }))} 
-                  trackColor={{ false: '#767577', true: '#22D3EE' }}
-                />
-              </View>
-
-              <View style={styles.editorRow}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.formLabel}>Storage Cap</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={editorFeatures.storage} 
-                    onChangeText={(v) => setEditorFeatures((prev: any) => ({ ...prev, storage: v }))} 
-                    placeholder="e.g. 25GB"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.formLabel}>Support Tier</Text>
-                  <TextInput 
-                    style={styles.formInput} 
-                    value={editorFeatures.support} 
-                    onChangeText={(v) => setEditorFeatures((prev: any) => ({ ...prev, support: v }))} 
-                    placeholder="email / priority / dedicated"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                  />
-                </View>
-              </View>
-
-            </ScrollView>
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 15 }}>
-              <TouchableOpacity style={[styles.modalCloseBtn, { flex: 1, backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.2)' }]} onPress={() => setIsPlanEditorVisible(false)}>
-                <Text style={[styles.modalCloseText, { color: '#fff' }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalCloseBtn, { flex: 1 }]} onPress={handleSavePlan}>
-                <Text style={styles.modalCloseText}>Save Package</Text>
+              <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
+                {plans.map((plan) => {
+                  const features = plan.features || {};
+                  return (
+                    <View key={plan.id} style={styles.planOverviewCard}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.planName}>{plan.name}</Text>
+                          <TouchableOpacity onPress={() => openPlanEditor(plan)}>
+                            <Feather name="edit-2" size={14} color="#22D3EE" />
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.planPrice}>₹{parseFloat(String(plan.price)).toLocaleString()} /mo</Text>
+                      </View>
+                      <Text style={styles.planLimits}>
+                        Limits: {plan.maxUsers === 999999 ? 'Unlimited' : plan.maxUsers} Users | {plan.maxAssets === 999999 ? 'Unlimited' : plan.maxAssets} Assets | {features.storage || '2GB'} Storage
+                      </Text>
+                      <Text style={styles.planFeatures}>
+                        Support: {features.support || 'email'} | Reports: {features.reports || 'basic'} |
+                        QR: {features.qrCode ? 'Yes' : 'No'} | Dynamic Fields: {features.dynamicFields ? 'Yes' : 'No'}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              <TouchableOpacity style={[styles.modalCloseBtn, { marginTop: 15 }]} onPress={() => setIsPlansModalVisible(false)}>
+                <Text style={styles.modalCloseText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      )}
+        )}
+
+        {/* ================= MODAL: ADD / EDIT PLAN WORKFLOW FORM OVERLAY ================= */}
+        {isPlanEditorVisible && (
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { width: Platform.OS === 'web' ? '50%' : '94%', maxWidth: 600 }]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editingPlan ? '✍️ Modify Plan Details' : '➕ Create Custom Package'}</Text>
+                <TouchableOpacity onPress={() => setIsPlanEditorVisible(false)}>
+                  <Ionicons name="close-circle-outline" size={26} color="#FF4D4D" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 450 }} showsVerticalScrollIndicator={false}>
+
+                <View style={styles.editorRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.formLabel}>Plan ID (URL Safe) *</Text>
+                    <TextInput
+                      style={[styles.formInput, editingPlan && { opacity: 0.5, backgroundColor: 'rgba(255,255,255,0.05)' }]}
+                      value={editorId}
+                      onChangeText={setEditorId}
+                      placeholder="e.g. starter"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      editable={!editingPlan}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.formLabel}>Plan Name *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={editorName}
+                      onChangeText={setEditorName}
+                      placeholder="e.g. Starter Plan"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.editorRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.formLabel}>Max Active Users *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={editorMaxUsers}
+                      onChangeText={setEditorMaxUsers}
+                      keyboardType="numeric"
+                      placeholder="e.g. 25"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.formLabel}>Max Assets Limit *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={editorMaxAssets}
+                      onChangeText={setEditorMaxAssets}
+                      keyboardType="numeric"
+                      placeholder="e.g. 2500"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.editorRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.formLabel}>Price (Monthly) *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={editorPrice}
+                      onChangeText={setEditorPrice}
+                      keyboardType="numeric"
+                      placeholder="e.g. 4999.00"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.formLabel}>Currency</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={editorCurrency}
+                      onChangeText={setEditorCurrency}
+                      placeholder="INR"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+                <Text style={[styles.sectionTitle, { fontSize: 15, marginTop: 10, marginBottom: 10 }]}>Feature Toggles & Infrastructure</Text>
+
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>QR Code & Barcodes</Text>
+                  <Switch
+                    value={editorFeatures.qrCode}
+                    onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, qrCode: v }))}
+                    trackColor={{ false: '#767577', true: '#22D3EE' }}
+                  />
+                </View>
+
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>Custom Categories</Text>
+                  <Switch
+                    value={editorFeatures.customCategories}
+                    onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, customCategories: v }))}
+                    trackColor={{ false: '#767577', true: '#22D3EE' }}
+                  />
+                </View>
+
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>Dynamic Metadata Fields (EAV)</Text>
+                  <Switch
+                    value={editorFeatures.dynamicFields}
+                    onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, dynamicFields: v }))}
+                    trackColor={{ false: '#767577', true: '#22D3EE' }}
+                  />
+                </View>
+
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>Audit logs governance</Text>
+                  <Switch
+                    value={editorFeatures.auditLogs}
+                    onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, auditLogs: v }))}
+                    trackColor={{ false: '#767577', true: '#22D3EE' }}
+                  />
+                </View>
+
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>REST API Developer Access</Text>
+                  <Switch
+                    value={editorFeatures.apiAccess}
+                    onValueChange={(v) => setEditorFeatures((prev: any) => ({ ...prev, apiAccess: v }))}
+                    trackColor={{ false: '#767577', true: '#22D3EE' }}
+                  />
+                </View>
+
+                <View style={styles.editorRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.formLabel}>Storage Cap</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={editorFeatures.storage}
+                      onChangeText={(v) => setEditorFeatures((prev: any) => ({ ...prev, storage: v }))}
+                      placeholder="e.g. 25GB"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.formLabel}>Support Tier</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={editorFeatures.support}
+                      onChangeText={(v) => setEditorFeatures((prev: any) => ({ ...prev, support: v }))}
+                      placeholder="email / priority / dedicated"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                    />
+                  </View>
+                </View>
+
+              </ScrollView>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 15 }}>
+                <TouchableOpacity style={[styles.modalCloseBtn, { flex: 1, backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.2)' }]} onPress={() => setIsPlanEditorVisible(false)}>
+                  <Text style={[styles.modalCloseText, { color: '#fff' }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalCloseBtn, { flex: 1 }]} onPress={handleSavePlan}>
+                  <Text style={styles.modalCloseText}>Save Package</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ================= MODAL: PLATFORM ASSETS VIEWER OVERLAY ================= */}
+        {isAssetsVisible && (
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { width: Platform.OS === 'web' ? '80%' : '96%', maxWidth: 1000 }]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>📊 Platform Assets Directory</Text>
+                <TouchableOpacity onPress={() => setIsAssetsVisible(false)}>
+                  <Ionicons name="close-circle-outline" size={26} color="#FF4D4D" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Filters Row */}
+              <View style={{ flexDirection: isMobileLayout ? 'column' : 'row', gap: 10, marginBottom: 15 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formLabel}>Filter by Organization</Text>
+                  <View style={[styles.formInput, { padding: 0, justifyContent: 'center' }]}>
+                    <Picker
+                      selectedValue={selectedTenantFilter}
+                      onValueChange={(itemValue) => setSelectedTenantFilter(itemValue)}
+                      style={{ color: '#E6F3FF', width: '100%', backgroundColor: 'rgba(18, 45, 73, 0.95)', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(159, 207, 255, 0.22)' }}
+                      dropdownIconColor="#E6F3FF"
+                    >
+                      <Picker.Item label="All Organizations" value="all" />
+                      {companies.map(c => (
+                        <Picker.Item key={c.id} label={c.name} value={c.id} />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formLabel}>Filter by Status</Text>
+                  <View style={[styles.formInput, { padding: 0, justifyContent: 'center' }]}>
+                    <Picker
+
+                      selectedValue={selectedStatusFilter}
+                      onValueChange={(itemValue) => setSelectedStatusFilter(itemValue)}
+                      style={{ color: '#E6F3FF', width: '100%', backgroundColor: 'rgba(18, 45, 73, 0.95)', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(159, 207, 255, 0.22)' }}
+                      dropdownIconColor="#E6F3FF"
+                    >
+                      <Picker.Item label="All Statuses" value="all" />
+                      <Picker.Item label="Unassigned" value="unassigned" />
+                      <Picker.Item label="Assigned" value="assigned" />
+                      <Picker.Item label="Returned" value="overdue" />
+                      <Picker.Item label="Maintenance" value="maintenance" />
+                      {/* <Picker.Item label="Damaged" value="damaged" /> */}
+                      {/* <Picker.Item label="Retired" value="retired" /> */}
+                    </Picker>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.tableContainer}>
+                {!isMobileLayout && <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderText, { flex: 2, paddingLeft: 8 }]}>Asset Name / Serial</Text>
+                  <Text style={[styles.tableHeaderText, { flex: 1.5 }]}>Organization</Text>
+                  <Text style={styles.tableHeaderText}>Status</Text>
+                  <Text style={[styles.tableHeaderText, { flex: 1.5 }]}>Location</Text>
+                </View>}
+                <ScrollView style={{ maxHeight: 600 }} showsVerticalScrollIndicator={true}>
+                  {loadingAssets ? (
+                    <ActivityIndicator size="large" color="#22D3EE" style={{ marginVertical: 30 }} />
+                  ) : platformAssets.length === 0 ? (
+                    <Text style={{ color: '#A9C6E4', textAlign: 'center', marginVertical: 30 }}>No assets found matching these filters.</Text>
+                  ) : (
+                    platformAssets.map((asset, index) => (
+                      <View key={asset.id + '-' + index} style={[styles.tableRow, isMobileLayout && { flexWrap: 'wrap', rowGap: 6, paddingHorizontal: 10 }]}>
+                        <View style={{ flex: 2, paddingLeft: 8 }}>
+                          <Text style={[styles.tableCell, { fontWeight: 'bold' }]}>{asset.name}</Text>
+                          <Text style={{ color: '#A9C6E4', fontSize: 11 }}>{asset.serialNo}</Text>
+                        </View>
+                        <Text style={[styles.tableCell, { flex: 1.5, color: '#A9C6E4' }]}>{asset.tenantName}</Text>
+                        <Text style={[styles.tableCell, { textTransform: 'capitalize', fontWeight: 'bold', color: asset.status === 'assigned' ? '#34D399' : asset.status === 'unassigned' ? '#22D3EE' : '#F59E0B' }]}>
+                          {asset.status}
+                        </Text>
+                        <Text style={[styles.tableCell, { flex: 1.5, color: '#A9C6E4' }]} numberOfLines={1}>
+                          {asset.location || 'N/A'}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+              <TouchableOpacity style={[styles.modalCloseBtn, { marginTop: 15 }]} onPress={() => setIsAssetsVisible(false)}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
       </SafeAreaView>
     </ImageBackground>
   );
@@ -760,7 +971,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   tableContainer: {
-    marginVertical: 15,
+    marginVertical: 25,
   },
   sectionTitle: {
     color: "#22D3EE",

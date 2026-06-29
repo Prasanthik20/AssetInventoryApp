@@ -139,6 +139,7 @@ const SupervisorDashboard: React.FC<Props> = ({
   const [selectedItem, setSelectedItem] = useState<OperatorReply | null>(null);
   const [extendModalVisible, setExtendModalVisible] = useState(false); // Removed duplicate state
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
+  const [isSubscriptionExpired, setIsSubscriptionExpired] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     visible: boolean;
     message: string;
@@ -253,6 +254,13 @@ const SupervisorDashboard: React.FC<Props> = ({
   };
   useEffect(() => {
     fetchDashboardData();
+    const loadSubscriptionStatus = async () => {
+      const expiredStr = await AsyncStorage.getItem('isSubscriptionExpired');
+      if (expiredStr) {
+        setIsSubscriptionExpired(JSON.parse(expiredStr));
+      }
+    };
+    loadSubscriptionStatus();
   }, [user?.employeeId]);
 
   const handleLogout = async () => {
@@ -508,6 +516,7 @@ const SupervisorDashboard: React.FC<Props> = ({
                     roleName={user?.roleName}
                     supervisorName={user?.supervisorName}
                     supervisorAssignedAssets={supervisorAssignedAssets}
+                    isSubscriptionExpired={isSubscriptionExpired}
                   />
                 </View>
                 <View style={styles.mobileBlockBottom}>
@@ -541,6 +550,7 @@ const SupervisorDashboard: React.FC<Props> = ({
                   roleName={user?.roleName}
                   supervisorName={user?.supervisorName}
                   supervisorAssignedAssets={supervisorAssignedAssets}
+                  isSubscriptionExpired={isSubscriptionExpired}
                 />
               </View>
             )}
@@ -667,6 +677,7 @@ const QuickActionsSection = ({
   supervisorName,
   supervisorAssignedAssets,
   isMobileLayout,
+  isSubscriptionExpired,
 }: any) => (
   <View
     style={[
@@ -685,36 +696,41 @@ const QuickActionsSection = ({
     ]}
   >
     <Text style={styles.sectionTitle}>Quick Actions</Text>
-    <TouchableOpacity
-      style={[styles.actionButton, styles.blueButton]}
-      onPress={() => navigation.navigate('AddEditAsset')}
-    >
-      <Ionicons
-        name="add-circle-outline"
-        size={20}
-        color="#fff"
-        style={styles.actionIcon}
-      />
-      <Text style={styles.actionButtonText}>Add New Asset</Text>
-    </TouchableOpacity>
-    <TouchableOpacity
-      onPress={() =>
-        navigation.navigate('AssignAsset', {
-          supervisor_employeeId: employeeId,
-          supervisorName: supervisorName,
-        })
-      }
-    >
-      <View style={[styles.actionButton, { backgroundColor: '#0F766E' }]}> 
-        <Ionicons
-          name="swap-horizontal-outline"
-          size={20}
-          color="#fff"
-          style={styles.actionIcon}
-        />
-        <Text style={styles.actionButtonText}>Assign Asset</Text>
-      </View>
-    </TouchableOpacity>
+    
+    {!isSubscriptionExpired && (
+      <>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.blueButton]}
+          onPress={() => navigation.navigate('AddEditAsset')}
+        >
+          <Ionicons
+            name="add-circle-outline"
+            size={20}
+            color="#fff"
+            style={styles.actionIcon}
+          />
+          <Text style={styles.actionButtonText}>Add New Asset</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() =>
+            navigation.navigate('AssignAsset', {
+              supervisor_employeeId: employeeId,
+              supervisorName: supervisorName,
+            })
+          }
+        >
+          <View style={[styles.actionButton, { backgroundColor: '#0F766E' }]}> 
+            <Ionicons
+              name="swap-horizontal-outline"
+              size={20}
+              color="#fff"
+              style={styles.actionIcon}
+            />
+            <Text style={styles.actionButtonText}>Assign Asset</Text>
+          </View>
+        </TouchableOpacity>
+      </>
+    )}
     <TouchableOpacity
       onPress={() =>
         navigation.navigate('FieldAssets', {

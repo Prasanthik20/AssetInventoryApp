@@ -140,6 +140,7 @@ const CompanyDashboard: React.FC<Props> = ({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [totalCategories, setTotalCategories] = useState<number>(0);
   const [subscription, setSubscription] = useState<any>(null);
+  const [isSubscriptionExpired, setIsSubscriptionExpired] = useState<boolean>(false);
 
   const fetchUsers = async () => {
     try {
@@ -198,7 +199,20 @@ const CompanyDashboard: React.FC<Props> = ({
       setUnderMaintenanceAssets(data.underMaintenanceAssets);
       setFieldLocationStats(data.fieldLocationStats || []);
       setTotalCategories(data.totalCategories || 0);
-      setSubscription(data.subscription || null);
+      
+      const sub = data.subscription || null;
+      setSubscription(sub);
+      
+      if (sub && sub.endDate) {
+        const endDate = new Date(sub.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        const isExpired = new Date() > endDate;
+        setIsSubscriptionExpired(isExpired);
+        AsyncStorage.setItem('isSubscriptionExpired', JSON.stringify(isExpired));
+      } else {
+        setIsSubscriptionExpired(false);
+        AsyncStorage.setItem('isSubscriptionExpired', JSON.stringify(false));
+      }
       
     } catch (error: any) {
       console.log('Dashboard API Error:', error.response?.data || error.message);
@@ -418,6 +432,15 @@ const CompanyDashboard: React.FC<Props> = ({
                       <View style={{ height: '100%', width: `${subscription.assetUsagePercent}%`, backgroundColor: subscription.assetUsagePercent > 80 ? '#EF4444' : '#10B981' }} />
                     </View>
                   </View>
+                </View>
+              )}
+
+              {/* Expired Subscription Banner */}
+              {isSubscriptionExpired && (
+                <View style={{ backgroundColor: '#FEE2E2', borderColor: '#EF4444', borderWidth: 1, padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                  <Text style={{ color: '#B91C1C', fontWeight: 'bold', fontSize: 14 }}>
+                    Your subscription has expired. You have view-only access.
+                  </Text>
                 </View>
               )}
 
@@ -776,62 +799,67 @@ const CompanyDashboard: React.FC<Props> = ({
                 {/* Quick Actions */}
                 <View style={styles.actionsContainer}>
                   <Text style={styles.sectionTitle}>Quick Actions</Text>
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('AddEditAsset')}
-                  >
-                    <LinearGradient
-                      colors={['#1E3A5F', '#162D4A']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.addUserButton}
-                    >
-                      <SafeIonicons name="cube-outline" size={20} color="#fff" />
-                      <Text style={styles.addUserButtonText}>
-                        Add New Asset
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                  
+                  {!isSubscriptionExpired && (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate('AddEditAsset')}
+                      >
+                        <LinearGradient
+                          colors={['#1E3A5F', '#162D4A']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.addUserButton}
+                        >
+                          <SafeIonicons name="cube-outline" size={20} color="#fff" />
+                          <Text style={styles.addUserButtonText}>
+                            Add New Asset
+                          </Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
 
-                  <TouchableOpacity
-                    onPress={() =>
-                      navigation.navigate('AssignAsset', {
-                        supervisor_employeeId: user?.employeeId || '',
-                        supervisorName: user?.fullName || 'Admin',
-                      })
-                    }
-                  >
-                    <LinearGradient
-                      colors={['#1F4C63', '#1A3D51']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.addUserButton}
-                    >
-                      <SafeIonicons
-                        name="hand-right-outline"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.addUserButtonText}>Assign Asset</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() =>
+                          navigation.navigate('AssignAsset', {
+                            supervisor_employeeId: user?.employeeId || '',
+                            supervisorName: user?.fullName || 'Admin',
+                          })
+                        }
+                      >
+                        <LinearGradient
+                          colors={['#1F4C63', '#1A3D51']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.addUserButton}
+                        >
+                          <SafeIonicons
+                            name="hand-right-outline"
+                            size={20}
+                            color="#fff"
+                          />
+                          <Text style={styles.addUserButtonText}>Assign Asset</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
 
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('AddCompanyUser')}
-                  >
-                    <LinearGradient
-                      colors={['#334155', '#1E293B']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.addUserButton}
-                    >
-                      <SafeIonicons
-                        name="person-add-outline"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.addUserButtonText}>Add New User</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate('AddCompanyUser')}
+                      >
+                        <LinearGradient
+                          colors={['#334155', '#1E293B']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.addUserButton}
+                        >
+                          <SafeIonicons
+                            name="person-add-outline"
+                            size={20}
+                            color="#fff"
+                          />
+                          <Text style={styles.addUserButtonText}>Add New User</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </>
+                  )}
 
                   <TouchableOpacity
                     onPress={() =>

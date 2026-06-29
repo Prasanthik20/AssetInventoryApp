@@ -277,7 +277,20 @@ const AddEditAsset: React.FC = () => {
 
       console.log("Selected Asset:", asset);
 
-      // First preference: Expo Base64
+      // Web path: Compress and convert using helper
+      if (Platform.OS === 'web') {
+        try {
+          const dataUrl = await toPersistentDataUrl(asset.uri, asset.mimeType || undefined);
+          handleInputChange(field, dataUrl);
+          return;
+        } catch (webError) {
+          console.error("Web image selection failed:", webError);
+          handleInputChange(field, asset.uri);
+          return;
+        }
+      }
+
+      // First preference: Expo Base64 for native mobile
       if (asset.base64) {
         const mimeType =
           asset.mimeType || "image/jpeg";
@@ -290,37 +303,9 @@ const AddEditAsset: React.FC = () => {
         return;
       }
 
-      // Fallback for Android release builds
+      // Fallback for Android/iOS release builds
       try {
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-
-        const base64Data = await new Promise<string>(
-          (resolve, reject) => {
-            const reader = new FileReader();
-
-            reader.onloadend = () => {
-              const result =
-                reader.result as string;
-
-              const extracted =
-                result.split(",")[1];
-
-              resolve(extracted);
-            };
-
-            reader.onerror = reject;
-
-            reader.readAsDataURL(blob);
-          }
-        );
-
-        const mimeType =
-          asset.mimeType || "image/jpeg";
-
-        const dataUrl =
-          `data:${mimeType};base64,${base64Data}`;
-
+        const dataUrl = await toPersistentDataUrl(asset.uri, asset.mimeType || undefined);
         handleInputChange(field, dataUrl);
       } catch (conversionError) {
         console.error(

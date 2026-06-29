@@ -1,16 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import query from '@/lib/db';
 import { setCorsHeaders } from '@/lib/corsHeaders';
+import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 
 type HistoryRow = {
-  assignmentId: number;
+  assignmentId: number | null;
   assetId: number;
   assetName: string;
   serialNo: string | null;
-  operatorEmployeeId: number;
-  operatorName: string;
-  supervisorEmployeeId: number;
-  supervisorName: string;
+  assetStatus: string;
+  operatorEmployeeId: number | null;
+  operatorName: string | null;
+  supervisorEmployeeId: number | null;
+  supervisorName: string | null;
   location: string | null;
   projectName: string | null;
   notes: string | null;
@@ -22,18 +24,14 @@ type HistoryRow = {
 
 const normalizeNotes = (value: unknown): string | null => {
   if (value === null || value === undefined) return null;
-
   const raw = String(value).trim();
   if (!raw) return null;
-
   try {
     const parsed = JSON.parse(raw);
-
     if (typeof parsed === 'string') {
       const text = parsed.trim();
       return text.length > 0 ? text : null;
     }
-
     if (Array.isArray(parsed)) {
       const text = parsed
         .map((item) => (typeof item === 'string' ? item.trim() : ''))
@@ -41,7 +39,6 @@ const normalizeNotes = (value: unknown): string | null => {
         .join(', ');
       return text.length > 0 ? text : null;
     }
-
     if (parsed && typeof parsed === 'object') {
       const candidateKeys = ['notes', 'note', 'message', 'reason', 'text', 'comment'];
       for (const key of candidateKeys) {
@@ -50,18 +47,15 @@ const normalizeNotes = (value: unknown): string | null => {
           return candidate.trim();
         }
       }
-
       const compact = Object.entries(parsed as Record<string, unknown>)
         .filter(([, val]) => val !== null && val !== undefined && String(val).trim().length > 0)
         .map(([key, val]) => `${key}: ${String(val).trim()}`)
         .join(' | ');
-
       return compact.length > 0 ? compact : raw;
     }
   } catch {
-    // Non-JSON legacy note text should pass through unchanged.
+    // Non-JSON legacy note — pass through as-is.
   }
-
   return raw;
 };
 
@@ -72,8 +66,6 @@ const normalizeDate = (value?: string | string[]): string | null => {
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString();
 };
-
-import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 
 export default withAuth(async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   const origin = req.headers.origin as string;
@@ -118,79 +110,108 @@ export default withAuth(async function handler(req: AuthenticatedRequest, res: N
       return res.status(404).json({ message: 'User not found in your organization' });
     }
 
-    const where: string[] = [`ad."tenantId" = $1`];
+    // ─── Build WHERE clauses ──────────────────────────────────────────────────
+    // All filtering anchors on Asset_Details (ad) so unassigned assets appear too.
     const params: Array<number | string> = [tenantId];
+    const adWhere: string[] = [`ad."tenantId" = $1`];
+    const aaExtraClauses: string[] = []; // extra conditions on aa (applied in the LEFT JOIN itself)
 
     if (!isAdminRole) {
       params.push(employeeId);
-      where.push(`(aa."operator_employeeId" = $${params.length} OR aa."supervisor_employeeId" = $${params.length})`);
+      // Non-admins see assets they appear on in any assignment (as operator or supervisor).
+      adWhere.push(`ad.id IN (
+        SELECT aa2."assetId"
+        FROM "Asset_Assignments" aa2
+        WHERE aa2."operator_employeeId" = $${params.length}
+           OR aa2."supervisor_employeeId" = $${params.length}
+      )`);
     }
 
     if (fromDate) {
       params.push(fromDate);
-      where.push(`aa."assigned_date" >= $${params.length}::date`);
+      aaExtraClauses.push(`aa.assigned_date >= $${params.length}::date`);
     }
 
     if (toDate) {
       params.push(toDate);
-      where.push(`aa."assigned_date" <= $${params.length}::date`);
+      aaExtraClauses.push(`aa.assigned_date <= $${params.length}::date`);
     }
 
-    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+    const adWhereSql = adWhere.length > 0 ? `WHERE ${adWhere.join(' AND ')}` : '';
+    // Date-range filters go into the JOIN condition so unassigned rows still appear.
+    const aaJoinExtra = aaExtraClauses.length > 0 ? `AND ${aaExtraClauses.join(' AND ')}` : '';
 
+    // ─── Main query ───────────────────────────────────────────────────────────
+    // Start from Asset_Details → LEFT JOIN assignments → each assignment = one row.
+    // Assets with no assignments produce a single "unassigned" or "maintenance" row.
     const historySql = `
       SELECT
-        aa.id AS "assignmentId",
-        ad.id AS "assetId",
-        ad.name AS "assetName",
-        ad.serial_no AS "serialNo",
-        aa."operator_employeeId" AS "operatorEmployeeId",
-        COALESCE(op."fullName", 'Unknown') AS "operatorName",
-        aa."supervisor_employeeId" AS "supervisorEmployeeId",
-        COALESCE(sp."fullName", 'Unknown') AS "supervisorName",
+        aa.id                                              AS "assignmentId",
+        ad.id                                              AS "assetId",
+        ad.name                                            AS "assetName",
+        ad.serial_no                                       AS "serialNo",
+        LOWER(COALESCE(s.status, 'unknown'))               AS "assetStatus",
+        aa."operator_employeeId"                           AS "operatorEmployeeId",
+        op."fullName"                                      AS "operatorName",
+        aa."supervisor_employeeId"                         AS "supervisorEmployeeId",
+        sp."fullName"                                      AS "supervisorName",
         aa.location,
-        aa."projectName" AS "projectName",
+        aa."projectName"                                   AS "projectName",
         aa.notes,
-        aa.assigned_date AS "assignedDate",
-        aa.expected_return_date AS "expectedReturnDate",
-        aa.returned_date AS "returnedDate",
-        CASE 
+        aa.assigned_date                                   AS "assignedDate",
+        aa.expected_return_date                            AS "expectedReturnDate",
+        aa.returned_date                                   AS "returnedDate",
+        CASE
+          WHEN aa.id IS NULL THEN
+            CASE
+              WHEN LOWER(COALESCE(s.status, '')) IN ('under maintenance', 'maintenance')
+                THEN 'maintenance'
+              ELSE 'unassigned'
+            END
           WHEN aa.status = 'returned' OR aa.returned_date IS NOT NULL THEN 'returned'
-          WHEN aa.expected_return_date < CURRENT_DATE THEN 'overdue'
+          WHEN aa.expected_return_date < CURRENT_DATE               THEN 'overdue'
           ELSE 'assigned'
-        END AS "status"
-      FROM "Asset_Assignments" aa
-      INNER JOIN "Asset_Details" ad ON ad.id = aa."assetId"
+        END                                                AS "status"
+      FROM "Asset_Details" ad
+      LEFT JOIN "Status" s ON s.id = ad.status_id
+      LEFT JOIN "Asset_Assignments" aa
+        ON aa."assetId" = ad.id ${aaJoinExtra}
       LEFT JOIN "Users" op ON op."employeeId" = aa."operator_employeeId"
       LEFT JOIN "Users" sp ON sp."employeeId" = aa."supervisor_employeeId"
-      ${whereSql}
-      ORDER BY aa.assigned_date DESC NULLS LAST, aa.id DESC;
+      ${adWhereSql}
+      ORDER BY
+        CASE WHEN aa.id IS NULL THEN 1 ELSE 0 END,
+        aa.assigned_date DESC NULLS LAST,
+        aa.id DESC;
     `;
 
     const historyResult = await query(historySql, params);
     const history = historyResult.rows.map((row: any): HistoryRow => ({
-      assignmentId: Number(row.assignmentId),
+      assignmentId: row.assignmentId != null ? Number(row.assignmentId) : null,
       assetId: Number(row.assetId),
       assetName: String(row.assetName || ''),
       serialNo: row.serialNo || null,
-      operatorEmployeeId: Number(row.operatorEmployeeId),
-      operatorName: String(row.operatorName || 'Unknown'),
-      supervisorEmployeeId: Number(row.supervisorEmployeeId),
-      supervisorName: String(row.supervisorName || 'Unknown'),
+      assetStatus: String(row.assetStatus || 'unknown'),
+      operatorEmployeeId: row.operatorEmployeeId != null ? Number(row.operatorEmployeeId) : null,
+      operatorName: row.operatorName || null,
+      supervisorEmployeeId: row.supervisorEmployeeId != null ? Number(row.supervisorEmployeeId) : null,
+      supervisorName: row.supervisorName || null,
       location: row.location || null,
       projectName: row.projectName || null,
       notes: normalizeNotes(row.notes),
       assignedDate: row.assignedDate || null,
       expectedReturnDate: row.expectedReturnDate || null,
       returnedDate: row.returnedDate || null,
-      status: String(row.status || 'assigned'),
+      status: String(row.status || 'unassigned'),
     }));
 
     const summary = {
-      totalAssignments: history.length,
-      activeAssignments: history.filter((row: { status: string; }) => row.status.toLowerCase() === 'assigned').length,
-      returnedAssignments: history.filter((row: { status: string; }) => row.status.toLowerCase() === 'returned').length,
-      overdueAssignments: history.filter((row: { status: string; }) => row.status.toLowerCase() === 'overdue').length,
+      totalAssignments: history.filter((r) => r.assignmentId != null).length,
+      activeAssignments: history.filter((r) => r.status === 'assigned').length,
+      returnedAssignments: history.filter((r) => r.status === 'returned').length,
+      overdueAssignments: history.filter((r) => r.status === 'overdue').length,
+      unassignedAssets: history.filter((r) => r.status === 'unassigned').length,
+      maintenanceAssets: history.filter((r) => r.status === 'maintenance').length,
     };
 
     const pendingApprovalBaseSql = `

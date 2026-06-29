@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { globalColors, globalStyleTokens } from '../../styles/globalStyles';
 
 interface User {
@@ -42,6 +43,7 @@ const CompanyUsersScreen: React.FC = () => {
     const [filter, setFilter] = React.useState('All');
     const [searchQuery, setSearchQuery] = React.useState('');
     const [errorText, setErrorText] = React.useState('');
+    const [isSubscriptionExpired, setIsSubscriptionExpired] = React.useState(false);
 
     const roleBadgeMap: Record<string, string> = {
         supervisor: '#0F766E',
@@ -134,6 +136,13 @@ const CompanyUsersScreen: React.FC = () => {
 
     React.useEffect(() => {
         fetchUsers();
+        const checkSubscription = async () => {
+            const expired = await AsyncStorage.getItem('isSubscriptionExpired');
+            if (expired) {
+                setIsSubscriptionExpired(JSON.parse(expired));
+            }
+        };
+        checkSubscription();
     }, []);
 
     // Filter & Search
@@ -215,10 +224,12 @@ const CompanyUsersScreen: React.FC = () => {
                             <Ionicons name="arrow-back-outline" size={24} color="#fff" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Total Users</Text>
-                        <TouchableOpacity style={styles.addUserButton} onPress={() => navigation.navigate('AddCompanyUser')}>
-                            <Ionicons name="add" size={24} color="#fff" />
-                            <Text style={styles.addUserText}>Add User</Text>
-                        </TouchableOpacity>
+                        {!isSubscriptionExpired && (
+                            <TouchableOpacity style={styles.addUserButton} onPress={() => navigation.navigate('AddCompanyUser')}>
+                                <Ionicons name="add" size={24} color="#fff" />
+                                <Text style={styles.addUserText}>Add User</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {/* Search & Filter */}

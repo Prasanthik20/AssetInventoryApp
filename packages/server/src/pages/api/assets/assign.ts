@@ -98,12 +98,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             receiverEmployeeId: number,
             reason: string,
             reply?: string,
+            tenantId?: string | null,
         ): Promise<void> => {
             await query(
                 `INSERT INTO "Notifications"
-                 ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
-                 VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW())`,
-                [assetId, assignmentId, senderEmployeeId, receiverEmployeeId, reason, reply ?? null],
+                 ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
+                 VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW(), $7)`,
+                [assetId, assignmentId, senderEmployeeId, receiverEmployeeId, reason, reply ?? null, tenantId ?? null],
             );
         };
 
@@ -157,40 +158,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     ? assignedDate.trim()
                     : new Date().toISOString().split('T')[0];
 
-        const resolveEmployeeId = async (incomingId: number, roleLabel: 'assignee' | 'assigner'): Promise<number> => {
+        const resolveEmployeeId = async (incomingId: number, roleLabel: 'assignee' | 'assigner'): Promise<{ employeeId: number, tenantId: string | null }> => {
             if (!Number.isFinite(incomingId)) {
                 throw new Error(`Invalid ${roleLabel} id`);
             }
 
             // Prefer direct employeeId match to avoid accidental cross-match with userId.
             const directEmployeeResult = await query(
-                `SELECT "employeeId"
+                `SELECT "employeeId", "tenantId"
                  FROM "Users"
                  WHERE "employeeId" = $1
                  LIMIT 1`,
                 [incomingId],
             );
 
-            const directEmployeeId = Number(directEmployeeResult.rows[0]?.employeeId);
-            if (Number.isFinite(directEmployeeId)) {
-                return directEmployeeId;
+            if (directEmployeeResult.rows.length > 0) {
+                return { employeeId: Number(directEmployeeResult.rows[0].employeeId), tenantId: directEmployeeResult.rows[0].tenantId || null };
             }
 
             const userIdFallbackResult = await query(
-                `SELECT "employeeId"
+                `SELECT "employeeId", "tenantId"
                  FROM "Users"
-                 WHERE "userId" = $1
+                 WHERE id = $1
                  LIMIT 1`,
                 [incomingId],
             );
 
-            const resolved = Number(userIdFallbackResult.rows[0]?.employeeId);
-            if (!Number.isFinite(resolved)) {
-                throw new Error(`Unable to resolve ${roleLabel} employee id`);
+            const fallbackEmployeeId = Number(userIdFallbackResult.rows[0]?.employeeId);
+            if (Number.isFinite(fallbackEmployeeId)) {
+                return { employeeId: fallbackEmployeeId, tenantId: userIdFallbackResult.rows[0]?.tenantId || null };
             }
 
-            return resolved;
+            throw new Error(`Could not resolve ${roleLabel} with id ${incomingId}`);
         };
+
+        const resolvedOperator = await resolveEmployeeId(incomingOperatorId, 'assignee');
+        const resolvedSupervisor = await resolveEmployeeId(incomingSupervisorId, 'assigner');
+        
+        const resolvedOperatorEmployeeId = resolvedOperator.employeeId;
+        const resolvedSupervisorEmployeeId = resolvedSupervisor.employeeId;
+        const tenantId = resolvedOperator.tenantId || resolvedSupervisor.tenantId;
 
         if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
             return res.status(400).json({ message: "No assets selected for assignment" });
@@ -208,8 +215,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ message: "Invalid assignee or assigner id" });
         }
 
-        const receiverId = await resolveEmployeeId(incomingOperatorId, 'assignee');
-        const senderId = await resolveEmployeeId(incomingSupervisorId, 'assigner');
+        const receiverId = resolvedOperator.employeeId;
+        const senderId = resolvedSupervisor.employeeId;
 
         // 1. Get Status ID for 'Assigned' with error handling
         const statusResult = await query(`SELECT id FROM "Status" WHERE status = 'Assigned' LIMIT 1`, []);
@@ -313,8 +320,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Each assignment record is immutable - status and dates only change on return
             const assignmentInsert = await query(`
                 INSERT INTO "Asset_Assignments"
-                ("assetId", "operator_employeeId", "supervisor_employeeId", "projectName", "location", "assigned_date", "expected_return_date", "notes", "photoURL", "barcodeURL", "status", "serialNoVerified", "createdAt")
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'assigned', true, NOW())
+                ("assetId", "operator_employeeId", "supervisor_employeeId", "projectName", "location", "assigned_date", "expected_return_date", "notes", "photoURL", "barcodeURL", "status", "serialNoVerified", "createdAt", "tenantId")
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'assigned', true, NOW(), $11)
                 RETURNING id`,
                 [
                     assetId,
@@ -327,6 +334,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     notes,
                     dbPhotoURL ?? null,
                     dbBarcodeURL ?? null,
+                    tenantId,
                 ]
             );
 
@@ -338,6 +346,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 senderId,
                 receiverId,
                 `Asset ${assetId} has been assigned to you by ${senderName}.`,
+                undefined,
+                tenantId
             );
 
             const auditRecipients = new Set<number>([...adminEmployeeIds, senderId]);
@@ -358,6 +368,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     auditReceiverId,
                     reason,
                     reply ?? undefined,
+                    tenantId
                 );
             }
         }));

@@ -143,6 +143,7 @@ const AssetFullDetails: React.FC = () => {
         kind: 'success' | 'error' | 'info';
     }>({ visible: false, message: '', kind: 'info' });
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [isSubscriptionExpired, setIsSubscriptionExpired] = useState(false);
 
     const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -198,7 +199,15 @@ const AssetFullDetails: React.FC = () => {
             }
         };
 
+        const checkSubscription = async () => {
+            const expired = await AsyncStorage.getItem('isSubscriptionExpired');
+            if (expired) {
+                setIsSubscriptionExpired(JSON.parse(expired));
+            }
+        };
+
         loadAssigneeOptions();
+        checkSubscription();
     }, []);
 
     useEffect(() => {
@@ -781,20 +790,22 @@ const AssetFullDetails: React.FC = () => {
                         
                         {/* Action Buttons */}
                         <View style={[styles.footer, isMobileLayout && { justifyContent: 'space-between' }]}>
-                            <TouchableOpacity 
-                                style={isMobileLayout && { flex: 1 }}
-                                onPress={isEditMode ? handleSaveAsset : handleEditToggle}
-                            >
-                                <LinearGradient colors={['#0EA5E9', '#0F766E']} style={styles.saveButton}>
-                                    <Text style={styles.buttonText}>
-                                        {isEditMode
-                                            ? 'SAVE CHANGES'
-                                            : isAssignedCardEdit
-                                                ? 'EDIT ASSIGNED ASSET'
-                                                : 'EDIT ASSET'}
-                                    </Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
+                            {!isSubscriptionExpired && (
+                                <TouchableOpacity 
+                                    style={isMobileLayout && { flex: 1 }}
+                                    onPress={isEditMode ? handleSaveAsset : handleEditToggle}
+                                >
+                                    <LinearGradient colors={['#0EA5E9', '#0F766E']} style={styles.saveButton}>
+                                        <Text style={styles.buttonText}>
+                                            {isEditMode
+                                                ? 'SAVE CHANGES'
+                                                : isAssignedCardEdit
+                                                    ? 'EDIT ASSIGNED ASSET'
+                                                    : 'EDIT ASSET'}
+                                        </Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            )}
                             <TouchableOpacity 
                                 style={[styles.cancelButton, isMobileLayout && { flex: 1 }]} 
                                 onPress={isEditMode ? handleEditToggle : () => navigation.goBack()}
