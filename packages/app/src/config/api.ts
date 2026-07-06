@@ -11,8 +11,9 @@ import { Platform } from 'react-native';
 
 const ENV = {
   dev: {
-    apiUrl: 'http://localhost:3000',
-    wsUrl: 'ws://localhost:3000',
+    // 10.0.2.2 = host machine from Android emulator; use LAN IP (e.g. 192.168.0.6) for physical device
+    apiUrl: 'http://10.0.2.2:3000',
+    wsUrl: 'ws://10.0.2.2:3000',
     timeout: 30000,
   },
   staging: {

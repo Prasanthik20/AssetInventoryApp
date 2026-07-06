@@ -8,7 +8,7 @@ type DashboardViewport = {
 export function dashboardStyles(viewport?: DashboardViewport) {
   const { width, height } = viewport ?? Dimensions.get('window');
   const isDesktopWeb = Platform.OS === 'web' && width >= 900;
-  const isNarrowWeb = Platform.OS === 'web' && width < 420;
+  const isNarrowWeb = Platform.OS !== 'web' || width < 420;
   const isShortViewport = height < 700;
 
   const colors = {
@@ -41,13 +41,13 @@ export function dashboardStyles(viewport?: DashboardViewport) {
     },
     container: {
       flex: 1,
-      paddingHorizontal: isDesktopWeb ? 20 : 0,
-      paddingVertical: isDesktopWeb ? 20 : 0,
+      // paddingHorizontal: isDesktopWeb ? 20 : 0,
+      // paddingVertical: isDesktopWeb ? 20 : 0,
     },
     mainScroll: { flex: 1 },
     scrollContent: {
       flexGrow: 1,
-      paddingBottom: 20,
+      // paddingBottom: 20,
     },
 
     leftPanel: {
@@ -55,7 +55,7 @@ export function dashboardStyles(viewport?: DashboardViewport) {
       justifyContent: 'center',
       alignItems: 'center',
       padding: isShortViewport ? 14 : 20,
-      borderRadius: 24,
+      // borderRadius: 24,
       backgroundColor: colors.panel,
       borderWidth: 1,
       borderColor: colors.border,
@@ -92,7 +92,7 @@ export function dashboardStyles(viewport?: DashboardViewport) {
     rightPanel: {
       flex: 1,
       backgroundColor: colors.panel,
-      borderRadius: isDesktopWeb ? 22 : 0,
+      borderRadius: 0,
       borderWidth: isDesktopWeb ? 1 : 0,
       borderColor: colors.border,
       padding: isShortViewport ? 14 : 18,

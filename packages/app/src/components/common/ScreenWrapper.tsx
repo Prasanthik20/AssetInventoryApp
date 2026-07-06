@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
   },
   gradient: {
     flex: 1,
-    padding: 16,
+    // padding: 16,
   },
   content: {
     flex: 1,

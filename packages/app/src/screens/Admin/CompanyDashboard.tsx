@@ -345,7 +345,7 @@ const CompanyDashboard: React.FC<Props> = ({
       source={require('../../assets/Company-bg.webp')}
       style={styles.backgroundImage}
       resizeMode="cover"
-      blurRadius={5}
+      // blurRadius={5}
     >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>

@@ -209,6 +209,33 @@ const CompanyUsersScreen: React.FC = () => {
         </TouchableOpacity> // ✅ CORRECT: Closing tag now correctly wraps the entire card
     );
 
+    const handleGoBack = async () => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            try {
+                const storedUser = await AsyncStorage.getItem('user');
+                if (storedUser) {
+                    const parsed = JSON.parse(storedUser);
+                    const role = String(parsed.roleName || parsed.role || '').toLowerCase();
+                    if (role.includes('superadmin') || role.includes('super admin')) {
+                        navigation.navigate('SuperAdminDashboard' as any);
+                    } else if (role.includes('supervisor')) {
+                        navigation.navigate('SupervisorDashboard' as any);
+                    } else if (role.includes('operator')) {
+                        navigation.navigate('OperatorDashboard' as any);
+                    } else {
+                        navigation.navigate('CompanyDashboard' as any);
+                    }
+                } else {
+                    navigation.navigate('Login' as any);
+                }
+            } catch {
+                navigation.navigate('Login' as any);
+            }
+        }
+    };
+
     return (
         <ImageBackground
             source={require("../../assets/Company-bg.webp")}
@@ -220,7 +247,7 @@ const CompanyUsersScreen: React.FC = () => {
                 <View style={styles.container}>
                     {/* Header */}
                     <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
                             <Ionicons name="arrow-back-outline" size={24} color="#fff" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Total Users</Text>

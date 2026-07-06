@@ -106,6 +106,7 @@ const TotalAssetsDetails: React.FC = () => {
     const route = useRoute<RouteProp<RootStackParamList, 'TotalAssetDetails'>>();
     const { width } = useWindowDimensions();
     const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+    const isNarrowWeb = Platform.OS !== 'web' || width < 420;
     const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
 
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -280,12 +281,39 @@ const TotalAssetsDetails: React.FC = () => {
         return <AssetCard asset={item} isMobileLayout={isMobileLayout} onPress={handlePress} index={index} />;
     };
 
+    const handleGoBack = async () => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            try {
+                const storedUser = await AsyncStorage.getItem('user');
+                if (storedUser) {
+                    const parsed = JSON.parse(storedUser);
+                    const role = String(parsed.roleName || parsed.role || '').toLowerCase();
+                    if (role.includes('superadmin') || role.includes('super admin')) {
+                        navigation.navigate('SuperAdminDashboard' as any);
+                    } else if (role.includes('supervisor')) {
+                        navigation.navigate('SupervisorDashboard' as any);
+                    } else if (role.includes('operator')) {
+                        navigation.navigate('OperatorDashboard' as any);
+                    } else {
+                        navigation.navigate('CompanyDashboard' as any);
+                    }
+                } else {
+                    navigation.navigate('Login' as any);
+                }
+            } catch {
+                navigation.navigate('Login' as any);
+            }
+        }
+    };
+
     return (
         <ImageBackground source={require("../../assets/Company-bg.webp")} style={styles.backgroundImage}>
             <ScreenWrapper contentContainerStyle={{ flex: 1 }}>
                 <View style={styles.container}>
                     <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
                             <Ionicons name="arrow-back" size={24} color="#E0E0E0" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>All Assets</Text>
@@ -311,10 +339,10 @@ const TotalAssetsDetails: React.FC = () => {
                             statusValue={selectedStatus}
                             onStatusChange={setSelectedStatus}
                             statusOptions={uniqueStatuses}
-                            containerStyle={isMobileLayout ? styles.topActionRowMobile : styles.topActionRow}
-                            searchContainerStyle={styles.searchContainer}
+                            containerStyle={isNarrowWeb ? styles.topActionRowMobile : styles.topActionRow}
+                            searchContainerStyle={isNarrowWeb ? styles.searchContainerMobile : styles.searchContainer}
                             searchInputStyle={styles.searchInput}
-                            filtersContainerStyle={isMobileLayout ? styles.mobileFilterContainer : styles.filterGroup}
+                            filtersContainerStyle={isNarrowWeb ? styles.mobileFilterContainer : styles.filterGroup}
                             pickerWrapperStyle={styles.pickerWrapper}
                             pickerStyle={styles.pickerInternal}
                         />
@@ -326,7 +354,7 @@ const TotalAssetsDetails: React.FC = () => {
                                 renderItem={renderAsset}
                                 numColumns={1}
                                 style={{ flex: 1 }}
-                                contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 8 }}
+                                contentContainerStyle={{ paddingTop: isNarrowWeb ? 50 : 50, paddingBottom: Platform.OS === 'web' ? 0 : 20 }}
                                 onEndReached={handleLoadMore}
                                 onEndReachedThreshold={0.3}
                                 ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#A9C6E4" style={{ marginVertical: 16 }} /> : null}
@@ -388,7 +416,7 @@ const styles = StyleSheet.create({
     },
     backButton: { marginRight: 20 },
     headerTitle: { color: '#E6F3FF', fontSize: 20, fontWeight: 'bold' },
-    body: { flex: 1, paddingHorizontal: 15, padding: 20 },
+    body: { flex: 1, paddingHorizontal: 15 },
     searchIcon: { marginRight: 10 },
     tableHeader: {
         display: 'flex',
@@ -419,7 +447,8 @@ const styles = StyleSheet.create({
     topActionRowMobile: {
         flexDirection: 'column',
         gap: 12,
-        marginBottom: 20,
+        marginBottom: 10,
+        paddingBottom: 0,
         width: '100%',
         flexShrink: 0,
     },
@@ -430,7 +459,18 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(24, 58, 93, 0.95)',
         borderRadius: 8,
         paddingHorizontal: 12,
-        height: 48,
+        height: 54,
+        borderWidth: 1.5,
+        borderColor: 'rgba(159, 207, 255, 0.65)',
+    },
+    searchContainerMobile: {
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(24, 58, 93, 0.95)',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        height: 54,
         borderWidth: 1.5,
         borderColor: 'rgba(159, 207, 255, 0.65)',
     },
@@ -458,7 +498,7 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         borderWidth: 1.5,
         borderColor: 'rgba(159, 207, 255, 0.65)',
-        height: 48,
+        height: 54,
         justifyContent: 'center',
         overflow: Platform.OS === 'android' ? 'visible' : 'hidden',
     },
@@ -730,7 +770,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginLeft: 5,
     },
-
 });
 
 export default TotalAssetsDetails;

@@ -817,6 +817,33 @@ const AssignAssetScreen: React.FC = () => {
     );
   }
 
+  const handleGoBack = async () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      try {
+        const storedUser = await AsyncStorage.getItem('user');
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          const role = String(parsed.roleName || parsed.role || '').toLowerCase();
+          if (role.includes('superadmin') || role.includes('super admin')) {
+            navigation.navigate('SuperAdminDashboard' as any);
+          } else if (role.includes('supervisor')) {
+            navigation.navigate('SupervisorDashboard' as any);
+          } else if (role.includes('operator')) {
+            navigation.navigate('OperatorDashboard' as any);
+          } else {
+            navigation.navigate('CompanyDashboard' as any);
+          }
+        } else {
+          navigation.navigate('Login' as any);
+        }
+      } catch {
+        navigation.navigate('Login' as any);
+      }
+    }
+  };
+
   // -------------------- MAIN UI --------------------
   return (
     <ImageBackground
@@ -829,7 +856,7 @@ const AssignAssetScreen: React.FC = () => {
         <View style={[styles.container, isMobileLayout && { margin: 0, borderRadius: 0, backgroundColor: 'rgba(7, 24, 42, 0.92)' }]}>
           {/* HEADER */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#E6F3FF" />
             </TouchableOpacity>
 
@@ -1149,7 +1176,7 @@ const AssignAssetScreen: React.FC = () => {
             styles.footer,
             isMobileLayout && { justifyContent: 'center', paddingBottom: 30 }
           ]}>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleGoBack}>
               <Text style={[styles.buttonText, { color: '#A9C6E4' }]}>Cancel</Text>
             </TouchableOpacity>
 
@@ -1180,17 +1207,18 @@ const AssignAssetScreen: React.FC = () => {
               }
               categoryOptions={assetCategories.filter((category) => category !== 'All Categories')}
               categoryAllLabel="All Categories"
-              containerStyle={{ marginBottom: 12 }}
+              containerStyle={{ marginTop: 10, marginBottom: 12 }}
               searchContainerStyle={{
                 backgroundColor: 'rgba(18, 45, 73, 0.86)',
                 borderColor: 'rgba(255, 255, 255, 1)',
+                height: 54,
               }}
               searchInputStyle={{
                 color: '#E6F3FF',
               }}
               pickerWrapperStyle={{
                 marginBottom: 0,
-                height: 44,
+                height: 54,
                 backgroundColor: 'rgba(18, 45, 73, 0.86)',
                 borderColor: 'rgba(159, 207, 255, 0.22)',
               }}

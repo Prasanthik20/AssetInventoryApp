@@ -33,6 +33,12 @@ Set-Location $appDir
 npx expo prebuild --platform android --clean
 Write-Host "Expo prebuild complete." -ForegroundColor Green
 
+Write-Host "`n=== Step 3.5: Create local.properties ===" -ForegroundColor Cyan
+$localProps = "$appDir\android\local.properties"
+$sdkPath = "C:/Users/sntha/AppData/Local/Android/Sdk"
+Set-Content -Path $localProps -Value "sdk.dir=$sdkPath"
+Write-Host "local.properties created with SDK path." -ForegroundColor Green
+
 Write-Host "`n=== Step 4: Patch gradle.properties ===" -ForegroundColor Cyan
 $gradleProps = "$appDir\android\gradle.properties"
 $propsContent = Get-Content $gradleProps -Raw
@@ -119,9 +125,8 @@ if ($buildContent -notmatch 'MYAPP_RELEASE_STORE_FILE') {
 
 # Ensure release buildType uses release signing
 if ($buildContent -notmatch 'signingConfig signingConfigs\.release') {
-    $buildContent = $buildContent -replace '(release\s*\{)', @'
-$1
-            if (project.hasProperty('MYAPP_RELEASE_STORE_FILE')) {
+    $buildContent = $buildContent -replace '(\/\/ Caution! In production, you need to generate your own keystore file\.\s*\/\/ see https:\/\/reactnative\.dev\/docs\/signed-apk-android\.\s*)signingConfig signingConfigs\.debug', @'
+$1if (project.hasProperty('MYAPP_RELEASE_STORE_FILE')) {
                 signingConfig signingConfigs.release
             } else {
                 signingConfig signingConfigs.debug

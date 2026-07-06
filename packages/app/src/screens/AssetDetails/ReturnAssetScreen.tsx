@@ -12,6 +12,7 @@ import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import { globalColors } from '../..//styles/globalStyles';
 import AppSnackbar from 'src/components/common/AppSnackbar';
 import { toPersistentDataUrl } from '../../utils/imageHelper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
@@ -371,6 +372,33 @@ const ReturnAssetScreen: React.FC = () => {
     };
 
 
+    const handleGoBack = async () => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            try {
+                const storedUser = await AsyncStorage.getItem('user');
+                if (storedUser) {
+                    const parsed = JSON.parse(storedUser);
+                    const role = String(parsed.roleName || parsed.role || '').toLowerCase();
+                    if (role.includes('superadmin') || role.includes('super admin')) {
+                        navigation.navigate('SuperAdminDashboard' as any);
+                    } else if (role.includes('supervisor')) {
+                        navigation.navigate('SupervisorDashboard' as any);
+                    } else if (role.includes('operator')) {
+                        navigation.navigate('OperatorDashboard' as any);
+                    } else {
+                        navigation.navigate('CompanyDashboard' as any);
+                    }
+                } else {
+                    navigation.navigate('Login' as any);
+                }
+            } catch {
+                navigation.navigate('Login' as any);
+            }
+        }
+    };
+
     return (
         <ImageBackground
             source={require("../../assets/Company-bg.webp")}
@@ -382,7 +410,7 @@ const ReturnAssetScreen: React.FC = () => {
                 <View style={[styles.container, isMobileLayout && { margin: 10, borderRadius: 15 }]}>
                     {/* Header */}
                     <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
                             <Ionicons name="arrow-back" size={24} color="#E6F3FF" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Select Assets to Return</Text>

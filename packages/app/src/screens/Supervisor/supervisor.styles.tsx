@@ -35,7 +35,7 @@ export function supervisorStyles(viewport?: DashboardViewport) {
       flex: 1,
     },
     screenScrollContent: {
-      paddingBottom: 16,
+      // paddingBottom: 16,
     },
     container: {
       padding: 16,
@@ -45,7 +45,7 @@ export function supervisorStyles(viewport?: DashboardViewport) {
       borderColor: theme.border,
       marginHorizontal: isDesktopWeb ? 12 : 0,
       marginBottom: isDesktopWeb ? 12 : 0,
-      borderRadius: isDesktopWeb ? 18 : 0,
+      // borderRadius: isDesktopWeb ? 18 : 0,
     },
     scrollContainer: {
       flex: 1,

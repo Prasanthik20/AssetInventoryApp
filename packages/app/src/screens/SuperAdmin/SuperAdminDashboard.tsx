@@ -349,7 +349,6 @@ export default function SuperAdminDashboard({ setUser }: any) {
       source={require("../../assets/Company-bg.webp")}
       style={styles.backgroundImage}
       resizeMode="cover"
-      blurRadius={5}
     >
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -894,8 +893,8 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   scrollContainer: {
-    paddingVertical: 20,
-    paddingHorizontal: 12,
+    // paddingVertical: 20,
+    // paddingHorizontal: 12,
   },
   dashboardContainer: {
     width: "100%",

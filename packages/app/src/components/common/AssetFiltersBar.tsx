@@ -90,7 +90,7 @@ const ModalPicker: React.FC<ModalPickerProps> = ({
   return (
     <>
       <TouchableOpacity
-        style={[styles.pickerWrapper, pickerWrapperStyle]}
+        style={StyleSheet.flatten([styles.pickerWrapper, pickerWrapperStyle])}
         onPress={() => setModalVisible(true)}
         activeOpacity={0.7}
       >
@@ -99,13 +99,14 @@ const ModalPicker: React.FC<ModalPickerProps> = ({
             style={[
               styles.pickerSelectorText,
               StyleSheet.flatten(pickerStyle),
+              { height: 'auto' },
               selectedValue === '' && styles.pickerSelectorPlaceholder
             ]}
             numberOfLines={1}
           >
             {currentLabel}
           </Text>
-          <Ionicons name="chevron-down" size={16} color="#A9C6E4" style={{ marginRight: 10 }} />
+          <Ionicons name="chevron-down" size={16} color="#A9C6E4" style={styles.pickerChevron} />
         </View>
       </TouchableOpacity>
 
@@ -190,13 +191,16 @@ const AssetFiltersBar: React.FC<AssetFiltersBarProps> = ({
 
   const renderCategoryPicker = () => {
     // Use ModalPicker for both web and mobile to ensure consistent dark theme styling
+    const wrapperStyle = isMobileLayout
+      ? [pickerWrapperStyle, styles.categoryWrapperMobile]
+      : [pickerWrapperStyle];
     return (
       <ModalPicker
         selectedValue={categoryValue}
         onValueChange={(val) => onCategoryChange?.(val)}
         options={categoryOptions}
         allLabel={categoryAllLabel}
-        pickerWrapperStyle={[pickerWrapperStyle, isMobileLayout && { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', width: '100%' }]}
+        pickerWrapperStyle={wrapperStyle}
         pickerStyle={pickerStyle}
         title="Select Category"
       />
@@ -238,12 +242,11 @@ const AssetFiltersBar: React.FC<AssetFiltersBarProps> = ({
   return (
     <View
       style={[
-        styles.controlsRow,
-        isMobileLayout && styles.controlsRowMobile,
+        isMobileLayout ? styles.controlsRowMobile : styles.controlsRow,
         containerStyle,
       ]}
     >
-      <View style={[styles.searchContainer, searchContainerStyle, isMobileLayout && { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', width: '100%' }]}>
+      <View style={[styles.searchContainer, searchContainerStyle]}>
         <Feather name="search" size={18} color="#A9C6E4" />
         <TextInput
           placeholder={searchPlaceholder}
@@ -260,7 +263,6 @@ const AssetFiltersBar: React.FC<AssetFiltersBarProps> = ({
             styles.filterGroup,
             isMobileLayout && styles.filterGroupMobile,
             filtersContainerStyle,
-            isMobileLayout && { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', width: '100%', height: 'auto' },
           ]}
         >
           {showCategory && renderCategoryPicker()}
@@ -270,7 +272,6 @@ const AssetFiltersBar: React.FC<AssetFiltersBarProps> = ({
               style={[
                 styles.secondaryFilterRow,
                 isMobileLayout && styles.secondaryFilterRowMobile,
-                isMobileLayout && { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', width: '100%' },
               ]}
             >
               {showLocation && renderLocationPicker()}
@@ -289,20 +290,23 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start', // align items to top for proper wrapping
     gap: 10,
     flexWrap: 'wrap', // allow components to wrap on small screens
+    marginTop: 10,
   },
   controlsRowMobile: {
     flexDirection: 'column',
     alignItems: 'stretch',
     flexShrink: 0,
+    flexWrap: 'nowrap',
+    marginTop: 10,
   },
   searchContainer: {
-    flex: 2,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: globalColors.surfacePrimary,
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 48,
+    height: 54,
     borderWidth: 1,
     borderColor: globalColors.borderSoft,
   },
@@ -313,33 +317,42 @@ const styles = StyleSheet.create({
     color: globalColors.textTitle,
   },
   filterGroup: {
-    flex: 3,
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 12, // space below filter group to separate from content
+    // marginBottom: 12, // space below filter group to separate from content
   },
   filterGroupMobile: {
     flexDirection: 'column',
     gap: 8,
   },
   secondaryFilterRow: {
-    flex: 2,
     flexDirection: 'row',
     gap: 10,
+    flex: 1,
   },
   secondaryFilterRowMobile: {
     flexDirection: 'row',
     gap: 8,
   },
   pickerWrapper: {
-    flex: 1,
     backgroundColor: globalColors.backgroundPanel,
     borderRadius: 12,
-    height: 48,
+    height: 54,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: globalColors.borderSoft,
     overflow: 'hidden', // prevent picker overflow on Android
+    flex: 1,
+  },
+  // Mobile override for category picker: uses explicit height instead of flex-based sizing.
+  // IMPORTANT: flex: 0 overrides the screen's flex: 1 (same shorthand, last-in-array wins).
+  // minHeight: 54 ensures height is respected after flex: 0 sets flexBasis: 0 → 0px.
+  // Yoga applies min/max AFTER flex calculation, so minHeight is the reliable floor.
+  categoryWrapperMobile: {
+    flex: 0,
+    width: '100%',
+    minHeight: 54,
+    height: 54,
   },
   picker: {
     width: '100%',
@@ -350,19 +363,25 @@ const styles = StyleSheet.create({
   pickerSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     width: '100%',
     height: '100%',
     paddingLeft: 12,
+    position: 'relative',
   },
   pickerSelectorText: {
     fontSize: 14,
     color: '#E6F3FF',
     flex: 1,
-    paddingRight: 8,
+    textAlign: 'left',
+    paddingRight: 28, // space to avoid overlapping the absolutely positioned icon
   },
   pickerSelectorPlaceholder: {
     color: '#7FA2C8',
+  },
+  pickerChevron: {
+    position: 'absolute',
+    right: 12,
   },
   modalBackdrop: {
     flex: 1,

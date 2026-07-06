@@ -173,11 +173,13 @@ cd android
 # Fix permissions if needed
 ls -l ./gradlew && chmod +x ./gradlew && ls -l ./gradlew
 
-# Build release APK
-./gradlew assembleRelease
+# Build release APK (Mac/Linux: NODE_ENV=production ./gradlew assembleRelease --no-daemon --max-workers=2)
+# (Windows PowerShell: $env:NODE_ENV="production"; ./gradlew assembleRelease --no-daemon --max-workers=2)
+./gradlew assembleRelease --no-daemon --max-workers=2
 
-# Build release .ABB
-./gradlew bundleRelease
+# Build release .AAB (Mac/Linux: NODE_ENV=production ./gradlew bundleRelease --no-daemon --max-workers=2)
+# (Windows PowerShell: $env:NODE_ENV="production"; ./gradlew bundleRelease --no-daemon --max-workers=2)
+./gradlew bundleRelease --no-daemon --max-workers=2
 
 $ keytool -genkey -v -keystore my-release-key.keystore -alias my-key-alias -keyalg RSA -keysize 2048 -validity 10000
 
