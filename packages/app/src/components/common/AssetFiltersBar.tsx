@@ -291,6 +291,8 @@ const styles = StyleSheet.create({
     gap: 10,
     flexWrap: 'wrap', // allow components to wrap on small screens
     marginTop: 10,
+    zIndex: 10,
+    elevation: 10,
   },
   controlsRowMobile: {
     flexDirection: 'column',
@@ -298,6 +300,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flexWrap: 'nowrap',
     marginTop: 10,
+    zIndex: 10,
+    elevation: 10,
   },
   searchContainer: {
     width: '100%',

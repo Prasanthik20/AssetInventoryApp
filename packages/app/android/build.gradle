@@ -1,7 +1,6 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-  ext.kotlinVersion = "2.1.20"
   repositories {
     google()
     mavenCentral()
@@ -9,26 +8,15 @@ buildscript {
   dependencies {
     classpath('com.android.tools.build:gradle')
     classpath('com.facebook.react:react-native-gradle-plugin')
-    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+    classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
   }
-}
-
-// Explicitly define SDK versions so that library modules (e.g. react-native-async-storage)
-// can read them via safeExtGet before the expo-root-project plugin runs.
-// These values must match what expo-autolinking-plugin (ExpoRootProjectPlugin) sets (SDK 35).
-ext {
-    compileSdkVersion = 35
-    targetSdkVersion = 35
-    minSdkVersion = 24
-    ndkVersion = "27.1.12297006"
-    buildToolsVersion = "35.0.0"
 }
 
 allprojects {
   repositories {
     google()
     mavenCentral()
-    maven { url = 'https://www.jitpack.io' }
+    maven { url 'https://www.jitpack.io' }
   }
 }
 

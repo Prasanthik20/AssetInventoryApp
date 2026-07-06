@@ -131,13 +131,9 @@ const AssignAssetScreen: React.FC = () => {
         const assignerRole = String(
           parsedUser?.roleName || parsedUser?.role?.roleName || '',
         ).toLowerCase();
-        const privilegedRoles = [
-          'admin',
-          'super',
-          'superadmin',
-          'super admin',
-        ];
-        const isPrivilegedAssigner = privilegedRoles.includes(assignerRole);
+        const isPrivilegedAssigner =
+          assignerRole.includes('admin') ||
+          assignerRole.includes('super');
         setCanAssignToSupervisor(isPrivilegedAssigner);
 
         // ----- FETCH ASSETS -----
@@ -912,8 +908,11 @@ const AssignAssetScreen: React.FC = () => {
                     if (!isEditAssignmentMode) setOperatorModal(true);
                   }}
                 >
-                  <Text style={styles.pickerText}>{selectedOperator ? `${selectedOperator.fullName}
-                   (${selectedOperator.employeeId})` : (canAssignToSupervisor ? 'Select Employee' : 'Select Operator')}</Text>
+                  <Text style={styles.pickerText}>
+                    {selectedOperator
+                      ? `${selectedOperator.fullName} (${selectedOperator.employeeId})`
+                      : (canAssignToSupervisor ? 'Select Employee' : 'Select Operator')}
+                  </Text>
                   {!isEditAssignmentMode && (
                     <Ionicons name="chevron-down" size={20} color="#A9C6E4" />
                   )}
@@ -1253,34 +1252,41 @@ const AssignAssetScreen: React.FC = () => {
 
       {/* ------------------- OPERATOR MODAL ------------------- */}
       <Modal visible={operatorModal} transparent animationType="slide">
-        <TouchableOpacity
+        <Pressable
           style={styles.modalOverlay}
-          activeOpacity={1}
           onPress={() => setOperatorModal(false)}
         >
-          <View style={styles.modalContent}>
+          <Pressable style={styles.modalContent} onPress={() => { }}>
             <Text style={styles.modalTitle}>
               {canAssignToSupervisor ? 'Select Employee' : 'Select Operator'}
             </Text>
 
-            {operators.map((op) => (
-              <TouchableOpacity
-                key={op.employeeId}
-                style={styles.assetRow}
-                onPress={() => {
-                  setSelectedOperator(op); // store full object
-                  setOperatorModal(false);
-                }}
-              >
-                <Ionicons name="person-circle-outline" size={24} color="#22D3EE" />
-                <Text style={{ marginLeft: 10, fontSize: 16, color: '#E6F3FF' }}>
-                  {op.fullName} ({op.employeeId})
+            <FlatList
+              data={operators}
+              keyExtractor={(item, index) => `operator-${item.employeeId}-${index}`}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.assetRow}
+                  onPress={() => {
+                    setSelectedOperator(item); // store full object
+                    setOperatorModal(false);
+                  }}
+                >
+                  <Ionicons name="person-circle-outline" size={24} color="#22D3EE" />
+                  <Text style={{ marginLeft: 10, fontSize: 16, color: '#E6F3FF' }}>
+                    {item.fullName} ({item.employeeId})
+                  </Text>
+                </TouchableOpacity>
+              )}
+              style={{ flex: 1, marginTop: 10 }}
+              ListEmptyComponent={
+                <Text style={styles.helperText}>
+                  {canAssignToSupervisor ? 'No employees found.' : 'No operators found.'}
                 </Text>
-              </TouchableOpacity>
-
-            ))}
-          </View>
-        </TouchableOpacity>
+              }
+            />
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {snackbar.visible && (

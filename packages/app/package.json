@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "web:build": "expo export --platform web",
-    "web:preview": "npx serve dist"
+    "web:preview": "npx serve dist",
+    "postinstall": "node fix-async-storage.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -24,6 +25,7 @@
     "bcryptjs": "^3.0.3",
     "expo": "~54.0.0",
     "expo-checkbox": "~5.0.8",
+    "expo-notifications": "~0.29.11",
     "expo-file-system": "~19.0.17",
     "expo-image-picker": "^55.0.10",
     "expo-linear-gradient": "~15.0.8",

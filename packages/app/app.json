@@ -19,7 +19,8 @@
           "cameraPermission": "The app accesses your camera to let you take photos and record videos of assets.",
           "microphonePermission": "The app accesses your microphone to record audio for videos."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "android": {
       "package": "com.assetmgmt.com",
@@ -31,7 +32,11 @@
         "android.permission.WRITE_CONTACTS",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.VIBRATE"
       ],
       "intentFilters": [
         {
@@ -56,6 +61,9 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "The app accesses your location to attach location data to your assets and assignments.",
         "NSLocationAlwaysUsageDescription": "The app accesses your location to attach location data to your assets and assignments."
       }
+    },
+    "web": {
+      "favicon": "./src/assets/asq_app_icon_v2.png"
     }
   }
 }

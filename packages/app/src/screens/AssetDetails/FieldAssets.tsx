@@ -538,6 +538,8 @@ const renderStyles = StyleSheet.create({
     gap: 10,
     marginTop: 10,
     marginBottom: 10,
+    zIndex: 10,
+    elevation: 10,
   },
   controlsRowMobile: {
     paddingHorizontal: 15,
@@ -545,6 +547,8 @@ const renderStyles = StyleSheet.create({
     gap: 10,
     marginTop: 10,
     marginBottom: 10,
+    zIndex: 10,
+    elevation: 10,
   },
   searchContainerInRow: {
     flex: 2,

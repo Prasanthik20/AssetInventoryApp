@@ -77,3 +77,24 @@ A modern, 3D glassmorphic icon with neon-blue shield layers and subtle QR code h
 > [!TIP]
 > **Tablet Screenshots**: 
 > You can reuse these high-resolution PNG mockups for both your **7-inch tablet** and **10-inch tablet** screenshot uploads in the Play Console, as they fully conform to Google Play’s aspect ratio and resolution requirements (up to 3,840 px bounds).
+
+---
+
+## 🚀 3. Release Notes (Changelog)
+
+Below is the release note formatted for your Google Play Console release submission under the **en-US** locale:
+
+```xml
+<en-US>
+ASQ Asset Ledger v2.0
+
+Enhanced features, layout refinements, and critical bug fixes.
+
+Highlights
+• Fixed filter clickability issues on mobile asset lists.
+• Resolved immediate closure bug in the employee selection modal.
+• Added scrolling list support for larger team directories.
+• Enabled Tenant Admins to assign assets to supervisors.
+• Web favicon and performance improvements.
+</en-US>
+```

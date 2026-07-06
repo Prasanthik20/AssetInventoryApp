@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import "./src/config/api"; // Initializes global Axios interceptors
+import { useNotificationListener } from "./src/hooks/useNotificationListener";
 
 import { RootStackParamList } from "./src/navigation/types";
 
@@ -197,6 +198,8 @@ function AuthStack({ setUser }: any) {
 /* ================= APP STACK ================= */
 
 function AppStack({ user, setUser }: any) {
+  useNotificationListener(user);
+
   const getInitialRoute = () => {
     switch (user.roleName) {
       case "Admin":

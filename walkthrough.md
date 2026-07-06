@@ -100,3 +100,124 @@ Here is a summary of the accomplishments, resolved bugs, and premium workflows a
 1. **Add Company**: Open the Super Admin Dashboard and click **Add New Organization**. Complete the form and verify that the system cleanly registers the organization and redirects you back to the Super Admin Cockpit.
 2. **Assign Tiers**: Click **View** on the new organization row to open its profile. Update its status to `suspended` or change its subscription package and save. Verify that the updates persist in the database and list table.
 3. **Verify Write Limits**: Log in as a user belonging to the suspended organization and attempt to log/update an asset; verify that a warning banner blocks access with a `403 Forbidden` restriction.
+
+# Walkthrough - Mobile AssetFiltersBar Overlap Fix
+
+We have resolved a UI overlapping issue on the **All Assets** (and all other screens using the shared `AssetFiltersBar` component) screen in the mobile layout.
+
+## Problem Details
+In mobile view, the filters (Category, Location, and Status pickers) inside the `AssetFiltersBar` were overlapping and showing up *behind* the first few cards of the `FlatList` component.
+This occurred because the `controlsRow` base style has `flexWrap: 'wrap'` enabled for desktop multi-row layouts. When the component dynamically switched to column flow (`flexDirection: 'column'`) on mobile, the inherited `flexWrap: 'wrap'` layout property caused the Yoga layout engine to render a collapsed/incorrect container height for the `AssetFiltersBar`. The next layout sibling, the `<View style={{ flex: 1 }}>` containing the `FlatList`, was drawn on top of the overflowed picker controls.
+
+## Resolution
+- Modified [AssetFiltersBar.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/components/common/AssetFiltersBar.tsx#L293-L298):
+  - Added `flexWrap: 'nowrap'` directly to `controlsRowMobile` style.
+  - This overrides the inherited wrap configuration from `controlsRow` when in mobile layout, ensuring the layout engine correctly computes the height of the column stack and spaces the `FlatList` container directly below the filter controls.
+
+# Walkthrough - AsyncStorage Gradle Release Build Variant Resolution
+
+We have resolved a release APK compilation error where the Gradle task `:app:mergeReleaseNativeLibs` failed with:
+`No matching variant of project :react-native-async-storage_async-storage was found.`
+
+## Problem Details
+When `newArchEnabled=true` is set in `gradle.properties`, the `@react-native-async-storage/async-storage` library's `build.gradle` attempts to apply the React Native Gradle Plugin (`com.facebook.react`) to its own module.
+However, in modern React Native and Gradle setups, the `com.facebook.react` plugin is designed to run exclusively on the main application module (i.e. `:app`). Applying it inside the library module disrupts release build configurations and fails to register variant outputs correctly, throwing a mismatch error for `releaseRuntimeClasspath`.
+
+## Resolution
+1. **Added Local Maven Repository to Root Project**: The actual cause for the `No matching variant` resolution failure on the release runtime classpath was that the local Maven repository for React Native (`react-native/android`) was missing from the root project's `allprojects.repositories` block in [build.gradle](file:///d:/APPS/AssetInventoryApp/packages/app/android/build.gradle#L27-L33). We have explicitly added it:
+   ```gradle
+   allprojects {
+     repositories {
+       google()
+       mavenCentral()
+       maven { url "$rootDir/../node_modules/react-native/android" }
+       maven { url = 'https://www.jitpack.io' }
+     }
+   }
+   ```
+2. **Restored Library com.facebook.react Plugin**: Restored the library's [build.gradle](file:///d:/APPS/AssetInventoryApp/packages/app/node_modules/@react-native-async-storage/async-storage/android/build.gradle#L35-L38) configuration to apply `com.facebook.react` when `isNewArchitectureEnabled` is true. This ensures React Native's autolinking/codegen task is executed for the library module, preventing compilation failures (where `NativeAsyncStorageModuleSpec` classes could not be found).
+3. **AndroidManifest package Attribute Cleanup**: Removed the deprecated `package` attribute from `@react-native-async-storage/async-storage`'s [AndroidManifest.xml](file:///d:/APPS/AssetInventoryApp/packages/app/node_modules/@react-native-async-storage/async-storage/android/src/main/AndroidManifest.xml) to clean up Gradle namespace warnings:
+   ```xml
+   <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+   ```
+4. **Persistent Post-Install Automation**: Configured [fix-async-storage.js](file:///d:/APPS/AssetInventoryApp/packages/app/fix-async-storage.js) as a `"postinstall"` hook in [package.json](file:///d:/APPS/AssetInventoryApp/packages/app/package.json#L12) to automatically patch the `AndroidManifest.xml` namespace warning on any future clean installations.
+5. **Optimized Build Process Instructions**: Documented setting `NODE_ENV=production` when executing release tasks (e.g., `./gradlew assembleRelease` or `./gradlew bundleRelease`) in [E2E_TEST_SCENARIOS.md](file:///d:/APPS/AssetInventoryApp/E2E_TEST_SCENARIOS.md#L176-L181) to ensure the Expo config creation task resolves correctly and bundles in production mode.
+
+# Walkthrough - Mobile Layout Overlaps & Filter Visibility Resolution
+
+We have resolved the remaining mobile layout overlapping and visibility issues affecting the asset filter components.
+
+## Problem Details
+1. **Overlap in All Assets Screen**: In mobile view, the `FlatList` container still partially overlapped the pickers in `AssetFiltersBar`. This occurred because in the style array `[styles.controlsRow, isMobileLayout && styles.controlsRowMobile, containerStyle]`, both the row and column layouts were merged together, leading to incomplete/faulty style overrides of the `flexWrap` property in React Native (Yoga layout engine).
+2. **Invisible Filters in Office/Field Asset Screens**: On the "Assets in Office" and "Assets in Fields" screens, the filters were completely hidden/invisible below the search bar. This happened because:
+   - A custom `dropdownContainer` style (containing `height: 54`, background color, border, and `flex: 1`) was mistakenly applied to the parent `filtersContainerStyle` as well as the child `pickerWrapperStyle`.
+   - On mobile view, the parent container `filterGroup` has its height set to `height: 'auto'` and `flexGrow: 0`. Since the child picker also had a flex-based layout (`flex: 1`) rather than fixed sizing under those overrides, the nested layout collapsed down to a height of `0` and was cut off by `overflow: 'hidden'`.
+
+## Resolution
+1. **Exclusively Select Container Style Class**:
+   - Modified [AssetFiltersBar.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/components/common/AssetFiltersBar.tsx#L238-L242) to select *either* `styles.controlsRowMobile` or `styles.controlsRow` dynamically:
+     ```tsx
+     style={[
+       isMobileLayout ? styles.controlsRowMobile : styles.controlsRow,
+       containerStyle,
+     ]}
+     ```
+     This completely prevents any stylesheet inheritance/merging issues with `flexWrap: 'wrap'` on mobile.
+2. **Fixed Invisible Filters on Sub-Asset Screens**:
+   - Removed the faulty `filtersContainerStyle` override from the `<AssetFiltersBar>` calls in [OfficeAssets.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/OfficeAssets.tsx#L101-L107) and [FieldAssets.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/FieldAssets.tsx#L363-L370).
+   - This allows the parent container to fall back to its clean default layout styling (`styles.filterGroup` on desktop, `styles.filterGroupMobile` on mobile), so it automatically scales its height around the picker elements.
+3. **Improved Spacing**:
+   - Added `marginBottom: 10` to `topControlsRowMobile` and `topControlsRow` inside [OfficeAssets.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/OfficeAssets.tsx#L176-L186) and [FieldAssets.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/FieldAssets.tsx#L509-L519) to ensure clean separation between the filter bar and the underlying lists.# Walkthrough - Gradle Worker Daemon OOM Resolution
+
+We have resolved a Java compiler worker crash where the build task `:react-native-community_datetimepicker:compileReleaseJavaWithJavac` failed with:
+`Failed to run Gradle Worker Daemon > Unable to connect to the child process`
+
+## Problem Details
+Gradle offloads tasks like Java compilation and code generation to independent compiler worker processes to isolate build dependencies. When the host system is under memory pressure, the operating system can terminate these compiler worker processes abruptly. The main Gradle build controller then fails to communicate with the closed process, halting the build.
+
+## Resolution
+1. **Configured Max Workers limit**: Added `org.gradle.workers.max=2` in [gradle.properties](file:///d:/APPS/AssetInventoryApp/packages/app/android/gradle.properties#L14) to limit the maximum number of simultaneous worker processes Gradle can spawn, reducing memory footprint during builds.
+2. **Updated Build Commands**: Documented build-limiting flags (`--no-daemon --max-workers=2`) in [E2E_TEST_SCENARIOS.md](file:///d:/APPS/AssetInventoryApp/E2E_TEST_SCENARIOS.md#L176-L182) to guide clean, low-memory builds on the development environment.
+
+## Web Browser Flexbox Collapse Resolution (Platform.select Style sheets)
+* **Problem**: React Native for Web translates properties like `flex: 1` or `flex: 2` into standard CSS shorthands that resolve to `flex-basis: 0%` (equivalent to `flex: 0 1 0%` or `flex: 1 1 0%`). This caused search and filter picker components to shrink to `0` width in desktop browsers. Inline ternary operators evaluating to `undefined` values on native Android/iOS created conflicts in the layout compiler, disturbing the `.apk` visual layouts.
+* **Resolution**: Configured styles using standard compilation-safe `Platform.select({ web: { ... }, default: { flex: X } })`. Metro resolves this at build time, meaning the native bundle contains only the standard native `flex` property, and the web bundle contains the browser-specific flexes.
+
+Affected elements updated in [AssetFiltersBar.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/components/common/AssetFiltersBar.tsx):
+1. `searchContainer`
+2. `filterGroup`
+3. `secondaryFilterRow`
+4. `pickerWrapper`
+
+## Responsive / Mobile Viewport Collapse (Web-Only Overrides)
+* **Problem**: Setting vertical/mobile override parameters such as `{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }` to resolve the web layout collapse conflicted with base styles (`flex: 1` or `flex: 2`) on native devices, breaking the APK layout.
+* **Resolution**: Created `webMobileOverride` and `webFilterGroupOverride` helpers using `Platform.select`:
+  * On Web: Applies the flex-grow overrides to prevent height collapses on mobile viewports.
+  * On Native (default): Resolves to a clean, empty object `{}`, completely preventing style properties conflicts inside the Yoga layout engine on Android/iOS.
+
+
+## Picker Placeholders & Values Vertical Centering (Middle)
+* **Goal**: Align the placeholder and selected text values inside Category, Location, and Status selectors vertically in the exact **middle** of their container, while keeping them **left-aligned** horizontally.
+* **Resolution**: 
+  1. Overrode `{ height: 'auto' }` on the `<Text>` element in `ModalPicker` to override parent/prop-based native picker height stretch constraints (`height: '100%'`). This enables the parent layout container's `alignItems: 'center'` layout engine to successfully center the text vertically in the middle of the box.
+  2. Set `textAlign: 'left'` and `paddingLeft: 12` inside `pickerSelectorText` to keep placeholders and values left-aligned.
+  3. Styled the chevron down icon as absolutely positioned on the right using a new `pickerChevron` style class (`position: 'absolute', right: 12`), keeping it cleanly aligned without interfering with the text block.
+
+## Navigation Back Fallback Redirection (goBack Warning Fix)
+* **Problem**: In React Native for Web, refreshing the browser page on any details/listing sub-screen (like `TotalAssetDetails`, `FieldAssets`, `OfficeAssets`, etc.) wipes the React Navigation stack history. Clicking the back arrow calls `navigation.goBack()`, which fails with a developer warning since there is no previous screen in the browser history stack.
+* **Resolution**: Implemented a reusable `handleGoBack` check across all listing/assignment screens:
+  * Checks `navigation.canGoBack()`. If true, it calls `navigation.goBack()`.
+  * If false (history is empty), it retrieves the logged-in user profile from `AsyncStorage` and redirects them to their respective role-based dashboard (`SuperAdminDashboard`, `SupervisorDashboard`, `OperatorDashboard`, or `CompanyDashboard`).
+
+Screens updated:
+1. [TotalAssetDetails.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/TotalAssetDetails.tsx)
+2. [FieldAssets.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/FieldAssets.tsx)
+3. [OfficeAssets.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/OfficeAssets.tsx)
+4. [CompanyUsersScreen.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/CommonScreen/CompanyUsersScreen.tsx)
+5. [ReturnAssetScreen.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/ReturnAssetScreen.tsx)
+6. [AssignAssetScreen.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/AssignAssetScreen.tsx)
+
+
+
+
+

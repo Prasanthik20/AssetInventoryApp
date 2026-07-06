@@ -354,7 +354,7 @@ const TotalAssetsDetails: React.FC = () => {
                                 renderItem={renderAsset}
                                 numColumns={1}
                                 style={{ flex: 1 }}
-                                contentContainerStyle={{ paddingTop: isNarrowWeb ? 50 : 50, paddingBottom: Platform.OS === 'web' ? 0 : 20 }}
+                                contentContainerStyle={{ paddingTop: isNarrowWeb ? 50 : 80, paddingBottom: Platform.OS === 'web' ? 0 : 20 }}
                                 onEndReached={handleLoadMore}
                                 onEndReachedThreshold={0.3}
                                 ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#A9C6E4" style={{ marginVertical: 16 }} /> : null}
@@ -443,6 +443,8 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         width: '100%',
         alignItems: 'stretch',
+        zIndex: 10,
+        elevation: 10,
     },
     topActionRowMobile: {
         flexDirection: 'column',
@@ -451,6 +453,8 @@ const styles = StyleSheet.create({
         paddingBottom: 0,
         width: '100%',
         flexShrink: 0,
+        zIndex: 10,
+        elevation: 10,
     },
     searchContainer: {
         flex: 1.5,
