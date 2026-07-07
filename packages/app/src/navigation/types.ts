@@ -109,6 +109,7 @@ export type RootStackParamList = {
     employeeId: string;
     roleName: string;
   };
+  Billing: undefined;
 };
 
 const PROD_API_URL = 'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net';

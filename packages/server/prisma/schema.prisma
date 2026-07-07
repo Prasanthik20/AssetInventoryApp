@@ -44,7 +44,9 @@ model Tenants {
 model Plans {
   id        String   @id
   name      String
+  minUsers  Int      @default(1) @map("min_users")
   maxUsers  Int
+  minAssets Int      @default(1) @map("min_assets")
   maxAssets Int
   price     Decimal  @db.Decimal(10, 2)
   currency  String   @default("INR")

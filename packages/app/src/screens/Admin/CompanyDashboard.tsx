@@ -437,10 +437,25 @@ const CompanyDashboard: React.FC<Props> = ({
 
               {/* Expired Subscription Banner */}
               {isSubscriptionExpired && (
-                <View style={{ backgroundColor: '#FEE2E2', borderColor: '#EF4444', borderWidth: 1, padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                <View style={{ backgroundColor: '#FEE2E2', borderColor: '#EF4444', borderWidth: 1, padding: 14, borderRadius: 8, marginBottom: 16 }}>
                   <Text style={{ color: '#B91C1C', fontWeight: 'bold', fontSize: 14 }}>
                     Your subscription has expired. You have view-only access.
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Billing')}
+                    style={{
+                      marginTop: 10,
+                      backgroundColor: '#B91C1C',
+                      borderRadius: 6,
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 12 }}>
+                      Renew / Upgrade Now
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               )}
 
@@ -881,6 +896,24 @@ const CompanyDashboard: React.FC<Props> = ({
                         color="#fff"
                       />
                       <Text style={styles.addUserButtonText}>View Reports</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Billing')}
+                  >
+                    <LinearGradient
+                      colors={['#0F766E', '#0D9488']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.addUserButton}
+                    >
+                      <SafeIonicons
+                        name="card-outline"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.addUserButtonText}>Billing & Subscription</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>

@@ -22,6 +22,19 @@ if (Test-Path $keystoreSrc) {
 Write-Host "`n=== Step 2: Delete android folder ===" -ForegroundColor Cyan
 $androidDir = "$appDir\android"
 if (Test-Path $androidDir) {
+    Write-Host "Stopping any running Gradle daemons..." -ForegroundColor Yellow
+    if (Test-Path "$androidDir\gradlew.bat") {
+        try {
+            Start-Process -FilePath "$androidDir\gradlew.bat" -ArgumentList "--stop" -Wait -NoNewWindow -ErrorAction SilentlyContinue
+        } catch {}
+    }
+    
+    Write-Host "Terminating java.exe processes to release file locks..." -ForegroundColor Yellow
+    Get-Process -Name "java" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    
+    # Give the OS a moment to release file handles
+    Start-Sleep -Seconds 2
+
     Remove-Item $androidDir -Recurse -Force
     Write-Host "Android folder deleted." -ForegroundColor Green
 } else {

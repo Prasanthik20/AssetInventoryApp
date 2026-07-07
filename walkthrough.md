@@ -215,9 +215,48 @@ Screens updated:
 3. [OfficeAssets.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/OfficeAssets.tsx)
 4. [CompanyUsersScreen.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/CommonScreen/CompanyUsersScreen.tsx)
 5. [ReturnAssetScreen.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/ReturnAssetScreen.tsx)
-6. [AssignAssetScreen.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/AssignAssetScreen.tsx)
+6. [AssignAssetScreen.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/AssetDetails/AssignAssetScreen.tsx)# Walkthrough - Offline B2B Subscription Renewal Workflow
 
+We have successfully implemented a manual, offline B2B billing and plan renewal workflow in both the client mobile app and server API, along with dynamic tier-based plan validation.
 
+## Changes Implemented
 
+### 1. Database Schema & Auto-Migration
+* **[schema.prisma](file:///d:/APPS/AssetInventoryApp/packages/server/prisma/schema.prisma)**: Added `minUsers` (`min_users`) and `minAssets` (`min_assets`) range boundary fields to the `Plans` database model definition.
+* **[plans.ts](file:///d:/APPS/AssetInventoryApp/packages/server/src/pages/api/superadmin/plans.ts)**:
+  - Integrated self-migrating database checks that automatically alter the database schema (adding columns `min_users` and `min_assets`) if not already present.
+  - Automatically seeds the system pricing plans catalog with updated tier ranges:
+    - **Free Trial**: 1 - 5 users, 1 - 100 assets (₹0.00)
+    - **Starter**: 6 - 25 users, 101 - 2,500 assets (₹4,999.00)
+    - **Professional**: 26 - 100 users, 2,501 - 25,000 assets (₹14,999.00)
+    - **Enterprise**: 101+ users, 25,001+ assets (-₹1.00)
+    - **Enterprise (Demo)**: 1 - 999 users, 1 - 999,999 assets (₹0.00)
+  - Configured GET permissions to allow Tenant Admins and Admins to read the plans list, while restricting POST/PUT/DELETE parameters strictly to Super Admins.
 
+### 2. Client Navigation & Range Visuals
+* **[types.ts](file:///d:/APPS/AssetInventoryApp/packages/app/src/navigation/types.ts)**: Registered `Billing` screen parameter definitions.
+* **[App.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/App.tsx)**: Stack mapping and browser deep-linking triggers configuration.
+* **[BillingScreen.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/CommonScreen/BillingScreen.tsx)**:
+  - Updated card rendering elements to display custom, dynamic usage ranges (e.g. `Supports 101 - 2,500 assets`) using new range text formatting helper functions.
+  - Implemented role-based filtering to dynamically hide the `'enterprise-demo'` tier from standard clients (making it visible only to Super Admins).
+  - Formatted the Enterprise Plan price (defined as `-1.00`) as `"Custom Pricing"`.
+  - Configured the checkout form to hide bank details and skip payment screenshot/transaction ID requirements when selecting the Enterprise Plan, replacing them with a custom notification message card to request corporate manager alignment.
+
+### 3. Server-Side Tier & Enterprise B2B Validation
+* **[renew.ts](file:///d:/APPS/AssetInventoryApp/packages/server/src/pages/api/subscription/renew.ts)**:
+  - Added strict validation checks that verify if the tenant's current counts of assets and active users fall within the chosen plan's specific min/max boundaries.
+  - Rejects renewal requests with a `400 Bad Request` status and detailed warning if they attempt to request a tier mismatching their actual organizational usage metrics.
+  - Automatically bypasses transaction screenshot requirements for Enterprise custom pricing requests, assigning placeholder transaction keys instead.
+
+### 4. Admin Dashboard Banner & Trigger Updates
+* **[CompanyDashboard.tsx](file:///d:/APPS/AssetInventoryApp/packages/app/src/screens/Admin/CompanyDashboard.tsx)**: Added a "Renew / Upgrade Now" banner link and a Quick Action entry redirecting users to the Billing dashboard.
+
+---
+
+## Verification Summary
+
+* Verified `/api/superadmin/plans` queries, alterations, and auto-seeding scripts run successfully.
+* Verified `BillingScreen` displays the user and asset tier limits ranges dynamically (e.g., `Supports 6 - 25 users`).
+* Verified `/api/subscription/renew` validation checks reject plan renewals if user or asset counts exceed target plan thresholds.
+* Verified that selecting the Enterprise Plan correctly displays a Custom pricing notice, hides the payment/bank form, and allows submission via placeholders.
 

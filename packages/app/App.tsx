@@ -23,6 +23,7 @@ import CompanyUsersScreen from "./src/screens/CommonScreen/CompanyUsersScreen";
 import ReportsScreen from "./src/screens/CommonScreen/ReportsScreen";
 import AddCompanyUser from "./src/screens/Admin/AddCompanyUser";
 import CustomCategoryBuilder from "./src/screens/Admin/CustomCategoryBuilder";
+import BillingScreen from "./src/screens/CommonScreen/BillingScreen";
 
 // Supervisor
 import SupervisorDashboard from "./src/screens/Supervisor/SupervisorDashboard";
@@ -136,6 +137,7 @@ function App(): React.JSX.Element {
         AddEditAsset: 'inventory/edit',
         AssignAsset: 'assign',
         Reports: 'reports',
+        Billing: 'billing',
         AssetFullDetails: 'inventory/:asset',
         ReturnAsset: 'return',
         ForgotPassword: 'forgot-password',
@@ -318,6 +320,10 @@ function AppStack({ user, setUser }: any) {
       <Stack.Screen
         name="Reports"
         component={ReportsScreen}
+      />
+      <Stack.Screen
+        name="Billing"
+        component={BillingScreen}
       />
     </Stack.Navigator>
   );
