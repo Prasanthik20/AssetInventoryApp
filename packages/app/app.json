@@ -3,7 +3,15 @@
     "name": "ASQ Asset Ledger",
     "slug": "asset-inventory-app",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#00000000",
+      "translucent": true
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#00000000"
+    },
     "icon": "./src/assets/asq_icon_with_text_v3.png",
     "platforms": [
       "android",

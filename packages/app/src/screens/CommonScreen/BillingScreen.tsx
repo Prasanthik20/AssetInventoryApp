@@ -343,44 +343,44 @@ const BillingScreen: React.FC = () => {
                         )}
                       </View>
 
-                    <View style={styles.planLimitRow}>
-                      <Feather name="layers" size={16} color="#22D3EE" />
-                      <Text style={styles.planLimitText}>
-                        {getAssetRangeText(plan)}
-                      </Text>
-                    </View>
-                    <View style={styles.planLimitRow}>
-                      <Feather name="users" size={16} color="#22D3EE" />
-                      <Text style={styles.planLimitText}>
-                        {getUserRangeText(plan)}
-                      </Text>
-                    </View>
+                      <View style={styles.planLimitRow}>
+                        <Feather name="layers" size={16} color="#22D3EE" />
+                        <Text style={styles.planLimitText}>
+                          {getAssetRangeText(plan)}
+                        </Text>
+                      </View>
+                      <View style={styles.planLimitRow}>
+                        <Feather name="users" size={16} color="#22D3EE" />
+                        <Text style={styles.planLimitText}>
+                          {getUserRangeText(plan)}
+                        </Text>
+                      </View>
 
-                    <TouchableOpacity
-                      style={[
-                        styles.selectPlanBtn,
-                        isActive && styles.selectPlanBtnActive,
-                        isSelected && !isActive && styles.selectPlanBtnSelected,
-                      ]}
-                      onPress={() => setSelectedPlanId(plan.id)}
-                    >
-                      <Text
+                      <TouchableOpacity
                         style={[
-                          styles.selectPlanBtnText,
-                          isSelected && !isActive && styles.selectPlanBtnTextSelected,
+                          styles.selectPlanBtn,
+                          isActive && styles.selectPlanBtnActive,
+                          isSelected && !isActive && styles.selectPlanBtnSelected,
                         ]}
+                        onPress={() => setSelectedPlanId(plan.id)}
                       >
-                        {isActive ? 'Current Plan' : isSelected ? 'Plan Selected' : 'Choose Plan'}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.selectPlanBtnText,
+                            isSelected && !isActive && styles.selectPlanBtnTextSelected,
+                          ]}
+                        >
+                          {isActive ? 'Current Plan' : isSelected ? 'Plan Selected' : 'Choose Plan'}
+                        </Text>
+                      </TouchableOpacity>
                     </TouchableOpacity>
-                  </TouchableOpacity>
-                );
-              })}
+                  );
+                })}
             </View>            {/* OFFLINE TRANSFER BILLING FORM */}
             {selectedPlanId && (() => {
               const selectedPlan = plans.find(p => p.id === selectedPlanId);
               const isEnterprise = selectedPlan && parseFloat(selectedPlan.price) === -1.00;
-              
+
               return (
                 <View style={styles.paymentFormCard}>
                   {isEnterprise ? (
@@ -401,19 +401,24 @@ const BillingScreen: React.FC = () => {
                       </Text>
 
                       <View style={styles.bankDetailsContainer}>
-                        <Text style={styles.bankTitle}>ASQ Bank Account Info</Text>
+                        <Text style={styles.bankTitle}>A Square Technologies Bank Account Info</Text>
                         <View style={styles.bankRow}>
                           <Text style={styles.bankLabel}>Beneficiary Name:</Text>
-                          <Text style={styles.bankValue}>ASQ Systems Pvt. Ltd.</Text>
+                          <Text style={styles.bankValue}>A Square Technologies</Text>
                         </View>
                         <View style={styles.bankRow}>
                           <Text style={styles.bankLabel}>Account Number:</Text>
-                          <Text style={styles.bankValue}>50200088921832</Text>
+                          <Text style={styles.bankValue}>50200102448772</Text>
                         </View>
                         <View style={styles.bankRow}>
                           <Text style={styles.bankLabel}>IFSC Code:</Text>
-                          <Text style={styles.bankValue}>HDFC0000240</Text>
+                          <Text style={styles.bankValue}>HDFC0001456</Text>
                         </View>
+                        <View style={styles.bankRow}>
+                          <Text style={styles.bankLabel}>Branch:</Text>
+                          <Text style={styles.bankValue}>Eluru Road Branch, Vijayawada</Text>
+                        </View>
+
                         <View style={styles.bankRow}>
                           <Text style={styles.bankLabel}>Account Type:</Text>
                           <Text style={styles.bankValue}>Current Account</Text>
