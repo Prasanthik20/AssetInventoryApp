@@ -47,9 +47,9 @@ cp -r public/. deploy_exact/public/ && \
 cd deploy_exact && \
 zip -r ../deploy.zip . && \
 cd .. && \
-az webapp deploy --name asset-api --resource-group asquaretechrg --src-path deploy.zip --type zip
+az webapp deploy --name asq-asset-api --resource-group asquaretechrg --src-path deploy.zip --type zip
 
 
 debug:
-az webapp log tail --name asset-api --resource-group asquaretechrg
+az webapp log tail --name asq-asset-api --resource-group asquaretechrg
 ls -F packages/server/deploy_final/

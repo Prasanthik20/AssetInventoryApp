@@ -12,7 +12,7 @@ import { Platform } from 'react-native';
 const ENV = {
   dev: {
     // 10.0.2.2 = host machine from Android emulator; use LAN IP (e.g. 192.168.0.6) for physical device
-    apiUrl: 'http://10.0.2.2:3000',
+    apiUrl: 'http://localhost:3000',//'http://10.0.2.2:3000',
     wsUrl: 'ws://10.0.2.2:3000',
     timeout: 30000,
   },
@@ -53,7 +53,7 @@ const getPlatformConfig = () => {
     // For production: use Azure backend
     const isDev = __DEV__;
     return {
-      apiUrl:  getEnv().apiUrl,
+      apiUrl: getEnv().apiUrl,
       timeout: 30000,
     };
   }

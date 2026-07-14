@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   TextInput,
   Switch,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -70,9 +71,12 @@ export default function SuperAdminDashboard({ setUser }: any) {
     totalTenants: 0,
     activeSubscriptions: 0,
     pendingRenewals: 0,
-    totalAssetsOnPlatform: 0
+    totalAssetsOnPlatform: 0,
+    depreciatingAssetsCount: 0
   });
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [depreciatingAssets, setDepreciatingAssets] = useState<any[]>([]);
+  const [isDepreciationModalVisible, setIsDepreciationModalVisible] = useState(false);
   const [plans, setPlans] = useState<PlanPackage[]>([]);
 
   // Sort states
@@ -127,6 +131,7 @@ export default function SuperAdminDashboard({ setUser }: any) {
       // 1. Fetch Global Stats
       const statsRes = await axios.get(`${baseURL}/api/superadmin/stats`, { headers });
       setStats(statsRes.data);
+      setDepreciatingAssets(statsRes.data.depreciatingAssets || []);
 
       // 2. Fetch Tenants
       const tenantsRes = await axios.get(`${baseURL}/api/superadmin/tenants`, { headers });
@@ -388,10 +393,17 @@ export default function SuperAdminDashboard({ setUser }: any) {
                 <Text style={styles.statLabel}>Pending Renewal Requests</Text>
               </View>
               <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-                <TouchableOpacity onPress={() => setIsAssetsVisible(true)}>
+                <TouchableOpacity onPress={() => setIsAssetsVisible(true)} style={{ alignItems: 'center' }}>
                   <Ionicons name="cube-outline" size={26} color="#EC4899" />
                   <Text style={styles.statNumber}>{stats.totalAssetsOnPlatform}</Text>
                   <Text style={styles.statLabel}>Platform Assets Logged</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
+                <TouchableOpacity onPress={() => setIsDepreciationModalVisible(true)} style={{ alignItems: 'center' }}>
+                  <Ionicons name="trending-down-outline" size={26} color="#EAB308" />
+                  <Text style={styles.statNumber}>{(stats as any).depreciatingAssetsCount ?? 0}</Text>
+                  <Text style={styles.statLabel}>Depreciating Assets</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -880,6 +892,132 @@ export default function SuperAdminDashboard({ setUser }: any) {
             </View>
           </View>
         )}
+
+        {/* DEPRECIATION DETAILS TABLE MODAL FOR SUPER ADMIN */}
+        <Modal
+          visible={isDepreciationModalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setIsDepreciationModalVisible(false)}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20
+          }}>
+            <View style={{
+              width: isDesktopWeb ? '85%' : '100%',
+              maxHeight: '85%',
+              backgroundColor: '#07182a',
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: 'rgba(159, 207, 255, 0.22)',
+              padding: 24,
+              overflow: 'hidden'
+            }}>
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 20,
+                borderBottomWidth: 1,
+                borderBottomColor: 'rgba(159, 207, 255, 0.12)',
+                paddingBottom: 12,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="trending-down" size={24} color="#EAB308" />
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E6F3FF' }}>
+                    Platform Depreciating Assets (lessthan 60% Life Remaining)
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setIsDepreciationModalVisible(false)}>
+                  <Ionicons name="close-circle-outline" size={26} color="#FF4D4D" />
+                </TouchableOpacity>
+              </View>
+
+              {depreciatingAssets.length === 0 ? (
+                <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                  <Text style={{ color: '#A9C6E4', fontSize: 15 }}>No assets are currently depreciating under 60% life across the platform.</Text>
+                </View>
+              ) : (
+                <ScrollView horizontal={true} showsHorizontalScrollIndicator={true}>
+                  <View style={{ minWidth: 750 }}>
+                    {/* Table Header */}
+                    <View style={{
+                      flexDirection: 'row',
+                      backgroundColor: 'rgba(18, 45, 73, 0.86)',
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: 'rgba(159, 207, 255, 0.22)',
+                      marginBottom: 6
+                    }}>
+                      <Text style={{ flex: 1.5, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Organization</Text>
+                      <Text style={{ flex: 2, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Asset Name</Text>
+                      <Text style={{ flex: 1.5, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Serial #</Text>
+                      <Text style={{ flex: 1, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Purchase Price</Text>
+                      <Text style={{ flex: 1.2, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Remaining Life</Text>
+                      <Text style={{ flex: 1.2, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Book Value</Text>
+                      <Text style={{ flex: 1.5, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Action Required</Text>
+                    </View>
+
+                    {/* Table Body */}
+                    <ScrollView style={{ maxHeight: 450 }}>
+                      {depreciatingAssets.map((item, index) => (
+                        <View key={item.id || index} style={{
+                          flexDirection: 'row',
+                          paddingVertical: 12,
+                          paddingHorizontal: 12,
+                          borderBottomWidth: 1,
+                          borderColor: 'rgba(159, 207, 255, 0.12)',
+                          alignItems: 'center',
+                          backgroundColor: 'rgba(7, 24, 42, 0.92)'
+                        }}>
+                          <Text style={{ flex: 1.5, color: '#E6F3FF', fontSize: 13, fontWeight: 'bold' }} numberOfLines={1}>{item.tenantName}</Text>
+                          <Text style={{ flex: 2, color: '#A9C6E4', fontSize: 13 }} numberOfLines={1}>{item.name}</Text>
+                          <Text style={{ flex: 1.5, color: '#A9C6E4', fontSize: 13 }} numberOfLines={1}>{item.serialNo || 'N/A'}</Text>
+                          <Text style={{ flex: 1, color: '#A9C6E4', fontSize: 13 }}>₹{parseFloat(item.price || 0).toLocaleString('en-IN')}</Text>
+                          <Text style={{ flex: 1.2, color: item.percentLifeRemaining < 20 ? '#EF4444' : '#F59E0B', fontSize: 13, fontWeight: 'bold' }}>
+                            {item.percentLifeRemaining}%
+                          </Text>
+                          <Text style={{ flex: 1.2, color: '#34D399', fontSize: 13, fontWeight: '600' }}>
+                            ₹{item.remainingValue.toLocaleString('en-IN')}
+                          </Text>
+                          <View style={{ flex: 1.5 }}>
+                            <View style={{
+                              backgroundColor: item.percentLifeRemaining < 20 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                              borderColor: item.percentLifeRemaining < 20 ? '#EF4444' : '#3B82F6',
+                              borderWidth: 1,
+                              borderRadius: 4,
+                              paddingVertical: 4,
+                              paddingHorizontal: 8,
+                              alignSelf: 'flex-start'
+                            }}>
+                              <Text style={{
+                                color: item.percentLifeRemaining < 20 ? '#FCA5A5' : '#93C5FD',
+                                fontSize: 11,
+                                fontWeight: 'bold',
+                                textAlign: 'center'
+                              }}>
+                                {item.percentLifeRemaining < 20 ? 'SEND TO SCRAP' : 'UPGRADE ASSET'}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </ScrollView>
+              )}
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setIsDepreciationModalVisible(false)}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
       </SafeAreaView>
     </ImageBackground>

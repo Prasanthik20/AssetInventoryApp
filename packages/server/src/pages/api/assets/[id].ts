@@ -23,6 +23,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
   const assetId = id; // For readability and matching legacy logic
 
+  // Auto-migration for useful_life and salvage_value
+  try {
+    await query(`
+      ALTER TABLE "Asset_Details" 
+      ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
+      ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+    `, []);
+  } catch (err) {
+    console.error('[AUTO-MIGRATION ERROR]', err);
+  }
+
   // Handle PUT - Update Asset
   if (req.method === 'PUT') {
     try {
@@ -39,6 +50,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         status,
         photoURL,
         barcodeURL,
+        usefulLife,
+        salvageValue,
         dynamicFields // Expected as array of { fieldId: number, value: string }
       } = req.body;
 
@@ -121,6 +134,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       if (price !== undefined) {
         updates.push(`price = $${paramIndex++}`);
         values.push(price || null);
+      }
+
+      if (usefulLife !== undefined) {
+        updates.push(`"useful_life" = $${paramIndex++}`);
+        values.push(usefulLife !== null ? parseInt(String(usefulLife), 10) : 5);
+      }
+
+      if (salvageValue !== undefined) {
+        updates.push(`"salvage_value" = $${paramIndex++}`);
+        values.push(salvageValue || null);
       }
 
       if (location !== undefined) {
@@ -221,6 +244,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         a.warranty_expiry AS "warrantyExpiry",
         a.purchase_date AS "purchaseDate",
         a.price,
+        a.useful_life AS "usefulLife",
+        a.salvage_value AS "salvageValue",
         
         (
           SELECT "assigned_date"
@@ -281,6 +306,33 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const isPastDue = expectedReturn ? expectedReturn < today : false;
     const isActuallyAssigned = asset.dbStatus === "Assigned" && asset.assigned_to !== null;
 
+    const initialCost = parseFloat(asset.price) || 0;
+    const salvageValueNum = parseFloat(asset.salvageValue) || 0;
+    const usefulLifeNum = parseInt(asset.usefulLife) || 5;
+
+    let remainingValue = initialCost;
+    let percentLifeRemaining = 100;
+    let percentLifeElapsed = 0;
+    let depreciationMessage = null;
+
+    if (initialCost > 0 && usefulLifeNum > 0 && asset.purchaseDate) {
+      const purchaseDate = new Date(asset.purchaseDate);
+      const today = new Date();
+      const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+
+      const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
+      const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
+      remainingValue = initialCost - totalDepreciation;
+
+      percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
+      percentLifeElapsed = Math.min(100, percentLifeElapsed);
+      percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
+
+      if (percentLifeRemaining < 60) {
+        depreciationMessage = `Depreciation alert: remaining life is ${percentLifeRemaining.toFixed(1)}%. Please scrap or upgrade this asset.`;
+      }
+    }
+
     const formatted = {
       assetId: asset.assetId,
       assetName: asset.assetName,
@@ -301,6 +353,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       projectName: asset.projectName || null,
       price: asset.price || null,
       value: asset.price ? parseFloat(asset.price).toLocaleString() : 'N/A',
+      usefulLife: usefulLifeNum,
+      salvageValue: asset.salvageValue || null,
+      remainingValue: parseFloat(remainingValue.toFixed(2)),
+      depreciationMessage,
       dynamicValues: dynamicValuesRes.rows
     };
 

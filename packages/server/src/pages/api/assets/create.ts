@@ -30,6 +30,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       barcodeURL, barcode,
       assignedBy, assignedTo, expectedReturnDate,
       assignmentId, operatorId, senderId, receiverId,
+      usefulLife, salvageValue,
       dynamicFields // Expected as an array of { fieldId: number, value: string }
     } = payload;
 
@@ -101,8 +102,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const nextId = nextIdRes.rows[0]?.next_id;
 
     const insertAsset = await query(
-      `INSERT INTO "Asset_Details" (id, name, "categoryId", "controller_key", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to, "tenantId")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      `INSERT INTO "Asset_Details" (id, name, "categoryId", "controller_key", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to, "tenantId", "useful_life", "salvage_value")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING id`,
       [
         nextId,
@@ -120,7 +121,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         barcodeURL || barcode || null,
         assignedByNum,
         assignedToNum,
-        tenantId
+        tenantId,
+        usefulLife !== undefined && usefulLife !== null ? parseInt(String(usefulLife), 10) : 5,
+        salvageValue || null
       ]
     );
 
@@ -183,7 +186,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         assignedBy: assignedByNum,
         assignedTo: assignedToNum,
         photoURL: photoURL || null,
-        barcodeURL: barcodeURL || barcode || null
+        barcodeURL: barcodeURL || barcode || null,
+        usefulLife: usefulLife !== undefined && usefulLife !== null ? parseInt(String(usefulLife), 10) : 5,
+        salvageValue: salvageValue || null
       }
     });
 

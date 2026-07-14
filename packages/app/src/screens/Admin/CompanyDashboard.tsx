@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
   useWindowDimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -137,6 +138,9 @@ const CompanyDashboard: React.FC<Props> = ({
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [depreciatingAssetsCount, setDepreciatingAssetsCount] = useState<number>(0);
+  const [depreciatingAssets, setDepreciatingAssets] = useState<any[]>([]);
+  const [isDepreciationModalVisible, setIsDepreciationModalVisible] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [totalCategories, setTotalCategories] = useState<number>(0);
   const [subscription, setSubscription] = useState<any>(null);
@@ -199,10 +203,12 @@ const CompanyDashboard: React.FC<Props> = ({
       setUnderMaintenanceAssets(data.underMaintenanceAssets);
       setFieldLocationStats(data.fieldLocationStats || []);
       setTotalCategories(data.totalCategories || 0);
-      
+      setDepreciatingAssetsCount(data.depreciatingAssetsCount || 0);
+      setDepreciatingAssets(data.depreciatingAssets || []);
+
       const sub = data.subscription || null;
       setSubscription(sub);
-      
+
       if (sub && sub.endDate) {
         const endDate = new Date(sub.endDate);
         endDate.setHours(23, 59, 59, 999);
@@ -213,7 +219,7 @@ const CompanyDashboard: React.FC<Props> = ({
         setIsSubscriptionExpired(false);
         AsyncStorage.setItem('isSubscriptionExpired', JSON.stringify(false));
       }
-      
+
     } catch (error: any) {
       console.log('Dashboard API Error:', error.response?.data || error.message);
     } finally {
@@ -259,7 +265,7 @@ const CompanyDashboard: React.FC<Props> = ({
   const hideNotification = async (id: number) => {
     try {
       const token = await AsyncStorage.getItem('token');
-      await axios.put(`${baseURL}/api/notifications/hide`, 
+      await axios.put(`${baseURL}/api/notifications/hide`,
         { id },
         {
           headers: {
@@ -297,7 +303,7 @@ const CompanyDashboard: React.FC<Props> = ({
 
     try {
       const token = await AsyncStorage.getItem('token');
-      await axios.post(`${baseURL}/api/assets/confirm-return`, 
+      await axios.post(`${baseURL}/api/assets/confirm-return`,
         {
           notificationId,
           ...(hasAssignmentId ? { assignmentId } : { assetId }),
@@ -345,7 +351,7 @@ const CompanyDashboard: React.FC<Props> = ({
       source={require('../../assets/Company-bg.webp')}
       style={styles.backgroundImage}
       resizeMode="cover"
-      // blurRadius={5}
+    // blurRadius={5}
     >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
@@ -410,7 +416,7 @@ const CompanyDashboard: React.FC<Props> = ({
                       Renews: {new Date(subscription.endDate).toLocaleDateString()}
                     </Text>
                   </View>
-                  
+
                   {/* Users Progress Bar */}
                   <View style={{ marginBottom: 10 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -622,6 +628,19 @@ const CompanyDashboard: React.FC<Props> = ({
                     {underMaintenanceAssets}
                   </Text>
                 </View>
+                <View style={styles.metricBox}>
+                  <TouchableOpacity
+                    style={styles.metricRow}
+                    activeOpacity={0.8}
+                    onPress={() => setIsDepreciationModalVisible(true)}
+                  >
+                    <SafeIonicons name="trending-down-outline" size={24} color="#EAB308" />
+                    <Text style={styles.metricLabel}>Depreciating Assets</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.metricValue}>
+                    {depreciatingAssetsCount}
+                  </Text>
+                </View>
               </View>
 
               {/* Bottom Content Row - Side-by-Side on Web */}
@@ -727,71 +746,71 @@ const CompanyDashboard: React.FC<Props> = ({
                                         const displayMessage = parseNotificationMessage(item.reply, item.reason);
 
                                         return (
-                                        <View
-                                          key={
-                                            item.id || `${groupIndex}-${index}`
-                                          }
-                                          style={styles.notifLine}
-                                        >
-                                          <View style={styles.notifMainContent}>
-                                            <View style={styles.notifHeaderRow}>
-                                              <View style={styles.tagContainer}>
-                                                <Text style={styles.roleTagText}>
-                                                  {item.status}
-                                                </Text>
-                                              </View>
-                                              <Text style={styles.notifTime}>
-                                                {item.createdAt
-                                                  ? new Date(
+                                          <View
+                                            key={
+                                              item.id || `${groupIndex}-${index}`
+                                            }
+                                            style={styles.notifLine}
+                                          >
+                                            <View style={styles.notifMainContent}>
+                                              <View style={styles.notifHeaderRow}>
+                                                <View style={styles.tagContainer}>
+                                                  <Text style={styles.roleTagText}>
+                                                    {item.status}
+                                                  </Text>
+                                                </View>
+                                                <Text style={styles.notifTime}>
+                                                  {item.createdAt
+                                                    ? new Date(
                                                       item.createdAt,
                                                     ).toLocaleDateString('en-GB')
-                                                  : ''}
-                                              </Text>
-                                            </View>
+                                                    : ''}
+                                                </Text>
+                                              </View>
 
-                                            <Text style={styles.assetContext}>
-                                              Asset:{' '}
+                                              <Text style={styles.assetContext}>
+                                                Asset:{' '}
+                                                <Text
+                                                  style={{ fontWeight: 'bold' }}
+                                                >
+                                                  {item.asset?.name || 'N/A'}
+                                                </Text>
+                                              </Text>
+
                                               <Text
-                                                style={{ fontWeight: 'bold' }}
+                                                style={styles.notifMessage}
+                                                numberOfLines={2}
                                               >
-                                                {item.asset?.name || 'N/A'}
+                                                "{displayMessage}"
                                               </Text>
-                                            </Text>
 
-                                            <Text
-                                              style={styles.notifMessage}
-                                              numberOfLines={2}
-                                            >
-                                              "{displayMessage}"
-                                            </Text>
+                                              {item.receiver?.name ? (
+                                                <Text style={styles.tapToHideText}>
+                                                  Receiver: {item.receiver.name}
+                                                </Text>
+                                              ) : null}
 
-                                            {item.receiver?.name ? (
-                                              <Text style={styles.tapToHideText}>
-                                                Receiver: {item.receiver.name}
-                                              </Text>
-                                            ) : null}
-
-                                            <View style={styles.notifActionRow}>
-                                              {isReturnPending && (
+                                              <View style={styles.notifActionRow}>
+                                                {isReturnPending && (
+                                                  <TouchableOpacity
+                                                    style={[styles.inlineActionButton, styles.confirmReturnButton]}
+                                                    onPress={() => handleConfirmReturn(item)}
+                                                    activeOpacity={0.8}
+                                                  >
+                                                    <Text style={styles.inlineActionButtonText}>Confirm Return</Text>
+                                                  </TouchableOpacity>
+                                                )}
                                                 <TouchableOpacity
-                                                  style={[styles.inlineActionButton, styles.confirmReturnButton]}
-                                                  onPress={() => handleConfirmReturn(item)}
+                                                  style={styles.inlineActionButton}
+                                                  onPress={() => hideNotification(item.id)}
                                                   activeOpacity={0.8}
                                                 >
-                                                  <Text style={styles.inlineActionButtonText}>Confirm Return</Text>
+                                                  <Text style={styles.inlineActionButtonText}>Mark as seen</Text>
                                                 </TouchableOpacity>
-                                              )}
-                                              <TouchableOpacity
-                                                style={styles.inlineActionButton}
-                                                onPress={() => hideNotification(item.id)}
-                                                activeOpacity={0.8}
-                                              >
-                                                <Text style={styles.inlineActionButtonText}>Mark as seen</Text>
-                                              </TouchableOpacity>
+                                              </View>
                                             </View>
                                           </View>
-                                        </View>
-                                      );
+                                        );
                                       },
                                     )}
                                   </ScrollView>
@@ -814,7 +833,7 @@ const CompanyDashboard: React.FC<Props> = ({
                 {/* Quick Actions */}
                 <View style={styles.actionsContainer}>
                   <Text style={styles.sectionTitle}>Quick Actions</Text>
-                  
+
                   {!isSubscriptionExpired && (
                     <>
                       <TouchableOpacity
@@ -922,6 +941,121 @@ const CompanyDashboard: React.FC<Props> = ({
           </ScrollView>
         </View>
       </SafeAreaView>
+      {/* DEPRECIATION DETAILS TABLE MODAL */}
+      <Modal
+        visible={isDepreciationModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsDepreciationModalVisible(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20
+        }}>
+          <View style={{
+            width: isDesktopWeb ? '80%' : '100%',
+            maxHeight: '80%',
+            backgroundColor: '#0F172A',
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: '#334155',
+            padding: 20,
+            overflow: 'hidden'
+          }}>
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 15
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="trending-down" size={24} color="#EAB308" />
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#F8FAFC' }}>
+                  Depreciating Assets (less than 60% Life Remaining)
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsDepreciationModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {depreciatingAssets.length === 0 ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <Text style={{ color: '#94A3B8', fontSize: 15 }}>No assets are currently depreciating under 60% life.</Text>
+              </View>
+            ) : (
+              <ScrollView horizontal={true} showsHorizontalScrollIndicator={true}>
+                <View style={{ minWidth: 600 }}>
+                  {/* Table Header */}
+                  <View style={{
+                    flexDirection: 'row',
+                    backgroundColor: '#1E293B',
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 6,
+                    borderBottomWidth: 1,
+                    borderColor: '#334155'
+                  }}>
+                    <Text style={{ flex: 2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Asset Name</Text>
+                    <Text style={{ flex: 1.5, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Serial #</Text>
+                    <Text style={{ flex: 1, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Purchase Price</Text>
+                    <Text style={{ flex: 1.2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Remaining Life</Text>
+                    <Text style={{ flex: 1.2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Book Value</Text>
+                    <Text style={{ flex: 1.5, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Action Recommendation</Text>
+                  </View>
+
+                  {/* Table Body */}
+                  <ScrollView style={{ maxHeight: 400 }}>
+                    {depreciatingAssets.map((item, index) => (
+                      <View key={item.id || index} style={{
+                        flexDirection: 'row',
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                        borderBottomWidth: 1,
+                        borderColor: 'rgba(51, 65, 85, 0.5)',
+                        alignItems: 'center'
+                      }}>
+                        <Text style={{ flex: 2, color: '#F1F5F9', fontSize: 13, fontWeight: '500' }} numberOfLines={1}>{item.name}</Text>
+                        <Text style={{ flex: 1.5, color: '#CBD5E1', fontSize: 13 }} numberOfLines={1}>{item.serialNo || 'N/A'}</Text>
+                        <Text style={{ flex: 1, color: '#CBD5E1', fontSize: 13 }}>₹{parseFloat(item.price || 0).toLocaleString('en-IN')}</Text>
+                        <Text style={{ flex: 1.2, color: item.percentLifeRemaining < 20 ? '#EF4444' : '#F59E0B', fontSize: 13, fontWeight: 'bold' }}>
+                          {item.percentLifeRemaining}%
+                        </Text>
+                        <Text style={{ flex: 1.2, color: '#10B981', fontSize: 13, fontWeight: '600' }}>
+                          ₹{item.remainingValue.toLocaleString('en-IN')}
+                        </Text>
+                        <View style={{ flex: 1.5 }}>
+                          <View style={{
+                            backgroundColor: item.percentLifeRemaining < 20 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                            borderColor: item.percentLifeRemaining < 20 ? '#EF4444' : '#3B82F6',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            paddingVertical: 4,
+                            paddingHorizontal: 8,
+                            alignSelf: 'flex-start'
+                          }}>
+                            <Text style={{
+                              color: item.percentLifeRemaining < 20 ? '#FCA5A5' : '#93C5FD',
+                              fontSize: 11,
+                              fontWeight: 'bold',
+                              textAlign: 'center'
+                            }}>
+                              {item.percentLifeRemaining < 20 ? 'SEND TO SCRAP' : 'UPGRADE ASSET'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ImageBackground>
   );
 };

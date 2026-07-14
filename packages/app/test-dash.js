@@ -16,7 +16,7 @@ const options = {
 const req = https.request(options, res => {
   let data = '';
   console.log('Status Code:', res.statusCode);
-  
+
   res.on('data', chunk => {
     data += chunk;
   });
@@ -24,7 +24,7 @@ const req = https.request(options, res => {
   res.on('end', () => {
     try {
       console.log('Response:', JSON.parse(data));
-    } catch(e) {
+    } catch (e) {
       console.log('Raw Response:', data);
     }
   });

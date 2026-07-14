@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, TextInput, useWindowDimensions, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground, Platform, ScrollView, TouchableOpacity, Switch, Image, TextInput, useWindowDimensions, Modal, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
+import { Feather, FontAwesome, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Asset, RootStackParamList, baseURL } from '../../navigation/types';
 import useAssetMeta from "../../hooks/useAssetMeta";
@@ -54,15 +54,15 @@ const FieldPicker = ({
         <Ionicons name="chevron-down" size={16} color="#A9C6E4" />
     </TouchableOpacity>
 );
-const DisplayField = ({ label, value, icon, children, editable, onChangeText }: { 
-    label: string, 
-    value?: string, 
-    icon?: any, 
+const DisplayField = ({ label, value, icon, children, editable, onChangeText }: {
+    label: string,
+    value?: string,
+    icon?: any,
     children?: React.ReactNode,
     editable?: boolean,
-    onChangeText?: (text: string) => void 
+    onChangeText?: (text: string) => void
 }) => (
-     <View style={styles.fieldContainer}>
+    <View style={styles.fieldContainer}>
         <View style={styles.labelContainer}>
             {icon && iconMap[icon]}
             <Text style={styles.label}>{label}</Text>
@@ -84,15 +84,15 @@ const DisplayField = ({ label, value, icon, children, editable, onChangeText }: 
     </View>
 );
 const formatDate = (dateValue?: string | Date | null) => {
-  if (!dateValue) return "N/A";
+    if (!dateValue) return "N/A";
 
-  const date = dateValue instanceof Date
-    ? dateValue
-    : new Date(dateValue);
+    const date = dateValue instanceof Date
+        ? dateValue
+        : new Date(dateValue);
 
-  return isNaN(date.getTime())
-    ? "N/A"
-    : date.toLocaleDateString();
+    return isNaN(date.getTime())
+        ? "N/A"
+        : date.toLocaleDateString();
 };
 
 
@@ -107,12 +107,12 @@ const AssetFullDetails: React.FC = () => {
     const { width } = useWindowDimensions();
     const isDesktopWeb = Platform.OS === 'web' && width >= 900;
     const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
-    
+
     const styles = assetStyles(isMobileLayout);
     // Edit mode state
     const [isEditMode, setIsEditMode] = useState(false);
     const [currentAsset, setCurrentAsset] = useState<Asset | null>(asset || null);
-    
+
     // Editable fields state
     const [assetName, setAssetName] = useState(asset?.assetName || '');
     const [selectedCategory, setSelectedCategory] = useState(String(asset?.category || ''));
@@ -135,6 +135,9 @@ const AssetFullDetails: React.FC = () => {
     const [showStatusPicker, setShowStatusPicker] = useState(false);
     const [showCategoryPicker, setShowCategoryPicker] = useState(false);
     const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+    const [usefulLife, setUsefulLife] = useState<number | string>(asset?.usefulLife || 5);
+    const [salvageValue, setSalvageValue] = useState(asset?.salvageValue || '');
+    const [refreshCount, setRefreshCount] = useState(0);
     const [showAssignedDatePicker, setShowAssignedDatePicker] = useState(false);
     const [assignableUsers, setAssignableUsers] = useState<AssigneeOption[]>([]);
     const [snackbar, setSnackbar] = useState<{
@@ -267,7 +270,9 @@ const AssetFullDetails: React.FC = () => {
                     setAssignedTo(d.assignedTo || 'Admin Role');
                     setPhotoURL(d.photoURL || '');
                     setBarcodeURL(d.barcodeURL || '');
-                    
+                    setUsefulLife(d.usefulLife || 5);
+                    setSalvageValue(d.salvageValue || '');
+
                     setCurrentAsset({
                         ...asset,
                         ...d,
@@ -279,7 +284,7 @@ const AssetFullDetails: React.FC = () => {
             }
         };
         fetchFullDetails();
-    }, [asset?.id, asset?.assetId]);
+    }, [asset?.id, asset?.assetId, refreshCount]);
 
     const handleDynamicValueChange = (fieldId: any, val: string) => {
         setDynamicValues(prev => prev.map(dv => dv.fieldId == fieldId ? { ...dv, value: val } : dv));
@@ -287,8 +292,8 @@ const AssetFullDetails: React.FC = () => {
 
     const pickImage = async (useCamera: boolean, isBarcode: boolean) => {
         try {
-            const result = useCamera 
-                ? await ImagePicker.launchCameraAsync({ quality: 0.5 }) 
+            const result = useCamera
+                ? await ImagePicker.launchCameraAsync({ quality: 0.5 })
                 : await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
 
             if (!result.canceled) {
@@ -342,7 +347,7 @@ const AssetFullDetails: React.FC = () => {
             );
         }
     };
-    
+
     const handleSaveAsset = async () => {
         try {
             const finalId = asset?.id || asset?.assetId;
@@ -390,7 +395,7 @@ const AssetFullDetails: React.FC = () => {
                 }
                 return;
             }
-            
+
             // Check each field for changes
             if (assetName !== asset.assetName) {
                 updateData.assetName = assetName;
@@ -422,12 +427,12 @@ const AssetFullDetails: React.FC = () => {
             if (assignedTo !== (asset.assignedTo || '')) {
                 updateData.assignedTo = assignedTo;
             }
-            
+
             // Include photoURL if it changed and is not empty
             if (photoURL && photoURL !== initialPhotoURL) {
                 updateData.photoURL = photoURL;
             }
-            
+
             // Include barcodeURL if it changed and is not empty
             if (barcodeURL && barcodeURL !== initialBarcodeURL) {
                 updateData.barcodeURL = barcodeURL;
@@ -441,6 +446,15 @@ const AssetFullDetails: React.FC = () => {
                 fieldId: parseInt(dv.fieldId),
                 value: dv.value
             }));
+
+            const parsedUsefulLife = usefulLife !== "" ? parseInt(String(usefulLife), 10) : 5;
+            const finalUsefulLife = isNaN(parsedUsefulLife) ? 5 : parsedUsefulLife;
+            if (finalUsefulLife !== (currentAsset?.usefulLife || 5)) {
+                updateData.usefulLife = finalUsefulLife;
+            }
+            if (salvageValue !== (currentAsset?.salvageValue || '')) {
+                updateData.salvageValue = salvageValue;
+            }
 
             if (changedDynamicFields.length > 0) {
                 updateData.dynamicFields = changedDynamicFields;
@@ -461,7 +475,8 @@ const AssetFullDetails: React.FC = () => {
             if (response.status === 200) {
                 showSnackbar("Asset updated successfully", 'success');
                 setIsEditMode(false);
-                
+                setRefreshCount(prev => prev + 1);
+
                 // Update currentAsset state
                 const updatedAsset = {
                     ...(currentAsset || asset),
@@ -477,6 +492,8 @@ const AssetFullDetails: React.FC = () => {
                     assignedTo,
                     photoURL,
                     barcodeURL,
+                    usefulLife,
+                    salvageValue,
                     dynamicValues
                 };
                 setCurrentAsset(updatedAsset as Asset);
@@ -487,7 +504,7 @@ const AssetFullDetails: React.FC = () => {
             showSnackbar(errorMsg, 'error');
         }
     };
-    
+
     const handleEditToggle = () => {
         if (isEditMode) {
             // Cancel edit mode - reset fields to currentAsset
@@ -506,13 +523,15 @@ const AssetFullDetails: React.FC = () => {
             setAssignedTo(resetSource?.assignedTo || 'Admin Role');
             setPhotoURL(resetSource?.photoURL || '');
             setBarcodeURL(resetSource?.barcodeURL || '');
+            setUsefulLife(resetSource?.usefulLife || 5);
+            setSalvageValue(resetSource?.salvageValue || '');
             if (resetSource?.dynamicValues) {
                 setDynamicValues(resetSource.dynamicValues);
             }
         }
         setIsEditMode(!isEditMode);
     };
-    
+
     if (!asset) {
         return <Text>Asset not found!</Text>;
     }
@@ -542,32 +561,32 @@ const AssetFullDetails: React.FC = () => {
                                 )}
                             </View>
                             {!isMobileLayout && (
-                            <View style={styles.headerRight}>
-                                <Feather name="user" size={16} color="#A9C6E4" />
-                                {/* <Text style={styles.userText}>Supervisor</Text> */}
-                                {/* <Switch
+                                <View style={styles.headerRight}>
+                                    <Feather name="user" size={16} color="#A9C6E4" />
+                                    {/* <Text style={styles.userText}>Supervisor</Text> */}
+                                    {/* <Switch
                                     trackColor={{ false: "#E9E9EA", true: "#34C759" }}
                                     thumbColor={"#f4f3f4"} value={true}
                                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                                 /> */}
-                                <Feather name="settings" size={20} color="#A9C6E4" style={{ marginLeft: 5 }} />
-                            </View>
-                            )}  
+                                    <Feather name="settings" size={20} color="#A9C6E4" style={{ marginLeft: 5 }} />
+                                </View>
+                            )}
                         </View>
 
                         {/* Details Body */}
-                       <ScrollView showsVerticalScrollIndicator={false}>
+                        <ScrollView showsVerticalScrollIndicator={false}>
                             <View style={[
-                                styles.formBody, 
-                                isMobileLayout && { flexDirection: 'column', gap: 0 } 
+                                styles.formBody,
+                                isMobileLayout && { flexDirection: 'column', gap: 0 }
                             ]}>
-                                
+
                                 <View style={styles.formColumn}>
                                     <Text style={styles.sectionTitle}>General Details</Text>
-                                    <DisplayField 
-                                        label="Asset Name" 
-                                        value={assetName} 
-                                        icon="truck" 
+                                    <DisplayField
+                                        label="Asset Name"
+                                        value={assetName}
+                                        icon="truck"
                                         editable={isEditMode && !isAssignedCardEdit}
                                         onChangeText={setAssetName}
                                     />
@@ -601,27 +620,88 @@ const AssetFullDetails: React.FC = () => {
                                             <Text style={styles.valueText}>{statusValue || 'N/A'}</Text>
                                         )}
                                     </DisplayField>
-                                    <DisplayField 
-                                        label="Model Number" 
-                                        value={modelNumber} 
-                                        icon="archive" 
+                                    <DisplayField
+                                        label="Model Number"
+                                        value={modelNumber}
+                                        icon="archive"
                                         editable={isEditMode && !isAssignedCardEdit}
                                         onChangeText={setModelNumber}
                                     />
-                                    <DisplayField 
-                                        label="Serial Number" 
-                                        value={serialNumber} 
-                                        icon="hash" 
+                                    <DisplayField
+                                        label="Serial Number"
+                                        value={serialNumber}
+                                        icon="hash"
                                         editable={isEditMode && !isAssignedCardEdit}
                                         onChangeText={setSerialNumber}
                                     />
-                                    <DisplayField 
-                                        label="Price" 
-                                        value={price} 
-                                        icon="dollar" 
+                                    <DisplayField
+                                        label="Price"
+                                        value={price}
+                                        icon="dollar"
                                         editable={isEditMode && !isAssignedCardEdit}
                                         onChangeText={setPrice}
                                     />
+
+                                    {/* DEPRECIATION DISPLAY AND SETTINGS */}
+                                    {isEditMode && !isAssignedCardEdit ? (
+                                        <View style={{ marginTop: 15 }}>
+                                            <Text style={[styles.sectionTitle, { color: '#EAB308', marginTop: 10 }]}>Depreciation Settings</Text>
+                                            <DisplayField
+                                                label="Useful Life (Years)"
+                                                value={usefulLife !== undefined && usefulLife !== null ? String(usefulLife) : "5"}
+                                                icon="hash"
+                                                editable={true}
+                                                onChangeText={(v) => setUsefulLife(v)}
+                                            />
+                                            <DisplayField
+                                                label="Salvage / Scrap Value"
+                                                value={salvageValue}
+                                                icon="dollar"
+                                                editable={true}
+                                                onChangeText={setSalvageValue}
+                                            />
+                                        </View>
+                                    ) : (
+                                        currentAsset && (
+                                            <View style={{ marginTop: 15 }}>
+                                                <Text style={[styles.sectionTitle, { color: '#EAB308', marginTop: 10 }]}>Depreciation & Life</Text>
+                                                <DisplayField
+                                                    label="Useful Life (Years)"
+                                                    value={usefulLife ? `${usefulLife} Years` : '5 Years'}
+                                                    icon="hash"
+                                                />
+                                                <DisplayField
+                                                    label="Salvage / Scrap Value"
+                                                    value={salvageValue ? `₹${parseFloat(salvageValue).toLocaleString('en-IN')}` : '₹0'}
+                                                    icon="dollar"
+                                                />
+                                                <DisplayField
+                                                    label="Remaining Book Value"
+                                                    value={currentAsset.remainingValue !== undefined ? `₹${currentAsset.remainingValue.toLocaleString('en-IN')}` : 'N/A'}
+                                                    icon="dollar"
+                                                />
+                                                {currentAsset.depreciationMessage && (
+                                                    <View style={{
+                                                        marginTop: 10,
+                                                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                                                        borderColor: '#EF4444',
+                                                        borderWidth: 1,
+                                                        borderRadius: 8,
+                                                        padding: 12,
+                                                        marginBottom: 10
+                                                    }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                            <Ionicons name="warning" size={16} color="#EF4444" />
+                                                            <Text style={{ color: '#EF4444', fontWeight: 'bold', fontSize: 13 }}>Action Required</Text>
+                                                        </View>
+                                                        <Text style={{ color: '#FCA5A5', fontSize: 13, lineHeight: 18 }}>
+                                                            {currentAsset.depreciationMessage}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        )
+                                    )}
 
                                     {/* 🔹 DYNAMIC FIELDS DISPLAY/EDIT */}
                                     {dynamicValues.length > 0 && (
@@ -642,7 +722,7 @@ const AssetFullDetails: React.FC = () => {
                                 </View>
 
                                 <View style={styles.formColumn}>
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         onPress={handleImageUpload}
                                         style={styles.mobileImageContainer}
                                         disabled={!isEditMode}
@@ -659,15 +739,15 @@ const AssetFullDetails: React.FC = () => {
                                             </View>
                                         )}
                                     </TouchableOpacity>
-                                     <Text style={styles.barcodeText}>Asset ID: {asset.barcode || 'N/A'}</Text>
+                                    <Text style={styles.barcodeText}>Asset ID: {asset.barcode || 'N/A'}</Text>
                                     {/* Barcode Image with Upload */}
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         onPress={handleBarcodeUpload}
                                         style={styles.barcodeContainer}
                                         disabled={!isEditMode}
                                     >
                                         {barcodeURL ? (
-                                     <Image source={{ uri: barcodeURL }} style={styles.barcodeImage} />
+                                            <Image source={{ uri: barcodeURL }} style={styles.barcodeImage} />
                                         ) : (
                                             <View style={styles.barcodeUploadPlaceholder}>
                                                 <Feather name="maximize" size={24} color="#A9C6E4" />
@@ -675,8 +755,8 @@ const AssetFullDetails: React.FC = () => {
                                             </View>
                                         )}
                                     </TouchableOpacity>
-                                   
-                                    <DisplayField 
+
+                                    <DisplayField
                                         label="Location"
                                         value={location}
                                         icon="map-pin"
@@ -787,11 +867,11 @@ const AssetFullDetails: React.FC = () => {
                                 </View>
                             </View>
                         </ScrollView>
-                        
+
                         {/* Action Buttons */}
                         <View style={[styles.footer, isMobileLayout && { justifyContent: 'space-between' }]}>
                             {!isSubscriptionExpired && (
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     style={isMobileLayout && { flex: 1 }}
                                     onPress={isEditMode ? handleSaveAsset : handleEditToggle}
                                 >
@@ -806,14 +886,14 @@ const AssetFullDetails: React.FC = () => {
                                     </LinearGradient>
                                 </TouchableOpacity>
                             )}
-                            <TouchableOpacity 
-                                style={[styles.cancelButton, isMobileLayout && { flex: 1 }]} 
+                            <TouchableOpacity
+                                style={[styles.cancelButton, isMobileLayout && { flex: 1 }]}
                                 onPress={isEditMode ? handleEditToggle : () => navigation.goBack()}
                             >
-                                <Text style={[styles.buttonText, { color: '#A9C6E4' }]}> 
+                                <Text style={[styles.buttonText, { color: '#A9C6E4' }]}>
                                     {isEditMode ? 'Cancel' : 'Go Back'}
                                 </Text>
-                        </TouchableOpacity>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -944,7 +1024,7 @@ const AssetFullDetails: React.FC = () => {
 const styles = StyleSheet.create({
     fieldContainer: { marginBottom: 12 },
     labelContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: 5 },
-    label: { fontSize: 12, color: globalColors.textBody, fontWeight: '500' }, // Light text
+    label: { fontSize: 12, color: '#f0f3f7ff', fontWeight: '500' }, // Light text
     fieldIcon: { marginRight: 6 },
     valueBox: {
         backgroundColor: 'rgba(18, 45, 73, 0.86)',
@@ -959,7 +1039,7 @@ const styles = StyleSheet.create({
         borderColor: '#34D399',
         borderWidth: 2,
     },
-     valueText: {
+    valueText: {
         fontSize: 14,
         color: '#E6F3FF',
         fontWeight: '500',

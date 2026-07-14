@@ -121,12 +121,7 @@ const BillingScreen: React.FC = () => {
 
   const pickImage = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        showSnackbar('Gallery permission is required to upload receipt.', 'error');
-        return;
-      }
-
+      // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,

@@ -151,6 +151,8 @@ model Asset_Details {
   warranty_expiry  DateTime?           @db.Date
   purchase_date    DateTime?           @db.Date
   price            String?
+  useful_life      Int?                @default(5)
+  salvage_value    String?
   location         String?
   photoURL         String?
   barcodeURL       String?

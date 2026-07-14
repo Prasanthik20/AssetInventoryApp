@@ -14,11 +14,11 @@ const ALLOWED_ORIGINS = new Set([
 
 export function middleware(req: NextRequest) {
   const origin = req.headers.get('origin') || '';
-  
+
   // Check if origin is allowed or is localhost
-  const isAllowed = ALLOWED_ORIGINS.has(origin) || 
-                   origin.includes('localhost') || 
-                   origin.includes('127.0.0.1');
+  const isAllowed = ALLOWED_ORIGINS.has(origin) ||
+    origin.includes('localhost') ||
+    origin.includes('127.0.0.1');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {

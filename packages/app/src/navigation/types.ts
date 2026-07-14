@@ -31,6 +31,10 @@ export type Asset = {
   receiverId?: string | number;
   operatorId?: string | number;
   dynamicValues?: any[];
+  usefulLife?: number;
+  salvageValue?: string;
+  depreciationMessage?: string | null;
+  remainingValue?: number;
 };
 
 export type AssetAssignment = {
@@ -120,4 +124,4 @@ const WEB_DEV_API_URL =
 const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
 
 // Keep all app screens on the same backend in development.
-export const baseURL = 'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net' //DEV_API_URL; //http://localhost:3000'; //PROD_API_URL
+export const baseURL = 'http://localhost:3000'; //'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net' //DEV_API_URL; //http://localhost:3000'; //PROD_API_URL

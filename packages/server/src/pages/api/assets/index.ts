@@ -23,6 +23,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(403).json({ message: 'Tenant ID missing. Please log in again.' });
     }
 
+    // Auto-migration for useful_life and salvage_value
+    try {
+        await query(`
+            ALTER TABLE "Asset_Details" 
+            ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
+            ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+        `, []);
+    } catch (err) {
+        console.error('[AUTO-MIGRATION ERROR]', err);
+    }
+
     console.log(`[DEBUG] User Payload: ${JSON.stringify(req.user)}`);
     console.log(`[DEBUG] Fetching assets for tenantId: "${tenantId}"`);
 
@@ -69,6 +80,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 a.location,
                 a."purchase_date" AS "purchaseDate",
                 a.price,
+                a.useful_life AS "usefulLife",
+                a.salvage_value AS "salvageValue",
                 a."warranty_expiry" AS "warrantyExpiry",
                 COALESCE(a."photoURL", aa."photoURL") AS "photoURL",
                 
@@ -126,29 +139,62 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         console.log(`[DEBUG] Query results: MainRows=${result.rows.length}, TotalCount=${total}`);
         const totalPages = Math.ceil(total / limit);
 
-        const formattedAssets = result.rows.map(asset => ({
-            id: asset.id.toString(),
-            assetName: asset.assetName,
-            barcode: asset.barcode,
-            controllerKey: asset.controllerKey || null,
-            serialNumber: asset.serialNumber,
-            category: asset.category,
-            status: asset.status,
-            assignedBy: asset.assignedBy || null,
-            assignedTo: asset.assignedTo || null,
-            location: asset.location,
-            purchaseDate: asset.purchaseDate,
-            warrantyExpiry: asset.warrantyExpiry,
-            price: asset.price,
-            photoURL: asset.photoURL || null,
-            barcodeURL: asset.barcodeURL || null,
-            expectedReturnDate: asset.expectedReturnDate || null,
-            projectName: asset.projectName || null,
-            assignmentId: asset.assignmentId ? asset.assignmentId.toString() : null,
-            operatorId: asset.operatorId ? asset.operatorId.toString() : null,
-            senderId: asset.senderId ? asset.senderId.toString() : null,
-            receiverId: asset.operatorId ? asset.operatorId.toString() : null
-        }));
+        const formattedAssets = result.rows.map(asset => {
+            const initialCost = parseFloat(asset.price) || 0;
+            const salvageValueNum = parseFloat(asset.salvageValue) || 0;
+            const usefulLifeNum = parseInt(asset.usefulLife) || 5;
+            
+            let remainingValue = initialCost;
+            let percentLifeRemaining = 100;
+            let percentLifeElapsed = 0;
+            let depreciationMessage = null;
+
+            if (initialCost > 0 && usefulLifeNum > 0 && asset.purchaseDate) {
+                const purchaseDate = new Date(asset.purchaseDate);
+                const today = new Date();
+                const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+                
+                const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
+                const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
+                remainingValue = initialCost - totalDepreciation;
+                
+                percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
+                percentLifeElapsed = Math.min(100, percentLifeElapsed);
+                percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
+
+                if (percentLifeRemaining < 60) {
+                    depreciationMessage = `Depreciation alert: remaining life is ${percentLifeRemaining.toFixed(1)}%. Please scrap or upgrade this asset.`;
+                }
+            }
+
+            return {
+                id: asset.id.toString(),
+                assetName: asset.assetName,
+                barcode: asset.barcode,
+                controllerKey: asset.controllerKey || null,
+                serialNumber: asset.serialNumber,
+                category: asset.category,
+                status: asset.status,
+                assignedBy: asset.assignedBy || null,
+                assignedTo: asset.assignedTo || null,
+                location: asset.location,
+                purchaseDate: asset.purchaseDate,
+                warrantyExpiry: asset.warrantyExpiry,
+                price: asset.price,
+                photoURL: asset.photoURL || null,
+                barcodeURL: asset.barcodeURL || null,
+                expectedReturnDate: asset.expectedReturnDate || null,
+                projectName: asset.projectName || null,
+                assignmentId: asset.assignmentId ? asset.assignmentId.toString() : null,
+                operatorId: asset.operatorId ? asset.operatorId.toString() : null,
+                senderId: asset.senderId ? asset.senderId.toString() : null,
+                receiverId: asset.operatorId ? asset.operatorId.toString() : null,
+                usefulLife: usefulLifeNum,
+                salvageValue: asset.salvageValue || null,
+                remainingValue: parseFloat(remainingValue.toFixed(2)),
+                depreciationMessage
+            };
+        });
 
         return res.status(200).json({
             message: 'Assets fetched successfully!',

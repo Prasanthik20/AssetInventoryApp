@@ -91,13 +91,8 @@ const codeToInsert = `
           showSnackbar('Camera permission is required.', 'error');
           return;
         }
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          showSnackbar('Media library permission is required.', 'error');
-          return;
-        }
       }
+      // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
 
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ['images'],

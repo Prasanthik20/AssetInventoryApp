@@ -98,6 +98,8 @@ const AddEditAsset: React.FC = () => {
     photoURL: "",
     assignmentId: 0,
     isOverdue: false,
+    usefulLife: 5,
+    salvageValue: "",
   });
 
   const [assetData, setAssetData] = useState<Omit<Asset, 'assetId'>>(getInitialAssetData);
@@ -454,6 +456,22 @@ const AddEditAsset: React.FC = () => {
       }
     }
 
+    if (assetData.usefulLife !== undefined && assetData.usefulLife !== null && String(assetData.usefulLife).trim() !== "") {
+      const numericLife = Number(assetData.usefulLife);
+      if (Number.isNaN(numericLife) || numericLife <= 0) {
+        showSnackbar('Useful life must be a valid positive number of years.', 'error');
+        return false;
+      }
+    }
+
+    if (assetData.salvageValue !== undefined && assetData.salvageValue !== null && String(assetData.salvageValue).trim() !== "") {
+      const numericSalvage = Number(assetData.salvageValue);
+      if (Number.isNaN(numericSalvage) || numericSalvage < 0) {
+        showSnackbar('Salvage value must be a valid non-negative number.', 'error');
+        return false;
+      }
+    }
+
     return true;
   };
 
@@ -472,6 +490,8 @@ const AddEditAsset: React.FC = () => {
         location: String(assetData.location || '').trim(),
         modelNumber: String(assetData.modelNumber || '').trim(),
         price: String(assetData.price || '').trim(),
+        usefulLife: assetData.usefulLife !== undefined && String(assetData.usefulLife).trim() !== "" ? parseInt(String(assetData.usefulLife), 10) : 5,
+        salvageValue: String(assetData.salvageValue || '').trim(),
         dynamicFields: Object.entries(dynamicValues).map(([fieldId, value]) => ({
           fieldId: parseInt(fieldId),
           value
@@ -714,6 +734,32 @@ const AddEditAsset: React.FC = () => {
                       placeholderTextColor="#999"
                       value={assetData.price}
                       onChangeText={v => handleInputChange('price', v)}
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <Text style={styles.label}>Useful Life (Years)</Text>
+                  <View style={styles.inputGroup}>
+                    <Feather name="hash" size={16} color="#22D3EE" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="5"
+                      placeholderTextColor="#999"
+                      value={assetData.usefulLife !== undefined && assetData.usefulLife !== null ? String(assetData.usefulLife) : "5"}
+                      onChangeText={v => handleInputChange('usefulLife', v)}
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <Text style={styles.label}>Salvage / Scrap Value</Text>
+                  <View style={styles.inputGroup}>
+                    <Feather name="dollar-sign" size={16} color="#22D3EE" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="0.00"
+                      placeholderTextColor="#999"
+                      value={assetData.salvageValue || ""}
+                      onChangeText={v => handleInputChange('salvageValue', v)}
                       keyboardType="numeric"
                     />
                   </View>

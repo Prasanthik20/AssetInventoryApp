@@ -82,6 +82,22 @@ const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, i
             <Text style={styles.label}>Assigned By</Text>
             <Text style={styles.value}>{asset.assignedBy || '—'}</Text>
           </View>
+          {asset.depreciationMessage && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+              borderColor: 'rgba(239, 68, 68, 0.3)',
+              borderWidth: 1,
+              borderRadius: 6,
+              padding: 6,
+              marginTop: 6
+            }}>
+              <Text style={{ color: '#FCA5A5', fontSize: 11, flex: 1 }} numberOfLines={1}>
+                ⚠️ {asset.depreciationMessage}
+              </Text>
+            </View>
+          )}
           <View style={styles.actionRow}>
             <TouchableOpacity onPress={handlePress} style={styles.actionButton}>
               <Text style={styles.actionText}>Details</Text>
@@ -125,6 +141,22 @@ const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, i
               <Text style={styles.label}>Assigned By</Text>
               <Text style={styles.value}>{asset.assignedBy || '—'}</Text>
             </View>
+            {asset.depreciationMessage && (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                borderColor: 'rgba(239, 68, 68, 0.3)',
+                borderWidth: 1,
+                borderRadius: 6,
+                padding: 6,
+                marginTop: 6
+              }}>
+                <Text style={{ color: '#FCA5A5', fontSize: 11, flex: 1 }} numberOfLines={1}>
+                  ⚠️ {asset.depreciationMessage}
+                </Text>
+              </View>
+            )}
             <View style={styles.actionRow}>
               <TouchableOpacity onPress={handlePress} style={styles.actionButton}>
                 <Text style={styles.actionText}>Details</Text>
@@ -174,7 +206,7 @@ const styles = StyleSheet.create({
   },
 
   row: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 4 },
-  label: { color: '#A9C6E4', fontSize: 12, flex: 1 },
+  label: { color: '#f2f5faff', fontSize: 12, flex: 1 },
   value: { color: '#E6F3FF', fontSize: 12, flex: 2, textAlign: 'right' },
   statusBadge: {
     paddingHorizontal: 8,

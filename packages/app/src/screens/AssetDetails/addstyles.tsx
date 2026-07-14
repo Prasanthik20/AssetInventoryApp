@@ -7,7 +7,7 @@ export function addStyles(isMobileLayout: boolean) {
     panelStrong: 'rgba(7, 24, 42, 0.9)',
     panelMuted: 'rgba(18, 45, 73, 0.86)',
     border: 'rgba(159, 207, 255, 0.22)',
-    textPrimary: '#E6F3FF',
+    textPrimary: '#f0f3f7ff',
     textSecondary: '#A9C6E4',
     accent: '#34D399',
   };
@@ -155,7 +155,7 @@ export function addStyles(isMobileLayout: boolean) {
     },
     label: {
       fontSize: 12,
-      color: theme.textSecondary,
+      color: '#f2f5faff',
       marginBottom: 6,
       fontWeight: '700',
       marginLeft: 4,
