@@ -117,11 +117,7 @@ export type RootStackParamList = {
 };
 
 const PROD_API_URL = 'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net';
-const WEB_DEV_API_URL =
-  process.env.REACT_APP_API_URL ||
-  process.env.EXPO_PUBLIC_API_URL ||
-  PROD_API_URL;
-const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
+const DEV_API_URL = 'http://localhost:3000';
 
 // Keep all app screens on the same backend in development.
-export const baseURL = PROD_API_URL;  // DEV_API_URL; 
+export const baseURL = __DEV__ ? DEV_API_URL : PROD_API_URL; 

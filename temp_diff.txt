@@ -1,0 +1,70 @@
+diff --git a/packages/app/android/app/build.gradle b/packages/app/android/app/build.gradle
+index daadcc4..7548e58 100644
+--- a/packages/app/android/app/build.gradle
++++ b/packages/app/android/app/build.gradle
+@@ -92,8 +92,8 @@ android {
+         applicationId 'com.assetmgmt.com'
+         minSdkVersion rootProject.ext.minSdkVersion
+         targetSdkVersion rootProject.ext.targetSdkVersion
+-        versionCode 120
+-        versionName "1.2.1"
++        versionCode 122
++        versionName "1.2.2"
+ 
+         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+     }
+diff --git a/packages/app/android/app/src/main/AndroidManifest.xml b/packages/app/android/app/src/main/AndroidManifest.xml
+index dcec7fb..c21b6cf 100644
+--- a/packages/app/android/app/src/main/AndroidManifest.xml
++++ b/packages/app/android/app/src/main/AndroidManifest.xml
+@@ -5,15 +5,15 @@
+   <uses-permission android:name="android.permission.INTERNET"/>
+   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+   <uses-permission android:name="android.permission.READ_CONTACTS"/>
++  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
++  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
++  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
++  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove"/>
+   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+   <uses-permission android:name="android.permission.VIBRATE"/>
+   <uses-permission android:name="android.permission.WRITE_CONTACTS"/>
+-  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
+   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
+-  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
+-  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
+-  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove"/>
+   <queries>
+     <intent>
+       <action android:name="android.intent.action.VIEW"/>
+diff --git a/play_store_assets.md b/play_store_assets.md
+index e7447f8..9eb17b1 100644
+--- a/play_store_assets.md
++++ b/play_store_assets.md
+@@ -86,15 +86,10 @@ Below is the release note formatted for your Google Play Console release submiss
+ 
+ ```xml
+ <en-US>
+-ASQ Asset Ledger v2.0
++📱 Large Screen Compatibility: Unlocked auto-rotation (default orientation) and enabled resizeableActivity for split-screen layout compatibility on tablets/foldables.
+ 
+-Enhanced features, layout refinements, and critical bug fixes.
++🎨 Android 15 Edge-to-Edge: Replaced opaque styling with transparent status and navigation bar backgrounds (#00000000) for SDK 35 compliance.
+ 
+-Highlights
+-• Fixed filter clickability issues on mobile asset lists.
+-• Resolved immediate closure bug in the employee selection modal.
+-• Added scrolling list support for larger team directories.
+-• Enabled Tenant Admins to assign assets to supervisors.
+-• Web favicon and performance improvements.
++💳 Billing Updates: Updated bank info in BillingScreen.tsx to beneficiary A Square Technologies.
+ </en-US>
+ ```
+diff --git a/powershell.bat b/powershell.bat
+index 5be2b42..06dc73c 100644
+--- a/powershell.bat
++++ b/powershell.bat
+@@ -1,2 +1,2 @@
+ @echo off
+-az webapp config appsettings list --name asq-asset-api --resource-group asquaretechrg
++git diff > temp_diff.txt

@@ -7,6 +7,9 @@
 $ErrorActionPreference = "Stop"
 $appDir = $PSScriptRoot
 
+Write-Host "`n=== Step 0: Bump app.json Version Code and Name ===" -ForegroundColor Cyan
+node "$appDir\bump-version.js"
+
 Write-Host "`n=== Step 1: Backup keystore ===" -ForegroundColor Cyan
 $keystoreSrc = "$appDir\android\my-release-key.keystore"
 $keystoreDst = "$appDir\my-release-key.keystore"
@@ -69,6 +72,18 @@ if ($propsContent -notmatch 'org\.gradle\.parallel') {
     $propsContent += "`norg.gradle.parallel=true"
 } else {
     $propsContent = $propsContent -replace 'org\.gradle\.parallel=.*', 'org.gradle.parallel=true'
+}
+
+# Enable R8 minification & resource shrinking
+if ($propsContent -notmatch 'android\.enableMinifyInReleaseBuilds') {
+    $propsContent += "`nandroid.enableMinifyInReleaseBuilds=true"
+} else {
+    $propsContent = $propsContent -replace 'android\.enableMinifyInReleaseBuilds=.*', 'android.enableMinifyInReleaseBuilds=true'
+}
+if ($propsContent -notmatch 'android\.enableShrinkResourcesInReleaseBuilds') {
+    $propsContent += "`nandroid.enableShrinkResourcesInReleaseBuilds=true"
+} else {
+    $propsContent = $propsContent -replace 'android\.enableShrinkResourcesInReleaseBuilds=.*', 'android.enableShrinkResourcesInReleaseBuilds=true'
 }
 
 # Signing config
@@ -150,17 +165,53 @@ $1if (project.hasProperty('MYAPP_RELEASE_STORE_FILE')) {
 Set-Content $appBuildGradle $buildContent -NoNewline
 Write-Host "app/build.gradle patched." -ForegroundColor Green
 
+Write-Host "`n=== Step 5.5: Patch proguard-rules.pro ===" -ForegroundColor Cyan
+$proguardRules = "$appDir\android\app\proguard-rules.pro"
+if (Test-Path $proguardRules) {
+    $rulesContent = Get-Content $proguardRules -Raw
+    $extraRules = @"
+
+# Suppress warnings for missing Expo Kotlin services classes in R8/Proguard
+-dontwarn expo.modules.kotlin.services.Service
+-dontwarn expo.modules.kotlin.services.ServicesRegistry
+"@
+    if ($rulesContent -notmatch 'expo\.modules\.kotlin\.services') {
+        $rulesContent += $extraRules
+        Set-Content $proguardRules $rulesContent -NoNewline
+        Write-Host "proguard-rules.pro patched." -ForegroundColor Green
+    } else {
+        Write-Host "proguard-rules.pro already patched." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "proguard-rules.pro not found, skipping patch." -ForegroundColor Yellow
+}
+
 Write-Host "`n=== Step 6: Copy keystore into android folder ===" -ForegroundColor Cyan
 Copy-Item "$appDir\my-release-key.keystore" "$appDir\android\my-release-key.keystore" -Force
 Write-Host "Keystore copied to android folder." -ForegroundColor Green
 
-Write-Host "`n=== Step 7: Build release APK ===" -ForegroundColor Cyan
+Write-Host "`n=== Step 7: Build release APK & AAB ===" -ForegroundColor Cyan
 Set-Location "$appDir\android"
-.\gradlew assembleRelease
+.\gradlew assembleRelease bundleRelease
 Write-Host "`n=== BUILD COMPLETE ===" -ForegroundColor Green
 $apkPath = "$appDir\android\app\build\outputs\apk\release\app-release.apk"
+$aabPath = "$appDir\android\app\build\outputs\bundle\release\app-release.aab"
+$mappingPath = "$appDir\android\app\build\outputs\mapping\release\mapping.txt"
+
 if (Test-Path $apkPath) {
     Write-Host "APK generated at: $apkPath" -ForegroundColor Green
 } else {
     Write-Host "APK not found at expected path. Check build output above." -ForegroundColor Yellow
+}
+
+if (Test-Path $aabPath) {
+    Write-Host "AAB generated at: $aabPath" -ForegroundColor Green
+} else {
+    Write-Host "AAB not found at expected path. Check build output above." -ForegroundColor Yellow
+}
+
+if (Test-Path $mappingPath) {
+    Write-Host "Deobfuscation mapping.txt generated at: $mappingPath" -ForegroundColor Green
+} else {
+    Write-Host "Deobfuscation mapping.txt not found at: $mappingPath" -ForegroundColor Yellow
 }

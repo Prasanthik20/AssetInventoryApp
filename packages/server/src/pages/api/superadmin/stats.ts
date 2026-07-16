@@ -14,6 +14,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 
   try {
+    // Auto-migration for useful_life and salvage_value
+    try {
+      await query(`
+        ALTER TABLE "Asset_Details" 
+        ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
+        ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+      `, []);
+    } catch (err) {
+      console.error('[AUTO-MIGRATION ERROR in superadmin stats]', err);
+    }
+
     // 2. Fetch global statistics in queries
     const tenantsCountRes = await query('SELECT COUNT(*) AS count FROM "Tenants"');
     const totalTenants = parseInt(tenantsCountRes.rows[0]?.count || '0', 10);

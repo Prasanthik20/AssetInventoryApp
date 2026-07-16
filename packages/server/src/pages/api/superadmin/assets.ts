@@ -25,6 +25,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         whereClauses.push(`st.status ILIKE $${values.length}`);
       }
 
+      // Auto-migration for useful_life and salvage_value
+      try {
+        await query(`
+          ALTER TABLE "Asset_Details" 
+          ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
+          ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+        `, []);
+      } catch (err) {
+        console.error('[AUTO-MIGRATION ERROR in superadmin assets]', err);
+      }
+
       const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
       const sql = `
@@ -35,6 +46,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           a."asset_Id" AS "assetId",
           st.status,
           a.location,
+          a.useful_life AS "usefulLife",
+          a.salvage_value AS "salvageValue",
           t.name AS "tenantName"
         FROM 
           "Asset_Details" a

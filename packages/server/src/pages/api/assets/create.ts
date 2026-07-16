@@ -18,6 +18,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   const { tenantId } = req.user;
 
   try {
+    // Auto-migration for useful_life and salvage_value
+    try {
+      await query(`
+        ALTER TABLE "Asset_Details" 
+        ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
+        ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+      `, []);
+    } catch (err) {
+      console.error('[AUTO-MIGRATION ERROR in assets create]', err);
+    }
+
     const payload = req.body?.data && typeof req.body.data === "object"
       ? req.body.data
       : req.body;

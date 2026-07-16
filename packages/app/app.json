@@ -2,7 +2,7 @@
   "expo": {
     "name": "ASQ Asset Ledger",
     "slug": "asset-inventory-app",
-    "version": "1.0.0",
+    "version": "1.2.5",
     "orientation": "default",
     "androidStatusBar": {
       "barStyle": "dark-content",
@@ -32,6 +32,7 @@
     ],
     "android": {
       "package": "com.assetmgmt.com",
+      "versionCode": 125,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",

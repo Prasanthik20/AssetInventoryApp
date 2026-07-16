@@ -86,15 +86,11 @@ Below is the release note formatted for your Google Play Console release submiss
 
 ```xml
 <en-US>
-ASQ Asset Ledger v2.0
-
-Enhanced features, layout refinements, and critical bug fixes.
-
-Highlights
-• Fixed filter clickability issues on mobile asset lists.
-• Resolved immediate closure bug in the employee selection modal.
-• Added scrolling list support for larger team directories.
-• Enabled Tenant Admins to assign assets to supervisors.
-• Web favicon and performance improvements.
+• Added Asset Depreciation settings (Useful Life, Salvage Value) & Remaining Book Value calculations.
+• Added Depreciating Assets tracker on Admin Dashboard with modal table and action recommendations (Upgrade/Scrap).
+• Unlocked screen auto-rotation & split-screen mode for tablets.
+• Android 15 Edge-to-Edge compliance (transparent status/navigation bars).
+• Optimized permissions (removed legacy storage access).
+• Updated beneficiary info to A Square Technologies.
 </en-US>
 ```
