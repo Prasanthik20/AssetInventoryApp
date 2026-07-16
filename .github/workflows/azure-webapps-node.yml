@@ -25,6 +25,9 @@ jobs:
 
     - name: Install dependencies and build Expo web app
       run: |
+        cd packages
+        npm install
+        cd app
         npm install
         npx expo export -p web
 
