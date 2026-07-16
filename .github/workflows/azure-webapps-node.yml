@@ -29,12 +29,15 @@ jobs:
         cd app
         npm install
         npx expo export -p web
+        echo "--- Directory contents after build ---"
+        ls -la
 
     - name: Upload artifact for deployment job
       uses: actions/upload-artifact@v4
       with:
         name: node-app
-        path: dist
+        path: packages/app/dist
+        if-no-files-found: error
 
   deploy:
     permissions:
