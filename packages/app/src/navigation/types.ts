@@ -124,4 +124,4 @@ const WEB_DEV_API_URL =
 const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
 
 // Keep all app screens on the same backend in development.
-export const baseURL = 'http://localhost:3000'; //'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net' //DEV_API_URL; //http://localhost:3000'; //PROD_API_URL
+export const baseURL = PROD_API_URL;  // DEV_API_URL; 
