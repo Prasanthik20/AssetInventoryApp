@@ -110,10 +110,10 @@ export function useNotificationListener(user: User | null) {
 
     const checkNotifications = async () => {
       try {
-        const isSupervisor = user.roleName.toLowerCase() === 'supervisor';
+        const isSupervisor = user.roleName.toLowerCase() === 'supervisor' || user.roleName.toLowerCase().includes('manager');
         const endpoint = isSupervisor
-          ? `${baseURL}/api/notifications/supervisor?id=${user.employeeId}`
-          : `${baseURL}/api/notifications/operator?id=${user.employeeId}`;
+          ? `${baseURL}/api/notifications/manager?id=${user.employeeId}`
+          : `${baseURL}/api/notifications/user?id=${user.employeeId}`;
 
         const response = await axios.get(endpoint);
         const notifications: any[] = response.data.notifications || [];

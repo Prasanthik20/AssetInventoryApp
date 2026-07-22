@@ -220,6 +220,7 @@ export default withAuth(async function handler(req: AuthenticatedRequest, res: N
         AND LOWER(COALESCE(n.status, '')) IN ('unread', 'replied')
         AND (
           LOWER(COALESCE(n.reply, '')) LIKE '%pending confirmation%'
+          OR LOWER(COALESCE(n.reply, '')) LIKE '%workflow_approval_pending%'
           OR (
             LOWER(COALESCE(n.reason, '')) LIKE '%has been returned by%'
             AND LOWER(COALESCE(n.reply, '')) LIKE '%return pending confirmation%'

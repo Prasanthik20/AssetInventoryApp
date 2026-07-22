@@ -17,6 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { navigateToDashboard } from '../../utils/navigation';
 import fieldStyles from './field.styles';
 import { globalColors } from '../../styles/globalStyles';
 import useAssetMeta from '../../hooks/useAssetMeta';
@@ -253,7 +254,7 @@ const FieldAssets: React.FC = () => {
       console.log('SENDING CORRECTED PAYLOAD:', payload);
 
       const response = await axios.post(
-        `${baseURL}/api/notifications/supervisor`,
+        `${baseURL}/api/notifications/manager`,
         payload,
       );
 
@@ -323,32 +324,13 @@ const FieldAssets: React.FC = () => {
     );
   };
 
-  const handleGoBack = async () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      try {
-        const storedUser = await AsyncStorage.getItem('user');
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          const role = String(parsed.roleName || parsed.role || '').toLowerCase();
-          if (role.includes('superadmin') || role.includes('super admin')) {
-            navigation.navigate('SuperAdminDashboard' as any);
-          } else if (role.includes('supervisor')) {
-            navigation.navigate('SupervisorDashboard' as any);
-          } else if (role.includes('operator')) {
-            navigation.navigate('OperatorDashboard' as any);
-          } else {
-            navigation.navigate('CompanyDashboard' as any);
-          }
-        } else {
-          navigation.navigate('Login' as any);
-        }
-      } catch {
-        navigation.navigate('Login' as any);
+    const handleGoBack = async () => {
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        await navigateToDashboard(navigation);
       }
-    }
-  };
+    };
 
   return (
     <ImageBackground

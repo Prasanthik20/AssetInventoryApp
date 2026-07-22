@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
     View,
     Text,
@@ -11,13 +11,14 @@ import {
     useWindowDimensions,
 } from "react-native";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
 import axios from "axios";
 import { useAssetFilter } from "src/hooks/useAssetFilter";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { navigateToDashboard } from '../../utils/navigation';
 import { globalColors, globalStyleTokens } from "../../styles/globalStyles";
 import ScreenWrapper from 'src/components/common/ScreenWrapper';
 import AssetCard from 'src/components/common/AssetCard';
@@ -168,9 +169,11 @@ const TotalAssetsDetails: React.FC = () => {
         loadUser();
     }, []);
 
-    useEffect(() => {
-        fetchAssets(1, false);
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            fetchAssets(1, false);
+        }, [])
+    );
 
     /* 🔹 Fetch assets with pagination */
     const fetchAssets = async (pageNum = 1, append = false) => {
@@ -253,7 +256,7 @@ const TotalAssetsDetails: React.FC = () => {
             console.log("SENDING CORRECTED PAYLOAD:", payload);
 
             const response = await axios.post(
-                `${baseURL}/api/notifications/supervisor`,
+                `${baseURL}/api/notifications/manager`,
                 payload
             );
 
@@ -278,33 +281,32 @@ const TotalAssetsDetails: React.FC = () => {
         const handlePress = () => {
             navigation.navigate('AssetFullDetails', { asset: item });
         };
-        return <AssetCard asset={item} isMobileLayout={isMobileLayout} onPress={handlePress} index={index} />;
+        const handleAssignPress = (assetToAssign: Asset) => {
+            navigation.navigate('AssignAsset', {
+                supervisor_employeeId: String(supervisorId || ''),
+                supervisorName: supervisorName,
+                editAsset: {
+                    ...assetToAssign,
+                    assetId: Number(assetToAssign.assetId || assetToAssign.id),
+                },
+            });
+        };
+        return (
+            <AssetCard 
+                asset={item} 
+                isMobileLayout={isMobileLayout} 
+                onPress={handlePress} 
+                onAssignPress={handleAssignPress}
+                index={index} 
+            />
+        );
     };
 
     const handleGoBack = async () => {
         if (navigation.canGoBack()) {
             navigation.goBack();
         } else {
-            try {
-                const storedUser = await AsyncStorage.getItem('user');
-                if (storedUser) {
-                    const parsed = JSON.parse(storedUser);
-                    const role = String(parsed.roleName || parsed.role || '').toLowerCase();
-                    if (role.includes('superadmin') || role.includes('super admin')) {
-                        navigation.navigate('SuperAdminDashboard' as any);
-                    } else if (role.includes('supervisor')) {
-                        navigation.navigate('SupervisorDashboard' as any);
-                    } else if (role.includes('operator')) {
-                        navigation.navigate('OperatorDashboard' as any);
-                    } else {
-                        navigation.navigate('CompanyDashboard' as any);
-                    }
-                } else {
-                    navigation.navigate('Login' as any);
-                }
-            } catch {
-                navigation.navigate('Login' as any);
-            }
+            await navigateToDashboard(navigation);
         }
     };
 
@@ -317,7 +319,28 @@ const TotalAssetsDetails: React.FC = () => {
                             <Ionicons name="arrow-back" size={24} color="#E0E0E0" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>All Assets</Text>
-                        <Text style={{ color: '#A9C6E4', marginLeft: 'auto', fontSize: 13 }}>{totalCount} total</Text>
+                        <TouchableOpacity
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#0F766E',
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 8,
+                                marginLeft: 'auto',
+                                marginRight: 12,
+                            }}
+                            onPress={() =>
+                                navigation.navigate('AssignAsset', {
+                                    supervisor_employeeId: String(supervisorId || ''),
+                                    supervisorName: supervisorName,
+                                })
+                            }
+                        >
+                            <Ionicons name="swap-horizontal-outline" size={16} color="#fff" style={{ marginRight: 4 }} />
+                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Assign Asset</Text>
+                        </TouchableOpacity>
+                        <Text style={{ color: '#A9C6E4', fontSize: 13 }}>{totalCount} total</Text>
                     </View>
 
                     {/* BODY MUST BE flex: 1 */}

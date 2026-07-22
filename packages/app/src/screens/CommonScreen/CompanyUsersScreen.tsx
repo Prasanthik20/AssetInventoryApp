@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import axios from 'axios';
+import { navigateToDashboard } from '../../utils/navigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { globalColors, globalStyleTokens } from '../../styles/globalStyles';
 
@@ -213,26 +214,7 @@ const CompanyUsersScreen: React.FC = () => {
         if (navigation.canGoBack()) {
             navigation.goBack();
         } else {
-            try {
-                const storedUser = await AsyncStorage.getItem('user');
-                if (storedUser) {
-                    const parsed = JSON.parse(storedUser);
-                    const role = String(parsed.roleName || parsed.role || '').toLowerCase();
-                    if (role.includes('superadmin') || role.includes('super admin')) {
-                        navigation.navigate('SuperAdminDashboard' as any);
-                    } else if (role.includes('supervisor')) {
-                        navigation.navigate('SupervisorDashboard' as any);
-                    } else if (role.includes('operator')) {
-                        navigation.navigate('OperatorDashboard' as any);
-                    } else {
-                        navigation.navigate('CompanyDashboard' as any);
-                    }
-                } else {
-                    navigation.navigate('Login' as any);
-                }
-            } catch {
-                navigation.navigate('Login' as any);
-            }
+            await navigateToDashboard(navigation);
         }
     };
 

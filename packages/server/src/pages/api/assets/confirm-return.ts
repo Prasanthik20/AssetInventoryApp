@@ -161,13 +161,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [resolvedAssetId, parsedNotificationId, hasAssignmentId ? parsedAssignmentId : null],
     );
 
-    const adminsResult = await query(
+    let adminsResult = await query(
       `SELECT DISTINCT u."employeeId"
        FROM "Users" u
-       INNER JOIN "Roles" r ON u."roleId" = r."roleId"
-       WHERE LOWER(r."roleName") IN ('admin', 'super admin', 'superadmin')`,
+       INNER JOIN "Role_Permissions" rp ON u."roleId" = rp."roleId"
+       INNER JOIN "Permissions" p ON rp."permissionId" = p.id
+       WHERE p.code IN ('MANAGE_USERS', 'MANAGE_WORKFLOWS')`,
       [],
     );
+
+    if (adminsResult.rows.length === 0) {
+      adminsResult = await query(
+        `SELECT DISTINCT u."employeeId"
+         FROM "Users" u
+         INNER JOIN "Roles" r ON u."roleId" = r."roleId"
+         WHERE LOWER(r."roleName") IN ('admin', 'super admin', 'superadmin', 'tenant admin', 'tenantadmin')`,
+        [],
+      );
+    }
 
     const adminIds = adminsResult.rows
       .map((row: { employeeId: unknown }) => toValidEmployeeId(row.employeeId))

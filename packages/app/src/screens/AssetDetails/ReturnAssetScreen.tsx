@@ -13,6 +13,7 @@ import { globalColors } from '../..//styles/globalStyles';
 import AppSnackbar from 'src/components/common/AppSnackbar';
 import { toPersistentDataUrl } from '../../utils/imageHelper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { navigateToDashboard } from '../../utils/navigation';
 
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
@@ -293,8 +294,8 @@ const ReturnAssetScreen: React.FC = () => {
 
             const response = await axios.post(
                 actorRole === 'supervisor'
-                    ? `${baseURL}/api/supervisor/returnAsset`
-                    : `${baseURL}/api/operator/returnAsset`,
+                    ? `${baseURL}/api/manager/confirm-return`
+                    : `${baseURL}/api/user/return-asset`,
                 payload
             );
 
@@ -376,26 +377,7 @@ const ReturnAssetScreen: React.FC = () => {
         if (navigation.canGoBack()) {
             navigation.goBack();
         } else {
-            try {
-                const storedUser = await AsyncStorage.getItem('user');
-                if (storedUser) {
-                    const parsed = JSON.parse(storedUser);
-                    const role = String(parsed.roleName || parsed.role || '').toLowerCase();
-                    if (role.includes('superadmin') || role.includes('super admin')) {
-                        navigation.navigate('SuperAdminDashboard' as any);
-                    } else if (role.includes('supervisor')) {
-                        navigation.navigate('SupervisorDashboard' as any);
-                    } else if (role.includes('operator')) {
-                        navigation.navigate('OperatorDashboard' as any);
-                    } else {
-                        navigation.navigate('CompanyDashboard' as any);
-                    }
-                } else {
-                    navigation.navigate('Login' as any);
-                }
-            } catch {
-                navigation.navigate('Login' as any);
-            }
+            await navigateToDashboard(navigation);
         }
     };
 

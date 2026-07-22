@@ -239,40 +239,35 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         a."asset_Id" AS "barcode",
         a.location,
         a."photoURL",
-        u."fullName" AS "assignedBy",
-        a.assigned_to,
+        COALESCE(u."fullName", u_aa."fullName") AS "assignedBy",
+        COALESCE(assignee."fullName", assignee_aa."fullName") AS "assignedToName",
+        COALESCE(a.assigned_to, aa."operator_employeeId") AS assigned_to,
         a.warranty_expiry AS "warrantyExpiry",
         a.purchase_date AS "purchaseDate",
         a.price,
         a.useful_life AS "usefulLife",
         a.salvage_value AS "salvageValue",
         
-        (
-          SELECT "assigned_date"
-          FROM "Asset_Assignments"
-          WHERE "assetId" = a.id AND "tenantId" = $2
-          ORDER BY id DESC
-          LIMIT 1
-        ) AS assigned_date,
-        (
-          SELECT "expected_return_date"
-          FROM "Asset_Assignments"
-          WHERE "assetId" = a.id AND "tenantId" = $2
-          ORDER BY id DESC
-          LIMIT 1
-        ) AS expected_return_date
-        ,(
-          SELECT "projectName"
-          FROM "Asset_Assignments"
-          WHERE "assetId" = a.id AND "tenantId" = $2
-          ORDER BY id DESC
-          LIMIT 1
-        ) AS "projectName"
+        aa.assigned_date AS assigned_date,
+        aa.expected_return_date AS expected_return_date,
+        aa."projectName" AS "projectName"
       FROM "Asset_Details" a
-      LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId"
+      LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId" AND (cat."tenantId" = a."tenantId" OR cat."tenantId" IS NULL OR a."tenantId" IS NULL)
       LEFT JOIN "Status" s ON a.status_id = s.id
-      LEFT JOIN "Users" u ON a.assigned_by = u."employeeId"
-      WHERE a.id = $1 AND a."tenantId" = $2;
+      LEFT JOIN LATERAL (
+        SELECT * FROM "Asset_Assignments"
+        WHERE "assetId" = a.id
+          AND ("tenantId" = $2 OR $2 IS NULL OR "tenantId" IS NULL)
+          AND COALESCE(status, '') <> 'returned'
+          AND "returned_date" IS NULL
+        ORDER BY id DESC
+        LIMIT 1
+      ) aa ON TRUE
+      LEFT JOIN "Users" u ON (u."employeeId" = a.assigned_by OR u."userId" = a.assigned_by) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" u_aa ON (u_aa."employeeId" = aa."supervisor_employeeId" OR u_aa."userId" = aa."supervisor_employeeId") AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" assignee ON (assignee."employeeId" = a.assigned_to OR assignee."userId" = a.assigned_to) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" assignee_aa ON (assignee_aa."employeeId" = aa."operator_employeeId" OR assignee_aa."userId" = aa."operator_employeeId") AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+      WHERE a.id = $1 AND (a."tenantId" = $2 OR $2 IS NULL);
     `;
 
     const result = await query(sqlQuery, [parseInt(assetId), tenantId]);
@@ -346,6 +341,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       location: asset.location,
       photoURL: asset.photoURL || null,
       assignedBy: asset.assignedBy || 'N/A',
+      assignedTo: asset.assignedToName || 'N/A',
       warrantyExpiry: formatDate(asset.warrantyExpiry),
       purchaseDate: formatDate(asset.purchaseDate),
       assignedDate: formatDate(asset.assigned_date),

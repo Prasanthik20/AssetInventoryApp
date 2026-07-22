@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { verifyToken, TokenPayload } from './auth';
-
 import { setCorsHeaders } from './corsHeaders';
+import query from './db';
 
 export interface AuthenticatedRequest extends NextApiRequest {
   user: TokenPayload;
@@ -42,4 +42,36 @@ export const withAuth = (handler: AuthenticatedHandler) => {
 
     return handler(req as AuthenticatedRequest, res);
   };
+};
+
+export const withPermission = (permissionCode: string, handler: AuthenticatedHandler) => {
+  return withAuth(async (req: AuthenticatedRequest, res: NextApiResponse) => {
+    const { userId, tenantId, role } = req.user;
+
+    // Super Admins bypass permission checks
+    if (role === 'Super Admin' || role === 'SuperAdmin') {
+      return handler(req, res);
+    }
+
+    try {
+      const permissionCheck = await query(
+        `SELECT 1 
+         FROM "Users" u
+         INNER JOIN "Role_Permissions" rp ON u."roleId" = rp."roleId"
+         INNER JOIN "Permissions" p ON rp."permissionId" = p.id
+         WHERE u."userId" = $1 AND p.code = $2 AND (u."tenantId" = $3 OR u."tenantId" IS NULL)
+         LIMIT 1`,
+        [userId, permissionCode, tenantId || null]
+      );
+
+      if (permissionCheck.rows.length === 0) {
+        return res.status(403).json({ message: `Forbidden: Missing required permission ${permissionCode}` });
+      }
+
+      return handler(req, res);
+    } catch (error) {
+      console.error('Permission check error:', error);
+      return res.status(500).json({ message: 'Internal server error during authorization.' });
+    }
+  });
 };

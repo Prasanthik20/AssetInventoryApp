@@ -65,10 +65,23 @@ export type RootStackParamList = {
   AddCompanyUser: undefined;
   CustomCategoryBuilder: undefined;
 
+  ManagerDashboard: {
+    supervisorName?: string;
+    managerName?: string;
+    roleName: string;
+    employeeId: string;
+  };
   SupervisorDashboard: {
     supervisorName: string;
     roleName: string;
     employeeId: string;
+  };
+  EmployeeDashboard: {
+    operatorName?: string;
+    userName?: string;
+    roleName: string;
+    employeeId: string;
+    refresh?: boolean;
   };
   OperatorDashboard: {
     operatorName: string;
@@ -114,6 +127,8 @@ export type RootStackParamList = {
     roleName: string;
   };
   Billing: undefined;
+  ManageRoles: undefined;
+  ConfigureWorkflows: undefined;
 };
 
 const PROD_API_URL = 'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net';

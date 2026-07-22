@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ImageBackground, FlatList, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { baseURL, Asset } from 'src/navigation/types';
 import axios from 'axios';
 import { useAssetFilter } from 'src/hooks/useAssetFilter';
@@ -10,6 +10,7 @@ import { globalColors, globalStyleTokens } from '../../styles/globalStyles';
 import useAssetMeta from '../../hooks/useAssetMeta';
 import AssetFiltersBar from 'src/components/common/AssetFiltersBar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { navigateToDashboard } from '../../utils/navigation';
 
 const OfficeAssets: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -69,34 +70,17 @@ const OfficeAssets: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchAssets();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchAssets();
+    }, [])
+  );
 
   const handleGoBack = async () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      try {
-        const storedUser = await AsyncStorage.getItem('user');
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          const role = String(parsed.roleName || parsed.role || '').toLowerCase();
-          if (role.includes('superadmin') || role.includes('super admin')) {
-            navigation.navigate('SuperAdminDashboard' as any);
-          } else if (role.includes('supervisor')) {
-            navigation.navigate('SupervisorDashboard' as any);
-          } else if (role.includes('operator')) {
-            navigation.navigate('OperatorDashboard' as any);
-          } else {
-            navigation.navigate('CompanyDashboard' as any);
-          }
-        } else {
-          navigation.navigate('Login' as any);
-        }
-      } catch {
-        navigation.navigate('Login' as any);
-      }
+      await navigateToDashboard(navigation);
     }
   };
 

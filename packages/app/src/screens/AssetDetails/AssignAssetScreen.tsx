@@ -27,6 +27,7 @@ import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { navigateToDashboard } from '../../utils/navigation';
 import assignStyles from './assign.styles';
 import { globalColors } from '../../styles/globalStyles';
 import useAssetMeta from '../../hooks/useAssetMeta';
@@ -120,6 +121,8 @@ const AssignAssetScreen: React.FC = () => {
     };
   }, []);
 
+  const [loggedInEmployeeId, setLoggedInEmployeeId] = useState<string | number>('');
+
   // -------------------- FETCH ASSETS --------------------
   useEffect(() => {
     const fetchData = async () => {
@@ -128,10 +131,17 @@ const AssignAssetScreen: React.FC = () => {
 
         const storedUser = await AsyncStorage.getItem('user');
         const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+        if (parsedUser) {
+          setLoggedInEmployeeId(parsedUser.employeeId || parsedUser.userId || '');
+        }
         const assignerRole = String(
           parsedUser?.roleName || parsedUser?.role?.roleName || '',
         ).toLowerCase();
+        
+        const permissions = Array.isArray(parsedUser?.permissions) ? parsedUser.permissions : [];
         const isPrivilegedAssigner =
+          permissions.includes('MANAGE_USERS') ||
+          permissions.includes('MANAGE_WORKFLOWS') ||
           assignerRole.includes('admin') ||
           assignerRole.includes('super');
         setCanAssignToSupervisor(isPrivilegedAssigner);
@@ -165,46 +175,60 @@ const AssignAssetScreen: React.FC = () => {
             u.role?.roleName || u.roleName || '',
           ).toLowerCase();
 
+          const uPermissions = Array.isArray(u.role?.permissions) 
+            ? u.role.permissions 
+            : (Array.isArray(u.permissions) ? u.permissions : []);
+
+          const isOperator = uPermissions.includes('INITIATE_RETURN');
+          const isSupervisor = uPermissions.includes('ASSIGN_ASSETS') || uPermissions.includes('CONFIRM_RETURN');
+          const isAdmin = uPermissions.includes('MANAGE_USERS') || uPermissions.includes('MANAGE_WORKFLOWS');
+
           if (isPrivilegedAssigner) {
-            return targetRole === 'operator' || targetRole === 'supervisor';
+            return (isOperator || isSupervisor) && !isAdmin;
           }
 
-          return targetRole === 'operator';
+          return isOperator && !isSupervisor && !isAdmin;
         });
 
         setOperators(assignableUsers);
 
-        if (isEditAssignmentMode && editAsset) {
-          setSelectedAssets([editAsset]);
-          setProjectName(String(editAsset.projectName || ''));
-          setLocation(String(editAsset.location || ''));
-          setAssignedDate(String(editAsset.assignedDate || today));
-          setDueDate(String(editAsset.expectedReturnDate || ''));
+        if (editAsset) {
+          const normalizedEditAsset = {
+            ...editAsset,
+            assetId: Number(editAsset.assetId || editAsset.id),
+          };
+          setSelectedAssets([normalizedEditAsset]);
+          if (isEditAssignmentMode) {
+            setProjectName(String(editAsset.projectName || ''));
+            setLocation(String(editAsset.location || ''));
+            setAssignedDate(String(editAsset.assignedDate || today));
+            setDueDate(String(editAsset.expectedReturnDate || ''));
 
-          try {
-            const assignmentResponse = await axios.get(`${baseURL}/api/assets/assign`, {
-              params: {
-                assignmentId: editAsset.assignmentId,
-                assetId: editAsset.id || editAsset.assetId,
-              },
-            });
+            try {
+              const assignmentResponse = await axios.get(`${baseURL}/api/assets/assign`, {
+                params: {
+                  assignmentId: editAsset.assignmentId,
+                  assetId: editAsset.id || editAsset.assetId,
+                },
+              });
 
-            const assignment = assignmentResponse.data || {};
-            setProjectName(String(assignment.projectName || editAsset.projectName || ''));
-            setLocation(String(assignment.location || editAsset.location || ''));
-            setAssignedDate(String(assignment.assignedDate || editAsset.assignedDate || today));
-            setDueDate(String(assignment.expectedReturnDate || editAsset.expectedReturnDate || ''));
+              const assignment = assignmentResponse.data || {};
+              setProjectName(String(assignment.projectName || editAsset.projectName || ''));
+              setLocation(String(assignment.location || editAsset.location || ''));
+              setAssignedDate(String(assignment.assignedDate || editAsset.assignedDate || today));
+              setDueDate(String(assignment.expectedReturnDate || editAsset.expectedReturnDate || ''));
 
-            if (assignment.operatorEmployeeId) {
-              const matchedOperator = assignableUsers.find(
-                (op: any) => Number(op.employeeId) === Number(assignment.operatorEmployeeId),
-              );
-              if (matchedOperator) {
-                setSelectedOperator(matchedOperator);
+              if (assignment.operatorEmployeeId) {
+                const matchedOperator = assignableUsers.find(
+                  (op: any) => Number(op.employeeId) === Number(assignment.operatorEmployeeId),
+                );
+                if (matchedOperator) {
+                  setSelectedOperator(matchedOperator);
+                }
               }
+            } catch (assignmentError) {
+              console.error('Failed to fetch assignment details:', assignmentError);
             }
-          } catch (assignmentError) {
-            console.error('Failed to fetch assignment details:', assignmentError);
           }
         }
       } catch (err) {
@@ -308,7 +332,9 @@ const AssignAssetScreen: React.FC = () => {
         return;
       }
 
-      const selectedAssetIds = selectedAssets.map(a => toAssetId(a.assetId));
+      const selectedAssetIds = selectedAssets
+        .map(a => toAssetId(a.assetId || a.id))
+        .filter(id => id > 0);
       const assetMedia = selectedAssetIds.map((assetId) => ({
         assetId,
         photoURL: assetPhotoMap[toAssetKey(assetId)] || photo || null,
@@ -330,7 +356,7 @@ const AssignAssetScreen: React.FC = () => {
       await axios.post(`${baseURL}/api/assets/assign`, {
         assetIds: selectedAssetIds,
         operator_employeeId: selectedOperator.employeeId,
-        supervisor_employeeId: supervisor_employeeId,
+        supervisor_employeeId: supervisor_employeeId || loggedInEmployeeId,
         project_name: projectName.trim(),
         destination: location.trim(),
         assigned_date: assignedDate,
@@ -368,8 +394,24 @@ const AssignAssetScreen: React.FC = () => {
     }
   };
 
-  const toAssetId = (value: unknown) => Number(value);
-  const toAssetKey = (value: unknown) => String(toAssetId(value));
+  const toAssetId = (value: unknown): number => {
+    if (value && typeof value === 'object') {
+      const raw = (value as any).assetId ?? (value as any).id;
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const toAssetKey = (value: unknown): string => {
+    if (value && typeof value === 'object') {
+      const raw = (value as any).assetId ?? (value as any).id;
+      return String(raw || '');
+    }
+    const id = toAssetId(value);
+    return id ? String(id) : '';
+  };
 
   const assetCategories = categories
     .map((item) => String(item?.category || '').trim())
@@ -817,26 +859,7 @@ const AssignAssetScreen: React.FC = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      try {
-        const storedUser = await AsyncStorage.getItem('user');
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          const role = String(parsed.roleName || parsed.role || '').toLowerCase();
-          if (role.includes('superadmin') || role.includes('super admin')) {
-            navigation.navigate('SuperAdminDashboard' as any);
-          } else if (role.includes('supervisor')) {
-            navigation.navigate('SupervisorDashboard' as any);
-          } else if (role.includes('operator')) {
-            navigation.navigate('OperatorDashboard' as any);
-          } else {
-            navigation.navigate('CompanyDashboard' as any);
-          }
-        } else {
-          navigation.navigate('Login' as any);
-        }
-      } catch {
-        navigation.navigate('Login' as any);
-      }
+      await navigateToDashboard(navigation);
     }
   };
 

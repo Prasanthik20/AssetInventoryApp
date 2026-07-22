@@ -164,18 +164,29 @@ const AssetFullDetails: React.FC = () => {
                 const editorRole = String(
                     parsedUser?.roleName || parsedUser?.role?.roleName || '',
                 ).toLowerCase();
-                const canEditAllEmployees = editorRole === 'admin';
+                const editorPermissions = Array.isArray(parsedUser?.permissions) ? parsedUser.permissions : [];
+                const canEditAllEmployees =
+                    editorPermissions.includes('MANAGE_USERS') ||
+                    editorPermissions.includes('MANAGE_WORKFLOWS') ||
+                    ['admin', 'tenant admin'].includes(editorRole);
 
                 const response = await axios.get(`${baseURL}/api/auth/users`);
                 const rawUsers =
                     response.data?.users || response.data?.data || response.data || [];
 
                 const filteredUsers = rawUsers.filter((u: any) => {
+                    const uPermissions = Array.isArray(u.role?.permissions) 
+                        ? u.role.permissions 
+                        : (Array.isArray(u.permissions) ? u.permissions : []);
                     const roleName = String(
                         u?.role?.roleName || u?.roleName || '',
                     ).toLowerCase();
 
-                    return roleName === 'admin';
+                    const isOperator = uPermissions.includes('INITIATE_RETURN');
+                    const isSupervisor = uPermissions.includes('ASSIGN_ASSETS') || uPermissions.includes('CONFIRM_RETURN');
+                    const isAdmin = uPermissions.includes('MANAGE_USERS') || uPermissions.includes('MANAGE_WORKFLOWS');
+
+                    return isOperator || isSupervisor || isAdmin;
                 });
 
                 const mappedUsers = filteredUsers.map((u: any) => {

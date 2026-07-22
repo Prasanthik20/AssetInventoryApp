@@ -147,6 +147,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
        const assetUsagePct = subscription.maxAssets > 0 ? (totalAssetsCount / subscription.maxAssets) * 100 : 0;
        subscriptionUsage = {
         plan: subscription.planName,
+        planName: subscription.planName,
         status: subscription.status,
         endDate: subscription.endDate,
         maxUsers: subscription.maxUsers,

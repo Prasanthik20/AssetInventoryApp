@@ -29,6 +29,11 @@ import { baseURL, RootStackParamList } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { opratorStyles } from './operator.styles';
 import AppSnackbar from 'src/components/common/AppSnackbar';
+import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
+import { StatMetricCard } from '../../components/dashboard/StatMetricCard';
+import { AssetDistributionWidget } from '../../components/dashboard/AssetDistributionWidget';
+import { AssetHealthWidget } from '../../components/dashboard/AssetHealthWidget';
+import { QuickActionsPanel } from '../../components/dashboard/QuickActionsPanel';
 
 type DashboardNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -176,10 +181,10 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
         try {
             const [assetsRes, notificationsRes] = await Promise.all([
                 axios.get(
-                    `${baseURL}/api/operator/assets?operatorId=${user.employeeId}`,
+                    `${baseURL}/api/my-assets?id=${user.employeeId}`,
                 ),
                 axios.get(
-                    `${baseURL}/api/notifications/operator?id=${user.employeeId}`,
+                    `${baseURL}/api/notifications/user?id=${user.employeeId}`,
                 ),
             ]);
             //const data = await res.json();
@@ -508,78 +513,64 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
             blurRadius={5}
         >
             <SafeAreaView style={styles.safeArea}>
-                <View style={styles.container}>
-                    <ScrollView
-                        style={styles.rightPanel}
-                        contentContainerStyle={{ paddingBottom: 50 }}
-                        refreshControl={
-                            <RefreshControl
-                                refreshing={refreshing}
-                                onRefresh={onRefresh}
-                                colors={['#22D3EE']}
-                                tintColor={'#22D3EE'}
-                            />
-                        }
-                    >
-                        {/* HEADER */}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>{user?.operatorName}</Text>
+                <DashboardHeader
+                    companyName={user?.operatorName || user?.fullName || 'Employee Portal'}
+                    userName={user?.fullName || 'Employee'}
+                    userRole="Employee / User"
+                    onLogout={handleLogout}
+                />
 
-                            <View style={styles.headerRight}>
-                                <Feather name="user" size={16} color="#A9C6E4" />
-                                <Text style={styles.userText}>{user?.fullName}</Text>
-                                <TouchableOpacity onPress={handleLogout}>
-                                    <Feather
-                                        name="log-out"
-                                        size={22}
-                                        color="#F97373"
-                                        style={{ marginLeft: 10 }}
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+                <ScrollView
+                    style={styles.rightPanel}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 50 }}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={['#22D3EE']}
+                            tintColor={'#22D3EE'}
+                        />
+                    }
+                >
+                    {/* 1. Stat Cards Row */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                        <StatMetricCard
+                            title="MY ASSIGNED ASSETS"
+                            count={assignedCount}
+                            iconName="hardware-chip-outline"
+                            accentColor="#22D3EE"
+                        />
+                        <StatMetricCard
+                            title="RETURNED ASSETS"
+                            count={historyNotifications.length}
+                            iconName="checkmark-circle-outline"
+                            accentColor="#34D399"
+                        />
+                        <StatMetricCard
+                            title="OVERDUE ASSETS"
+                            count={overdueCount}
+                            iconName="alert-circle-outline"
+                            accentColor="#FB7185"
+                        />
+                    </View>
 
-                        {/* METRICS */}
-                        <View style={styles.metricsContainer}>
-                            <View style={styles.metricBox}>
-                                <View style={styles.metricRow}>
-                                    <View style={styles.metricIconBg}>
-                                        <Ionicons
-                                            name="construct-outline"
-                                            size={20}
-                                            color="#22D3EE"
-                                        />
-                                    </View>
-                                    <Text style={styles.metricTitle}>Assigned Assets</Text>
-                                </View>
-                                <Text style={styles.metricValue}>{assignedCount}</Text>
-                            </View>
-
-                            <View style={styles.metricBox}>
-                                <View style={styles.metricRow}>
-                                    <View style={styles.metricIconBg}>
-                                        <Feather name="map-pin" size={18} color="#22D3EE" />
-                                    </View>
-                                    <Text style={styles.metricTitle}>Assets By Location</Text>
-                                </View>
-                                {locationStats.length === 0 ? (
-                                    <Text style={[styles.metricValue, styles.locationMetricValue]}>
-                                        N/A
-                                    </Text>
-                                ) : (
-                                    <View style={styles.locationGrid}>
-                                        {locationStats.map(item => (
-                                            <View key={item.location} style={styles.locationCell}>
-                                                <Text style={styles.locationName} numberOfLines={1}>
-                                                    {item.location}
-                                                </Text>
-                                                <Text style={styles.locationCount}>{item.count}</Text>
-                                            </View>
-                                        ))}
-                                    </View>
-                                )}
-                            </View>
-                        </View>
+                    {/* 2. Quick Actions Panel */}
+                    <View style={{ marginBottom: 16 }}>
+                        <QuickActionsPanel
+                            actions={[
+                                {
+                                    id: 'return',
+                                    label: 'Initiate Asset Return',
+                                    iconName: 'return-down-back-outline',
+                                    variant: 'primary',
+                                    onPress: () => navigation.navigate('ReturnAsset', {
+                                        assets: activeAssets,
+                                        operatorEmployeeId: user?.employeeId,
+                                    }),
+                                },
+                            ]}
+                        />
+                    </View>
                         <View
                             style={[
                                 styles.dashboardTwoColumnRow,
@@ -1151,7 +1142,6 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                             </View>
                         </View>
                     </ScrollView>
-                </View>
 
                 <OverdueNotificationModal
                     visible={modalVisible}

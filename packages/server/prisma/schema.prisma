@@ -39,6 +39,11 @@ model Tenants {
   invoices            Invoices[]
   auditLogs           AuditLogs[]
   featureFlags        TenantFeatureFlags[]
+
+  // Dynamic Roles & Workflows
+  roles               Roles[]
+  Approval_Workflows  Approval_Workflows[]
+  Approval_Requests   Approval_Requests[]
 }
 
 model Plans {
@@ -73,9 +78,14 @@ model Subscriptions {
 }
 
 model Roles {
-  roleId   BigInt  @id @default(autoincrement()) @map("roleId")
-  roleName String? @map("roleName")
-  Users    Users[]
+  roleId                  BigInt                    @id @default(autoincrement()) @map("roleId")
+  roleName                String?                   @map("roleName")
+  tenantId                String?
+  Users                   Users[]
+  tenant                  Tenants?                  @relation(fields: [tenantId], references: [id])
+  Role_Permissions        Role_Permissions[]
+  Approval_Workflow_Steps Approval_Workflow_Steps[]
+  Approval_Request_Steps  Approval_Request_Steps[]
 }
 
 model Users {
@@ -102,6 +112,8 @@ model Users {
   sentNotifications     Notifications[]     @relation("SentNotifications")
   role                  Roles?              @relation(fields: [roleId], references: [roleId])
   tenant                Tenants?            @relation(fields: [tenantId], references: [id])
+  requestedRequests     Approval_Requests[] @relation("RequestedBy")
+  actionedRequestSteps  Approval_Request_Steps[] @relation("ActionedBy")
 }
 
 model Category {
@@ -165,6 +177,7 @@ model Asset_Details {
   notifications    Notifications[]
   tenant           Tenants?            @relation(fields: [tenantId], references: [id])
   AssetDynamicValues AssetDynamicValues[]
+  Approval_Requests  Approval_Requests[]
 }
 
 model Asset_Assignments {
@@ -350,4 +363,74 @@ model SupportTicketMessages {
   createdAt   DateTime @default(now())
 
   ticket SupportTickets @relation(fields: [ticketId], references: [id])
+}
+
+model Permissions {
+  id    BigInt             @id @default(autoincrement())
+  code  String             @unique
+  name  String
+  roles Role_Permissions[]
+}
+
+model Role_Permissions {
+  roleId       BigInt
+  permissionId BigInt
+  role         Roles       @relation(fields: [roleId], references: [roleId], onDelete: Cascade)
+  permission   Permissions @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Approval_Workflows {
+  id         BigInt                    @id @default(autoincrement())
+  tenantId   String
+  name       String
+  actionType String                    // "CHECKOUT" or "RETURN"
+  isActive   Boolean                   @default(true)
+  tenant     Tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  steps      Approval_Workflow_Steps[]
+  requests   Approval_Requests[]
+}
+
+model Approval_Workflow_Steps {
+  id             BigInt             @id @default(autoincrement())
+  workflowId     BigInt
+  stepSequence   Int
+  approverRoleId BigInt
+  workflow       Approval_Workflows @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  approverRole   Roles              @relation(fields: [approverRoleId], references: [roleId], onDelete: Cascade)
+}
+
+model Approval_Requests {
+  id                  BigInt                   @id @default(autoincrement())
+  tenantId            String
+  assetId             BigInt
+  workflowId          BigInt
+  currentStepSequence Int
+  status              String                   @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  requestedById       BigInt
+  payload             Json                     // Stores info like project_name, location, expected_return_date, images
+  createdAt           DateTime                 @db.Timestamp
+  updatedAt           DateTime                 @db.Timestamp
+
+  tenant              Tenants                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  asset               Asset_Details            @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  workflow            Approval_Workflows       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  requestedByUser     Users                    @relation("RequestedBy", fields: [requestedById], references: [employeeId])
+  steps               Approval_Request_Steps[]
+}
+
+model Approval_Request_Steps {
+  id             BigInt            @id @default(autoincrement())
+  requestId      BigInt
+  stepSequence   Int
+  approverRoleId BigInt
+  status         String            @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  actionedById   BigInt?
+  actionedAt     DateTime?         @db.Timestamp
+  notes          String?
+  mediaURL       String?
+  request        Approval_Requests @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  approverRole   Roles             @relation(fields: [approverRoleId], references: [roleId], onDelete: Cascade)
+  actionedByUser Users?            @relation("ActionedBy", fields: [actionedById], references: [employeeId])
 }

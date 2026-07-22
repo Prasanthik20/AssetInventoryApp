@@ -2,7 +2,7 @@ import type { NextApiResponse } from 'next';
 import query from '@/lib/db';
 import crypto from 'crypto';
 import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
-import { withSubscriptionLimit } from '@/lib/subscription';
+import { withSubscriptionLimit, getSubscriptionInfo } from '@/lib/subscription';
 
 /**
  * Securely hashes a password using Node's native crypto module.
@@ -29,9 +29,41 @@ async function addUserHandler(req: AuthenticatedRequest, res: NextApiResponse) {
     return res.status(400).json({ message: 'Missing required fields.' });
   }
 
+  if (!tenantId) {
+    return res.status(400).json({ message: 'Tenant ID is missing.' });
+  }
+
   try {
+    // Check subscription plan limits for administrators
+    const subInfo = await getSubscriptionInfo(tenantId);
+    const planId = subInfo?.planId || 'free-trial';
+
+    if (roleName.toLowerCase().includes('admin')) {
+      const adminCountRes = await query(
+        `SELECT COUNT(u."userId") AS count 
+         FROM "Users" u
+         INNER JOIN "Roles" r ON u."roleId" = r."roleId"
+         WHERE u."tenantId" = $1 AND LOWER(r."roleName") LIKE '%admin%' AND u.status != 'disabled'`,
+        [tenantId]
+      );
+      const activeAdmins = parseInt(adminCountRes.rows[0]?.count || '0', 10);
+
+      let allowedAdmins = 1;
+      if (planId === 'starter') allowedAdmins = 2;
+      else if (planId === 'professional') allowedAdmins = 5;
+      else if (planId === 'enterprise') allowedAdmins = 999999;
+
+      if (activeAdmins >= allowedAdmins) {
+        return res.status(400).json({
+          message: `Your current plan (${subInfo?.planName || 'Free Trial'}) limits you to a maximum of ${allowedAdmins} Administrator account(s). Please upgrade your subscription plan to add more administrators.`
+        });
+      }
+    }
     // 1. Get roleId from Role Name
-    const roleResult = await query('SELECT "roleId" FROM "Roles" WHERE "roleName" = $1 LIMIT 1', [roleName]);
+    const roleResult = await query(
+      'SELECT "roleId" FROM "Roles" WHERE "roleName" = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1',
+      [roleName, tenantId]
+    );
     if (roleResult.rows.length === 0) {
       return res.status(400).json({ message: 'Invalid role selected.' });
     }

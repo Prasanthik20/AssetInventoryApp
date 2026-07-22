@@ -22,6 +22,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Picker } from "@react-native-picker/picker";
 import { baseURL } from '../../navigation/types';
+import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
+import { StatMetricCard } from '../../components/dashboard/StatMetricCard';
 
 interface Company {
   id: string;
@@ -356,56 +358,49 @@ export default function SuperAdminDashboard({ setUser }: any) {
       resizeMode="cover"
     >
       <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={[styles.dashboardContainer, isMobileLayout && { width: '96%', padding: 14, borderRadius: 16 }]}>
-            {/* Header */}
-            <View style={[styles.headerRow, isMobileLayout && { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
-              <View>
-                <Text style={styles.headerTitle}>Super Admin Control Panel</Text>
-                <Text style={{ color: '#A9C6E4', fontSize: 13, marginTop: 2 }}>Platform Management Console</Text>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                <View style={styles.adminBadge}>
-                  <Ionicons name="person-circle-outline" size={20} color="#22D3EE" />
-                  <Text style={[styles.adminText, { color: '#22D3EE', fontWeight: 'bold' }]}>Super Admin</Text>
-                </View>
-                <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                  <Ionicons name="log-out-outline" size={20} color="#FF4D4D" />
-                </TouchableOpacity>
-              </View>
-            </View>
+        <DashboardHeader
+          companyName="ASQ Platform Control Panel"
+          userName="Super Admin"
+          userRole="Super Admin"
+          onLogout={handleLogout}
+        />
 
+        <ScrollView contentContainerStyle={{ padding: 16 }}>
+          <View style={[styles.dashboardContainer, isMobileLayout && { width: '100%', padding: 14, borderRadius: 16 }]}>
             {/* Top Stats Grid */}
-            <View style={styles.statsRow}>
-              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-                <MaterialIcons name="business" size={26} color="#22D3EE" />
-                <Text style={styles.statNumber}>{stats.totalTenants}</Text>
-                <Text style={styles.statLabel}>Total Organizations</Text>
-              </View>
-              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-                <Ionicons name="checkmark-done" size={26} color="#34D399" />
-                <Text style={styles.statNumber}>{stats.activeSubscriptions}</Text>
-                <Text style={styles.statLabel}>Paid Subscriptions</Text>
-              </View>
-              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-                <Ionicons name="time-outline" size={26} color="#F59E0B" />
-                <Text style={styles.statNumber}>{stats.pendingRenewals}</Text>
-                <Text style={styles.statLabel}>Pending Renewal Requests</Text>
-              </View>
-              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-                <TouchableOpacity onPress={() => setIsAssetsVisible(true)} style={{ alignItems: 'center' }}>
-                  <Ionicons name="cube-outline" size={26} color="#EC4899" />
-                  <Text style={styles.statNumber}>{stats.totalAssetsOnPlatform}</Text>
-                  <Text style={styles.statLabel}>Platform Assets Logged</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
-                <TouchableOpacity onPress={() => setIsDepreciationModalVisible(true)} style={{ alignItems: 'center' }}>
-                  <Ionicons name="trending-down-outline" size={26} color="#EAB308" />
-                  <Text style={styles.statNumber}>{(stats as any).depreciatingAssetsCount ?? 0}</Text>
-                  <Text style={styles.statLabel}>Depreciating Assets</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+              <StatMetricCard
+                title="ORGANIZATIONS"
+                count={stats.totalTenants}
+                iconName="business-outline"
+                accentColor="#22D3EE"
+              />
+              <StatMetricCard
+                title="PAID SUBSCRIPTIONS"
+                count={stats.activeSubscriptions}
+                iconName="checkmark-done-circle-outline"
+                accentColor="#34D399"
+              />
+              <StatMetricCard
+                title="PENDING RENEWALS"
+                count={stats.pendingRenewals}
+                iconName="time-outline"
+                accentColor="#F59E0B"
+              />
+              <StatMetricCard
+                title="PLATFORM ASSETS"
+                count={stats.totalAssetsOnPlatform}
+                iconName="cube-outline"
+                accentColor="#EC4899"
+                onPress={() => setIsAssetsVisible(true)}
+              />
+              <StatMetricCard
+                title="DEPRECIATING ASSETS"
+                count={(stats as any).depreciatingAssetsCount ?? 0}
+                iconName="trending-down-outline"
+                accentColor="#EAB308"
+                onPress={() => setIsDepreciationModalVisible(true)}
+              />
             </View>
 
             {/* Client Companies Listing */}

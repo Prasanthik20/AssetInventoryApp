@@ -24,6 +24,8 @@ import ReportsScreen from "./src/screens/CommonScreen/ReportsScreen";
 import AddCompanyUser from "./src/screens/Admin/AddCompanyUser";
 import CustomCategoryBuilder from "./src/screens/Admin/CustomCategoryBuilder";
 import BillingScreen from "./src/screens/CommonScreen/BillingScreen";
+import ManageRolesScreen from "./src/screens/Admin/ManageRolesScreen";
+import ConfigureWorkflowsScreen from "./src/screens/Admin/ConfigureWorkflowsScreen";
 
 // Supervisor
 import SupervisorDashboard from "./src/screens/Supervisor/SupervisorDashboard";
@@ -127,7 +129,9 @@ function App(): React.JSX.Element {
         CompanyUsersScreen: 'company-users',
         AddCompanyUser: 'add-company-user',
         CustomCategoryBuilder: 'categories/custom',
+        ManagerDashboard: 'manager',
         SupervisorDashboard: 'supervisor',
+        EmployeeDashboard: 'employee',
         OperatorDashboard: 'operator',
         SuperAdminLogin: 'superadmin/login',
         SuperAdminDashboard: 'superadmin/dashboard',
@@ -140,6 +144,8 @@ function App(): React.JSX.Element {
         Billing: 'billing',
         AssetFullDetails: 'inventory/:asset',
         ReturnAsset: 'return',
+        ManageRoles: 'roles/manage',
+        ConfigureWorkflows: 'workflows/configure',
         ForgotPassword: 'forgot-password',
         ResetPassword: 'reset-password',
       },
@@ -203,19 +209,37 @@ function AppStack({ user, setUser }: any) {
   useNotificationListener(user);
 
   const getInitialRoute = () => {
-    switch (user.roleName) {
-      case "Admin":
-        return "CompanyDashboard";
-      case "Supervisor":
-        return "SupervisorDashboard";
-      case "Operator":
-        return "OperatorDashboard";
-      case "SuperAdmin":
-      case "Super Admin":
-        return "SuperAdminDashboard";
-      default:
-        return "CompanyDashboard";
+    const role = String(user?.roleName || '').toLowerCase();
+    if (role.includes('superadmin') || role.includes('super admin')) {
+      return "SuperAdminDashboard";
     }
+
+    const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+    if (permissions.length > 0) {
+      const isOperator = permissions.includes('INITIATE_RETURN') || permissions.includes('VIEW_DASHBOARD');
+      const isSupervisor = permissions.includes('ASSIGN_ASSETS') || permissions.includes('CONFIRM_RETURN');
+      const isAdmin = permissions.includes('MANAGE_USERS') || permissions.includes('MANAGE_WORKFLOWS');
+
+      if (isAdmin) {
+        return "CompanyDashboard";
+      }
+      if (isSupervisor) {
+        return "SupervisorDashboard";
+      }
+      if (isOperator) {
+        return "OperatorDashboard";
+      }
+    }
+
+    // Fallback checks
+    if (role.includes('supervisor') || role.includes('manager')) {
+      return "SupervisorDashboard";
+    }
+    if (role.includes('operator') || role.includes('employee') || role.includes('staff')) {
+      return "OperatorDashboard";
+    }
+
+    return "CompanyDashboard";
   };
 
   return (
@@ -233,12 +257,31 @@ function AppStack({ user, setUser }: any) {
       </Stack.Screen>
 
       <Stack.Screen
-        name="SupervisorDashboard"
-        // Use children to pass props
+        name="ManagerDashboard"
         children={(props) => (
           <SupervisorDashboard
-            {...props}      // pass navigation & route props
-            user={user}     // your state from App.tsx
+            {...props}
+            user={user}
+            setUser={setUser} />
+        )}
+      />
+
+      <Stack.Screen
+        name="SupervisorDashboard"
+        children={(props) => (
+          <SupervisorDashboard
+            {...props}
+            user={user}
+            setUser={setUser} />
+        )}
+      />
+
+      <Stack.Screen
+        name="EmployeeDashboard"
+        children={(props) => (
+          <OperatorDashboard
+            {...props}
+            user={user}
             setUser={setUser} />
         )}
       />
@@ -246,9 +289,9 @@ function AppStack({ user, setUser }: any) {
       <Stack.Screen name="OperatorDashboard"
         children={(props) => (
           <OperatorDashboard
-            {...props}      // pass navigation & route props
-            user={user}     // your state from App.tsx
-            setUser={setUser} /> // optional: if you need logout functionality
+            {...props}
+            user={user}
+            setUser={setUser} />
         )}
       />
 
@@ -279,6 +322,16 @@ function AppStack({ user, setUser }: any) {
       <Stack.Screen
         name="CustomCategoryBuilder"
         component={CustomCategoryBuilder}
+      />
+
+      <Stack.Screen
+        name="ManageRoles"
+        component={ManageRolesScreen}
+      />
+
+      <Stack.Screen
+        name="ConfigureWorkflows"
+        component={ConfigureWorkflowsScreen}
       />
 
       {/* ===== ASSET SCREENS ===== */}

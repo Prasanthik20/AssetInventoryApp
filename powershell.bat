@@ -1,2 +1,2 @@
 @echo off
-az webapp config appsettings list --name asq-asset-api --resource-group asquaretechrg
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe %*

@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const queryId = urlObj.searchParams.get('id');
     const pathSegment = req.query.id as string;
 
-    const isRoleInPath = ['admin', 'supervisor', 'operator'].includes(pathSegment?.toLowerCase());
+    const isRoleInPath = ['admin', 'supervisor', 'operator', 'tenant admin', 'tenantadmin'].includes(pathSegment?.toLowerCase());
     const role = (req.query.role as string) || (isRoleInPath ? pathSegment.toLowerCase() : null);
     const receiverEmployeeId = queryId || (!isRoleInPath ? pathSegment : null);
 
@@ -50,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // SUPERVISOR MODE → show all notifications
     // no extra condition
 console.log(role)
-    if (role === "admin") {
+    if (role === "admin" || role === "tenant admin" || role === "tenantadmin") {
       // Admin global feed: show all notifications
       sqlQuery = `
         SELECT

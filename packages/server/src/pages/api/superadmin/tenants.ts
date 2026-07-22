@@ -42,8 +42,18 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         LEFT JOIN LATERAL (
           SELECT u."fullName", u.email, u."phoneNumber", u.address
           FROM "Users" u
-          JOIN "Roles" r ON u."roleId" = r."roleId"
-          WHERE u."tenantId" = t.id AND (r."roleName" = 'Admin' OR r."roleName" = 'Super Admin' OR r."roleName" = 'superadmin' OR r."roleName" = 'admin' OR r."roleName" = 'Tenant Admin' OR r."roleName" = 'tenant admin')
+          LEFT JOIN "Roles" r ON u."roleId" = r."roleId"
+          WHERE u."tenantId" = t.id AND (
+            u."isPrimaryContact" = TRUE OR
+            (r."roleName" IS NOT NULL AND (
+              LOWER(r."roleName") IN ('admin', 'super admin', 'superadmin', 'tenant admin', 'tenantadmin')
+              OR EXISTS (
+                SELECT 1 FROM "Role_Permissions" rp
+                JOIN "Permissions" p ON rp."permissionId" = p.id
+                WHERE rp."roleId" = u."roleId" AND p.code IN ('MANAGE_USERS', 'MANAGE_WORKFLOWS')
+              )
+            ))
+          )
           ORDER BY u."userId" ASC
           LIMIT 1
         ) admin ON TRUE
