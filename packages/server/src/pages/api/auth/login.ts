@@ -43,6 +43,7 @@ export default async function loginCoreHandler(
         u."photoURL",
         u."tenantId" AS "tenantId",
         u."status",
+        u."roleId",
         r."roleName"
       FROM 
         "Users" u
@@ -73,6 +74,16 @@ export default async function loginCoreHandler(
       res.status(401).json({ message: 'Invalid credentials.' });
       return;
     }
+
+    // Fetch user permissions dynamically
+    const permissionsResult = await query(
+      `SELECT p.code 
+       FROM "Role_Permissions" rp
+       INNER JOIN "Permissions" p ON rp."permissionId" = p.id
+       WHERE rp."roleId" = $1`,
+      [user.roleId]
+    );
+    const permissions = permissionsResult.rows.map((row: any) => row.code);
 
     let subscriptionExpired = false;
     let subscriptionStatus = 'active';
@@ -121,6 +132,7 @@ export default async function loginCoreHandler(
       token,
       user: {
         ...user,
+        permissions,
         subscriptionExpired,
         subscriptionStatus
       },

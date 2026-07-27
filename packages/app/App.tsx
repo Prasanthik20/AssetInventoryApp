@@ -4,7 +4,9 @@ import { NavigationContainer } from "@react-navigation/native";
 import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import "./src/config/api"; // Initializes global Axios interceptors
+import { useNotificationListener } from "./src/hooks/useNotificationListener";
 
 import { RootStackParamList } from "./src/navigation/types";
 
@@ -21,6 +23,9 @@ import CompanyUsersScreen from "./src/screens/CommonScreen/CompanyUsersScreen";
 import ReportsScreen from "./src/screens/CommonScreen/ReportsScreen";
 import AddCompanyUser from "./src/screens/Admin/AddCompanyUser";
 import CustomCategoryBuilder from "./src/screens/Admin/CustomCategoryBuilder";
+import BillingScreen from "./src/screens/CommonScreen/BillingScreen";
+import ManageRolesScreen from "./src/screens/Admin/ManageRolesScreen";
+import ConfigureWorkflowsScreen from "./src/screens/Admin/ConfigureWorkflowsScreen";
 
 // Supervisor
 import SupervisorDashboard from "./src/screens/Supervisor/SupervisorDashboard";
@@ -81,20 +86,20 @@ function App(): React.JSX.Element {
   // Set browser tab title for web and prevent navigation from changing it
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      document.title = 'ASQ - NSCLLP Asset Management';
-      
+      document.title = 'ASQ - Asset Management';
+
       // Monitor for title changes and reset if needed
       const observer = new MutationObserver(() => {
-        if (document.title !== 'ASQ - NSCLLP Asset Management') {
-          document.title = 'ASQ - NSCLLP Asset Management';
+        if (document.title !== 'ASQ - Asset Management') {
+          document.title = 'ASQ - Asset Management';
         }
       });
-      
+
       observer.observe(document.head, {
         childList: true,
         subtree: true,
       });
-      
+
       return () => observer.disconnect();
     }
   }, []);
@@ -124,18 +129,23 @@ function App(): React.JSX.Element {
         CompanyUsersScreen: 'company-users',
         AddCompanyUser: 'add-company-user',
         CustomCategoryBuilder: 'categories/custom',
+        ManagerDashboard: 'manager',
         SupervisorDashboard: 'supervisor',
+        EmployeeDashboard: 'employee',
         OperatorDashboard: 'operator',
         SuperAdminLogin: 'superadmin/login',
         SuperAdminDashboard: 'superadmin/dashboard',
-        TotalAssetDetails: 'assets/total',
-        OfficeAssets: 'assets/office',
-        FieldAssets: 'assets/field',
-        AddEditAsset: 'assets/edit',
+        TotalAssetDetails: 'inventory/total',
+        OfficeAssets: 'inventory/office',
+        FieldAssets: 'inventory/field',
+        AddEditAsset: 'inventory/edit',
         AssignAsset: 'assign',
         Reports: 'reports',
-        AssetFullDetails: 'assets/:asset',
+        Billing: 'billing',
+        AssetFullDetails: 'inventory/:asset',
         ReturnAsset: 'return',
+        ManageRoles: 'roles/manage',
+        ConfigureWorkflows: 'workflows/configure',
         ForgotPassword: 'forgot-password',
         ResetPassword: 'reset-password',
       },
@@ -154,18 +164,20 @@ function App(): React.JSX.Element {
   const onNavigationStateChange = () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       setTimeout(() => {
-        document.title = 'ASQ - NSCLLP Asset Management';
+        document.title = 'ASQ - Asset Management';
       }, 0);
     }
   };
 
   return (
-    <NavigationContainer
-      linking={linking}
-      onStateChange={onNavigationStateChange}
-    >
-      {user ? <AppStack user={user} setUser={setUser} /> : <AuthStack setUser={setUser} />}
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer
+        linking={linking}
+        onStateChange={onNavigationStateChange}
+      >
+        {user ? <AppStack user={user} setUser={setUser} /> : <AuthStack setUser={setUser} />}
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 
@@ -194,20 +206,40 @@ function AuthStack({ setUser }: any) {
 /* ================= APP STACK ================= */
 
 function AppStack({ user, setUser }: any) {
+  useNotificationListener(user);
+
   const getInitialRoute = () => {
-    switch (user.roleName) {
-      case "Admin":
-        return "CompanyDashboard";
-      case "Supervisor":
-        return "SupervisorDashboard";
-      case "Operator":
-        return "OperatorDashboard";
-      case "SuperAdmin":
-      case "Super Admin":
-        return "SuperAdminDashboard";
-      default:
-        return "CompanyDashboard";
+    const role = String(user?.roleName || '').toLowerCase();
+    if (role.includes('superadmin') || role.includes('super admin')) {
+      return "SuperAdminDashboard";
     }
+
+    const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+    if (permissions.length > 0) {
+      const isOperator = permissions.includes('INITIATE_RETURN') || permissions.includes('VIEW_DASHBOARD');
+      const isSupervisor = permissions.includes('ASSIGN_ASSETS') || permissions.includes('CONFIRM_RETURN');
+      const isAdmin = permissions.includes('MANAGE_USERS') || permissions.includes('MANAGE_WORKFLOWS');
+
+      if (isAdmin) {
+        return "CompanyDashboard";
+      }
+      if (isSupervisor) {
+        return "SupervisorDashboard";
+      }
+      if (isOperator) {
+        return "OperatorDashboard";
+      }
+    }
+
+    // Fallback checks
+    if (role.includes('supervisor') || role.includes('manager')) {
+      return "SupervisorDashboard";
+    }
+    if (role.includes('operator') || role.includes('employee') || role.includes('staff')) {
+      return "OperatorDashboard";
+    }
+
+    return "CompanyDashboard";
   };
 
   return (
@@ -225,23 +257,42 @@ function AppStack({ user, setUser }: any) {
       </Stack.Screen>
 
       <Stack.Screen
-        name="SupervisorDashboard"
-        // Use children to pass props
+        name="ManagerDashboard"
         children={(props) => (
           <SupervisorDashboard
-            {...props}      // pass navigation & route props
-            user={user}     // your state from App.tsx
-            setUser={setUser}  />
-  )}
+            {...props}
+            user={user}
+            setUser={setUser} />
+        )}
+      />
+
+      <Stack.Screen
+        name="SupervisorDashboard"
+        children={(props) => (
+          <SupervisorDashboard
+            {...props}
+            user={user}
+            setUser={setUser} />
+        )}
+      />
+
+      <Stack.Screen
+        name="EmployeeDashboard"
+        children={(props) => (
+          <OperatorDashboard
+            {...props}
+            user={user}
+            setUser={setUser} />
+        )}
       />
 
       <Stack.Screen name="OperatorDashboard"
-      children={(props) => (
+        children={(props) => (
           <OperatorDashboard
-            {...props}      // pass navigation & route props
-            user={user}     // your state from App.tsx
-            setUser={setUser}  /> // optional: if you need logout functionality
-      )}
+            {...props}
+            user={user}
+            setUser={setUser} />
+        )}
       />
 
       <Stack.Screen name="SuperAdminDashboard">
@@ -273,7 +324,17 @@ function AppStack({ user, setUser }: any) {
         component={CustomCategoryBuilder}
       />
 
-     {/* ===== ASSET SCREENS ===== */}
+      <Stack.Screen
+        name="ManageRoles"
+        component={ManageRolesScreen}
+      />
+
+      <Stack.Screen
+        name="ConfigureWorkflows"
+        component={ConfigureWorkflowsScreen}
+      />
+
+      {/* ===== ASSET SCREENS ===== */}
       <Stack.Screen
         name="TotalAssetDetails"
         component={TotalAssetDetails}
@@ -312,6 +373,10 @@ function AppStack({ user, setUser }: any) {
       <Stack.Screen
         name="Reports"
         component={ReportsScreen}
+      />
+      <Stack.Screen
+        name="Billing"
+        component={BillingScreen}
       />
     </Stack.Navigator>
   );

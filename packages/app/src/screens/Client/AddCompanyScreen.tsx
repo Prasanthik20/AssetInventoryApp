@@ -6,21 +6,26 @@ import {
   TouchableOpacity,
   ImageBackground,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Platform,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  useWindowDimensions,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import AppSnackbar from '../../components/common/AppSnackbar';
 import { baseURL, RootStackParamList } from "../../navigation/types";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function AddCompanyScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [loading, setLoading] = useState(false);
+  const { width } = useWindowDimensions();
+  const isMobileLayout = Platform.OS !== 'web' || width < 768;
 
   // Organization Details
   const [orgName, setOrgName] = useState("");
@@ -131,81 +136,100 @@ export default function AddCompanyScreen() {
       resizeMode="cover"
       blurRadius={10}
     >
-      <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-          <View style={styles.formCard}>
-            <Text style={styles.header}>🏢 SaaS Organization Registration</Text>
-            
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Organization Details</Text>
-              <View style={styles.divider} />
-            </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, width: '100%' }}
+          >
+            <ScrollView
+              contentContainerStyle={styles.scrollContainer}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={[styles.formCard, isMobileLayout && { width: "100%" }]}>
+                <Text style={styles.header}>🏢 SaaS Organization Registration</Text>
 
-            <View style={styles.row}>
-              <Input label="Organization Name *" value={orgName} onChange={setOrgName} placeholder="Enter org name" />
-              <Input label="Organization Type" value={orgType} onChange={setOrgType} placeholder="e.g. Hospital, Corporate" />
-            </View>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Organization Details</Text>
+                  <View style={styles.divider} />
+                </View>
 
-            <View style={styles.row}>
-              <Input label="Institution ID (Opt)" value={institutionId} onChange={setInstitutionId} placeholder="Enter ID" />
-              <Input label="GST Number (Opt)" value={gstNumber} onChange={setGstNumber} placeholder="Enter GST" />
-            </View>
+                <View style={[styles.row, isMobileLayout && { flexDirection: 'column' }]}>
+                  <Input label="Organization Name *" value={orgName} onChange={setOrgName} placeholder="Enter org name" isMobileLayout={isMobileLayout} />
+                  <Input label="Organization Type" value={orgType} onChange={setOrgType} placeholder="e.g. Hospital, Corporate" isMobileLayout={isMobileLayout} />
+                </View>
 
-            <Input label="Address" value={address} onChange={setAddress} placeholder="Enter full address" multiline />
+                <View style={[styles.row, isMobileLayout && { flexDirection: 'column' }]}>
+                  <Input label="Institution ID (Opt)" value={institutionId} onChange={setInstitutionId} placeholder="Enter ID" isMobileLayout={isMobileLayout} />
+                  <Input label="GST Number (Opt)" value={gstNumber} onChange={setGstNumber} placeholder="Enter GST" isMobileLayout={isMobileLayout} />
+                </View>
 
-            <View style={styles.row}>
-              <Input label="Country" value={country} onChange={setCountry} placeholder="India" />
-              <Input label="State" value={state} onChange={setState} placeholder="Enter state" />
-            </View>
+                <Input label="Address" value={address} onChange={setAddress} placeholder="Enter full address" multiline isMobileLayout={isMobileLayout} />
 
-            <View style={styles.row}>
-              <Input label="City" value={city} onChange={setCity} placeholder="Enter city" />
-              <Input label="Postal Code" value={postalCode} onChange={setPostalCode} placeholder="Enter code" keyboardType="numeric" />
-            </View>
+                <View style={[styles.row, isMobileLayout && { flexDirection: 'column' }]}>
+                  <Input label="Country" value={country} onChange={setCountry} placeholder="India" isMobileLayout={isMobileLayout} />
+                  <Input label="State" value={state} onChange={setState} placeholder="Enter state" isMobileLayout={isMobileLayout} />
+                </View>
 
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Primary Admin User</Text>
-              <View style={styles.divider} />
-            </View>
+                <View style={[styles.row, isMobileLayout && { flexDirection: 'column' }]}>
+                  <Input label="City" value={city} onChange={setCity} placeholder="Enter city" isMobileLayout={isMobileLayout} />
+                  <Input label="Postal Code" value={postalCode} onChange={setPostalCode} placeholder="Enter code" keyboardType="numeric" isMobileLayout={isMobileLayout} />
+                </View>
 
-            <View style={styles.row}>
-              <Input label="Full Name *" value={fullName} onChange={setFullName} placeholder="Enter full name" />
-              <Input label="Designation" value={designation} onChange={setDesignation} placeholder="e.g. IT Manager" />
-            </View>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Primary Admin User</Text>
+                  <View style={styles.divider} />
+                </View>
 
-            <View style={styles.row}>
-              <Input label="Email Address *" value={email} onChange={setEmail} placeholder="admin@org.com" keyboardType="email-address" />
-              <Input label="Mobile Number" value={mobileNumber} onChange={setMobileNumber} placeholder="Enter mobile" keyboardType="phone-pad" />
-            </View>
+                <View style={[styles.row, isMobileLayout && { flexDirection: 'column' }]}>
+                  <Input label="Full Name *" value={fullName} onChange={setFullName} placeholder="Enter full name" isMobileLayout={isMobileLayout} />
+                  <Input label="Designation" value={designation} onChange={setDesignation} placeholder="e.g. IT Manager" isMobileLayout={isMobileLayout} />
+                </View>
 
-            <View style={styles.row}>
-              <Input label="Password *" value={password} onChange={setPassword} placeholder="••••••••" secureTextEntry />
-              <Input label="Confirm Password *" value={confirmPassword} onChange={setConfirmPassword} placeholder="••••••••" secureTextEntry />
-            </View>
+                <View style={[styles.row, isMobileLayout && { flexDirection: 'column' }]}>
+                  <Input label="Email Address *" value={email} onChange={setEmail} placeholder="admin@org.com" keyboardType="email-address" isMobileLayout={isMobileLayout} />
+                  <Input label="Mobile Number" value={mobileNumber} onChange={setMobileNumber} placeholder="Enter mobile" keyboardType="phone-pad" isMobileLayout={isMobileLayout} />
+                </View>
 
-            <View style={styles.buttonRow}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.createButton}
-                onPress={handleRegister}
-                disabled={loading}
-              >
-                <LinearGradient
-                  colors={["#00c6ff", "#0072ff"]}
-                  style={styles.createGradient}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.createText}>REGISTER & ACTIVATE TRIAL</Text>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
+                <View style={[styles.row, isMobileLayout && { flexDirection: 'column' }]}>
+                  <Input label="Password *" value={password} onChange={setPassword} placeholder="••••••••" secureTextEntry isMobileLayout={isMobileLayout} />
+                  <Input label="Confirm Password *" value={confirmPassword} onChange={setConfirmPassword} placeholder="••••••••" secureTextEntry isMobileLayout={isMobileLayout} />
+                </View>
+
+                <View style={[styles.buttonRow, isMobileLayout && { flexDirection: 'column' }]}>
+                  <TouchableOpacity
+                    style={[styles.createButton, isMobileLayout && { width: '100%' }]}
+                    onPress={handleRegister}
+                    disabled={loading}
+                  >
+                    <LinearGradient
+                      colors={["#0EA5E9", "#0F766E"]}
+                      style={styles.createGradient}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.createText}>REGISTER & ACTIVATE TRIAL</Text>
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('CompanyLogin')}
+                    style={[styles.cancelButton, isMobileLayout && { width: '100%' }]}
+                  >
+                    <LinearGradient
+                      colors={["#235972ff", "#3aaca2ff"]}
+                      style={styles.createGradient}
+                    >
+                      <Text style={styles.cancelText}>Cancel</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
       <AppSnackbar
         visible={snackbar.visible}
@@ -218,8 +242,8 @@ export default function AddCompanyScreen() {
   );
 }
 
-const Input = ({ label, value, onChange, placeholder, ...props }: any) => (
-  <View style={styles.inputContainer}>
+const Input = ({ label, value, onChange, placeholder, isMobileLayout, ...props }: any) => (
+  <View style={[styles.inputContainer, !isMobileLayout ? { flex: 1 } : { width: '100%', marginHorizontal: 0 }]}>
     <Text style={styles.label}>{label}</Text>
     <TextInput
       style={styles.input}
@@ -234,7 +258,13 @@ const Input = ({ label, value, onChange, placeholder, ...props }: any) => (
 
 const styles = StyleSheet.create({
   backgroundImage: { flex: 1, width: '100%', height: '100%' },
-  container: { flex: 1 },
+  safeArea: { flex: 1, backgroundColor: '#071425' },
+  container: {
+    flex: 1,
+    backgroundColor: 'rgba(7, 24, 42, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
+  },
   scrollContainer: { padding: 20, alignItems: "center" },
   formCard: {
     width: Platform.OS === 'web' ? "80%" : "100%",
@@ -271,7 +301,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   inputContainer: {
-    flex: 1,
     marginHorizontal: 5,
     marginVertical: 10,
   },
@@ -288,17 +317,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
   },
-  buttonRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 30,
+    buttonRow: {
+    flexDirection: Platform.OS === "web" ? "row" : "column",
+    justifyContent: Platform.OS === "web" ? "space-between" : "flex-end",
+    marginTop: 10,
     gap: 15,
   },
   cancelButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 10,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    borderRadius: 15,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   cancelText: {
     color: "#fff",
@@ -307,11 +337,15 @@ const styles = StyleSheet.create({
   createButton: {
     borderRadius: 10,
     overflow: "hidden",
-    minWidth: 200,
+    minWidth: 100,
+  },
+  backButton: {
+    padding: 5,
   },
   createGradient: {
     paddingVertical: 14,
     paddingHorizontal: 25,
+    borderRadius: 15,
     alignItems: "center",
   },
   createText: {

@@ -23,6 +23,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
   try {
     const sqlQuery = `
       SELECT u.*, r."roleName",
+             COALESCE(
+               (
+                 SELECT json_agg(p.code)
+                 FROM "Role_Permissions" rp
+                 JOIN "Permissions" p ON rp."permissionId" = p.id
+                 WHERE rp."roleId" = u."roleId"
+               ),
+               '[]'::json
+             ) AS permissions,
              json_agg(
                json_build_object(
                  'id', a.id,
@@ -34,6 +43,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
       LEFT JOIN "Roles" AS r ON u."roleId" = r."roleId"
       LEFT JOIN "Asset_Details" AS a ON a."assigned_to" = u."employeeId"
       WHERE u."tenantId" = $1
+        AND (r."roleName" IS NULL OR LOWER(r."roleName") NOT IN ('super admin', 'superadmin'))
       GROUP BY u."userId", r."roleName"
       ORDER BY u."userId" ASC;
     `;
@@ -49,7 +59,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
       address: user.address || null,
       photoURL: user.photoURL || null,
       role: {
-        roleName: user.roleName || 'Unassigned'
+        roleName: user.roleName || 'Unassigned',
+        permissions: user.permissions || []
       },
       assignedAssets: user.assignedassets || [],
     }));

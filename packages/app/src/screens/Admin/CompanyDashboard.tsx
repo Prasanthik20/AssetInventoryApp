@@ -3,13 +3,14 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   Image,
   ImageBackground,
   Platform,
   ScrollView,
   useWindowDimensions,
+  Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
@@ -19,6 +20,14 @@ import { baseURL, RootStackParamList } from '../../navigation/types';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dashboardStyles } from './dashboard.styles';
+import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
+import { SubscriptionLimitBar } from '../../components/dashboard/SubscriptionLimitBar';
+import { StatMetricCard } from '../../components/dashboard/StatMetricCard';
+import { AssetDistributionWidget } from '../../components/dashboard/AssetDistributionWidget';
+import { AssetHealthWidget } from '../../components/dashboard/AssetHealthWidget';
+import { ActivityFeedWidget } from '../../components/dashboard/ActivityFeedWidget';
+import { QuickActionsPanel } from '../../components/dashboard/QuickActionsPanel';
+import { OfficeFieldWidget } from '../../components/dashboard/OfficeFieldWidget';
 
 interface LocationStat {
   location: string;
@@ -137,9 +146,13 @@ const CompanyDashboard: React.FC<Props> = ({
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [depreciatingAssetsCount, setDepreciatingAssetsCount] = useState<number>(0);
+  const [depreciatingAssets, setDepreciatingAssets] = useState<any[]>([]);
+  const [isDepreciationModalVisible, setIsDepreciationModalVisible] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [totalCategories, setTotalCategories] = useState<number>(0);
   const [subscription, setSubscription] = useState<any>(null);
+  const [isSubscriptionExpired, setIsSubscriptionExpired] = useState<boolean>(false);
 
   const fetchUsers = async () => {
     try {
@@ -198,8 +211,23 @@ const CompanyDashboard: React.FC<Props> = ({
       setUnderMaintenanceAssets(data.underMaintenanceAssets);
       setFieldLocationStats(data.fieldLocationStats || []);
       setTotalCategories(data.totalCategories || 0);
-      setSubscription(data.subscription || null);
-      
+      setDepreciatingAssetsCount(data.depreciatingAssetsCount || 0);
+      setDepreciatingAssets(data.depreciatingAssets || []);
+
+      const sub = data.subscription || null;
+      setSubscription(sub);
+
+      if (sub && sub.endDate) {
+        const endDate = new Date(sub.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        const isExpired = new Date() > endDate;
+        setIsSubscriptionExpired(isExpired);
+        AsyncStorage.setItem('isSubscriptionExpired', JSON.stringify(isExpired));
+      } else {
+        setIsSubscriptionExpired(false);
+        AsyncStorage.setItem('isSubscriptionExpired', JSON.stringify(false));
+      }
+
     } catch (error: any) {
       console.log('Dashboard API Error:', error.response?.data || error.message);
     } finally {
@@ -245,7 +273,7 @@ const CompanyDashboard: React.FC<Props> = ({
   const hideNotification = async (id: number) => {
     try {
       const token = await AsyncStorage.getItem('token');
-      await axios.put(`${baseURL}/api/notifications/hide`, 
+      await axios.put(`${baseURL}/api/notifications/hide`,
         { id },
         {
           headers: {
@@ -283,7 +311,7 @@ const CompanyDashboard: React.FC<Props> = ({
 
     try {
       const token = await AsyncStorage.getItem('token');
-      await axios.post(`${baseURL}/api/assets/confirm-return`, 
+      await axios.post(`${baseURL}/api/assets/confirm-return`,
         {
           notificationId,
           ...(hasAssignmentId ? { assignmentId } : { assetId }),
@@ -300,6 +328,34 @@ const CompanyDashboard: React.FC<Props> = ({
       await fetchDashboardData();
     } catch (error) {
       console.error('Admin confirm return error:', error);
+    }
+  };
+
+  const handleWorkflowAction = async (item: any, action: 'approve' | 'reject') => {
+    try {
+      const parsed = JSON.parse(item.reply || '{}');
+      const requestId = Number(parsed.requestId);
+      const token = await AsyncStorage.getItem('token');
+
+      await axios.post(
+        `${baseURL}/api/approvals/action`,
+        {
+          requestId,
+          action,
+          notes: action === 'approve' ? 'Approved via Admin Dashboard' : 'Rejected via Admin Dashboard'
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      setNotifications((prev) => prev.filter((n) => n.id !== item.id));
+      await fetchGlobalNotifications();
+      await fetchDashboardData();
+    } catch (error: any) {
+      console.error('Admin workflow action error:', error?.response?.data || error);
     }
   };
 
@@ -331,12 +387,15 @@ const CompanyDashboard: React.FC<Props> = ({
       source={require('../../assets/Company-bg.webp')}
       style={styles.backgroundImage}
       resizeMode="cover"
-      blurRadius={5}
     >
       <SafeAreaView style={styles.safeArea}>
+        <DashboardHeader
+          companyName={user?.companyName || user?.fullName || 'ASQ - Asset Management'}
+          userName={user?.fullName || 'Admin'}
+          userRole="Tenant Admin"
+          onLogout={handleLogout}
+        />
         <View style={styles.container}>
-
-          {/* Main Content Area */}
           <ScrollView
             style={styles.mainScroll}
             contentContainerStyle={styles.scrollContent}
@@ -348,520 +407,309 @@ const CompanyDashboard: React.FC<Props> = ({
                 isMobileLayout && styles.mobilePadding,
               ]}
             >
-              {/* Mobile Header */}
-              {isMobileLayout && (
-                <View style={styles.mobileHeaderCard}>
-                  <View style={styles.mobileUserRow}>
-                    <Image
-                      source={{
-                        uri:
-                          user?.photoURL || 'https://i.imgur.com/6VBx3io.png',
-                      }}
-                      style={styles.mobileAvatar}
-                    />
-                    <View>
-                      <Text style={styles.mobileAdminName}>
-                        {user?.fullName}
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity onPress={handleLogout}>
-                    <SafeFeatherIcon name="log-out" size={24} color="#FF4D4D" />
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* System Overview Header */}
-              <View style={styles.header}>
-                <Text style={styles.headerTitle}>Analytics</Text>
-                {!isMobileLayout && (
-                  <View style={styles.headerRight}>
-                    <SafeIonicons name="person-outline" size={16} color="#A9C6E4" />
-                    <Text style={styles.userText}>{user?.fullName}</Text>
-                    <TouchableOpacity onPress={handleLogout}>
-                      <SafeFeatherIcon name="log-out" size={24} color="#FF4D4D" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-
-              {/* 🛡️ SUBSCRIPTION USAGE WIDGET */}
-              {subscription && (
-                <View style={[styles.metricBox, { width: '100%', marginBottom: 16, padding: 16, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1 }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E3A8A' }}>
-                      {subscription.plan} Plan - {subscription.status.toUpperCase()}
-                    </Text>
-                    <Text style={{ fontSize: 14, color: '#3B82F6' }}>
-                      Renews: {new Date(subscription.endDate).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  
-                  {/* Users Progress Bar */}
-                  <View style={{ marginBottom: 10 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 12, color: '#475569' }}>User Limits</Text>
-                      <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '600' }}>{totalUsers} / {subscription.maxUsers === 999999 ? 'Unlimited' : subscription.maxUsers}</Text>
-                    </View>
-                    <View style={{ height: 6, backgroundColor: '#DBEAFE', borderRadius: 3, overflow: 'hidden' }}>
-                      <View style={{ height: '100%', width: `${subscription.userUsagePercent}%`, backgroundColor: subscription.userUsagePercent > 80 ? '#EF4444' : '#3B82F6' }} />
-                    </View>
-                  </View>
-
-                  {/* Assets Progress Bar */}
-                  <View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 12, color: '#475569' }}>Asset Limits</Text>
-                      <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '600' }}>{totalAssets} / {subscription.maxAssets === 999999 ? 'Unlimited' : subscription.maxAssets}</Text>
-                    </View>
-                    <View style={{ height: 6, backgroundColor: '#DBEAFE', borderRadius: 3, overflow: 'hidden' }}>
-                      <View style={{ height: '100%', width: `${subscription.assetUsagePercent}%`, backgroundColor: subscription.assetUsagePercent > 80 ? '#EF4444' : '#10B981' }} />
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {/* Metrics Grid - 4 in a row on Web */}
-              <View style={styles.metricsGrid}>
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    style={styles.metricRow}
-                    onPress={() => navigation.navigate('TotalAssetDetails')}
-                  >
-                    <SafeIonicons
-                      name="settings-outline"
-                      size={24}
-                      color="#34D399"
-                    />
-                    <Text style={styles.metricLabel}>Total Assets</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.metricValue}>{totalAssets ?? 0}</Text>
-                </View>
-
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    style={styles.metricRow}
-                    onPress={() => navigation.navigate('CompanyUsersScreen')}
-                  >
-                    <SafeIonicons name="people-outline" size={24} color="#38BDF8" />
-                    <Text style={styles.metricLabel}>Total Users</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.metricValue}>{totalUsers ?? 0}</Text>
-                </View>
-
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    style={styles.metricRow}
-                    activeOpacity={0.8}
-                    onPress={() => navigation.navigate('CustomCategoryBuilder')}
-                  >
-                    <SafeIonicons name="folder-open-outline" size={24} color="#8B5CF6" />
-                    <Text style={styles.metricLabel}>Total Categories</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.metricValue}>{totalCategories}</Text>
-                </View>
-
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    style={styles.metricRow}
-                    onPress={() => navigation.navigate('OfficeAssets')}
-                  >
-                    <SafeIonicons
-                      name="business-outline"
-                      size={24}
-                      color="#F59E0B"
-                    />
-                    <Text style={styles.metricLabel}>Office Assets</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.metricValue}>{officeAssets ?? 0}</Text>
-                </View>
-
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    style={[styles.metricRow, styles.fieldMetricBox]}
-                    onPress={() => navigation.navigate('FieldAssets')}
-                  >
-                    <SafeIonicons name="map-outline" size={24} color="#22D3EE" />
-                    <Text style={styles.metricValue}>{fieldAssets ?? 0}</Text>
-                    <Text style={styles.metricLabel}>Field Assets</Text>
-                  </TouchableOpacity>
-                  <View style={styles.fieldLocationGrid}>
-                    {fieldLocationStats.length === 0 ? (
-                      <Text style={styles.fieldLocationEmpty}>
-                        No location data
-                      </Text>
-                    ) : (
-                      fieldLocationStats.slice(0, 4).map(item => (
-                        <View
-                          key={item.location}
-                          style={styles.fieldLocationCell}
-                        >
-                          <Text
-                            style={styles.fieldLocationName}
-                            numberOfLines={1}
-                          >
-                            {item.location}
-                          </Text>
-                          <Text style={styles.fieldLocationCount}>
-                            {item.count}
-                          </Text>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                </View>
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    style={styles.metricRow}
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      navigation.navigate('TotalAssetDetails', {
-                        statusFilter: 'Unassigned',
-                      })
-                    }
-                  >
-                    <SafeIonicons
-                      name="remove-circle-outline"
-                      size={24}
-                      color="#FB7185"
-                    />
-                    <Text style={styles.metricLabel}>Unassigned Assets</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.metricValue}>{unassignedAssets}</Text>
-                </View>
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    style={styles.metricRow}
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      navigation.navigate('TotalAssetDetails', {
-                        statusFilter: 'Assigned',
-                      })
-                    }
-                  >
-                    <SafeIonicons
-                      name="checkmark-done-outline"
-                      size={24}
-                      color="#34D399"
-                    />
-                    <Text style={styles.metricLabel}>Assigned Assets</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.metricValue}>{assignedAssets}</Text>
-                </View>
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    style={styles.metricRow}
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      navigation.navigate('TotalAssetDetails', {
-                        statusFilter: 'Overdue',
-                      })
-                    }
-                  >
-                    <SafeIonicons
-                      name="alert-circle-outline"
-                      size={24}
-                      color="#F97373"
-                    />
-                    <Text style={styles.metricLabel}>Overdue Assets</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.metricValue}>{overdueAssets}</Text>
-                </View>
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    style={styles.metricRow}
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      navigation.navigate('TotalAssetDetails', {
-                        statusFilter: 'Under Maintenance',
-                      })
-                    }
-                  >
-                    <SafeIonicons name="build-outline" size={24} color="#F59E0B" />
-                    <Text style={styles.metricLabel}>Under Maintenance</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.metricValue}>
-                    {underMaintenanceAssets}
+              {/* Expired Subscription Banner */}
+              {isSubscriptionExpired && (
+                <View style={{ backgroundColor: '#FEE2E2', borderColor: '#EF4444', borderWidth: 1, padding: 14, borderRadius: 8, marginBottom: 16 }}>
+                  <Text style={{ color: '#B91C1C', fontWeight: 'bold', fontSize: 14 }}>
+                    Your subscription has expired. You have view-only access.
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Billing')}
+                    style={{
+                      marginTop: 10,
+                      backgroundColor: '#B91C1C',
+                      borderRadius: 6,
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 12 }}>
+                      Renew / Upgrade Now
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* 1. Subscription & Limit Bar */}
+              <SubscriptionLimitBar
+                planName={subscription?.planName || subscription?.plan || 'Free Trial Plan'}
+                status={subscription?.status || 'ACTIVE'}
+                renewDate={subscription?.endDate ? new Date(subscription.endDate).toLocaleDateString() : '13/06/2026'}
+                usedUsers={totalUsers || 0}
+                maxUsers={subscription?.maxUsers || 5}
+                usedAssets={totalAssets || 0}
+                maxAssets={subscription?.maxAssets || 100}
+              />
+
+              {/* 2. Top Metrics Grid (4 Stat Cards + Quick Action Card) */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                <View style={{ flex: 1, minWidth: 180 }}>
+                  <StatMetricCard
+                    title="TOTAL ASSETS"
+                    count={totalAssets ?? 0}
+                    iconName="hardware-chip-outline"
+                    accentColor="#22D3EE"
+                    onPress={() => navigation.navigate('TotalAssetDetails')}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 180 }}>
+                  <StatMetricCard
+                    title="DEPRECIATING ASSETS"
+                    count={depreciatingAssetsCount ?? 0}
+                    iconName="trending-down-outline"
+                    accentColor="#EAB308"
+                    onPress={() => setIsDepreciationModalVisible(true)}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 180 }}>
+                  <StatMetricCard
+                    title="TOTAL USERS"
+                    count={totalUsers ?? 0}
+                    iconName="people-outline"
+                    accentColor="#38BDF8"
+                    onPress={() => navigation.navigate('CompanyUsersScreen')}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 180 }}>
+                  <StatMetricCard
+                    title="TOTAL CATEGORIES"
+                    count={totalCategories ?? 0}
+                    iconName="folder-open-outline"
+                    accentColor="#8B5CF6"
+                    onPress={() => navigation.navigate('CustomCategoryBuilder')}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 180 }}>
+                  <QuickActionsPanel
+                    title="QUICK ACTIONS"
+                    actions={[
+                      {
+                        id: 'add_asset',
+                        label: '+ Add New Asset',
+                        iconName: 'add-circle-outline',
+                        variant: 'primary',
+                        onPress: () => navigation.navigate('AddEditAsset'),
+                      },
+                    ]}
+                  />
                 </View>
               </View>
 
-              {/* Bottom Content Row - Side-by-Side on Web */}
-              <View style={styles.bottomRow}>
-                {/* Activity Feed */}
-                <View style={styles.feedContainer}>
-                  <Text style={styles.sectionTitle}>Global Activity Feed</Text>
-                  <View style={styles.notificationFeed}>
-                    {notifications.length > 0 ? (
-                      (() => {
-                        // Group notifications by sender
-                        const groupedNotifications = notifications.reduce(
-                          (acc, item) => {
-                            const senderName = item.sender?.name || 'Unknown';
-                            if (!acc[senderName]) {
-                              acc[senderName] = [];
-                            }
-                            acc[senderName].push(item);
-                            return acc;
-                          },
-                          {} as Record<string, any[]>,
-                        );
-
-                        return Object.keys(groupedNotifications).map(
-                          (senderName, groupIndex) => {
-                            const userNotifications =
-                              groupedNotifications[senderName];
-                            const firstNotif = userNotifications[0];
-                            const isSupervisor = senderName
-                              .toLowerCase()
-                              .includes('supervisor');
-                            const isExpanded = expandedGroups.has(senderName);
-
-                            return (
-                              <View
-                                key={`group-${groupIndex}`}
-                                style={styles.notifGroup}
-                              >
-                                {/* Group Header */}
-                                <TouchableOpacity
-                                  style={styles.groupHeader}
-                                  onPress={() => toggleGroup(senderName)}
-                                  activeOpacity={0.7}
-                                >
-                                  <View style={styles.groupHeaderLeft}>
-                                    <View
-                                      style={[
-                                        styles.groupIndicator,
-                                        {
-                                          backgroundColor: isSupervisor
-                                            ? '#4C51BF'
-                                            : '#38B2AC',
-                                        },
-                                      ]}
-                                    />
-                                    <Text style={styles.groupSenderName}>
-                                      {senderName}
-                                    </Text>
-                                    <View
-                                      style={[
-                                        styles.notifBadge,
-                                        {
-                                          backgroundColor: isSupervisor
-                                            ? '#E9D5FF'
-                                            : '#B2F5EA',
-                                        },
-                                      ]}
-                                    >
-                                      <Text
-                                        style={[
-                                          styles.notifBadgeText,
-                                          {
-                                            color: isSupervisor
-                                              ? '#6B21A8'
-                                              : '#00796B',
-                                          },
-                                        ]}
-                                      >
-                                        {userNotifications.length}
-                                      </Text>
-                                    </View>
-                                  </View>
-                                  <SafeIonicons
-                                    name={
-                                      isExpanded ? 'chevron-up' : 'chevron-down'
-                                    }
-                                    size={20}
-                                    color="#718096"
-                                  />
-                                </TouchableOpacity>
-
-                                {/* Group Notifications */}
-                                {isExpanded && (
-                                  <ScrollView
-                                    style={styles.groupNotificationsScroll}
-                                    contentContainerStyle={styles.groupNotificationsScrollContent}
-                                    nestedScrollEnabled
-                                    showsVerticalScrollIndicator
-                                  >
-                                    {userNotifications.map(
-                                      (item: any, index: number) => {
-                                        const isReturnPending = isReturnPendingNotification(item.reason, item.reply, item.status);
-                                        const displayMessage = parseNotificationMessage(item.reply, item.reason);
-
-                                        return (
-                                        <View
-                                          key={
-                                            item.id || `${groupIndex}-${index}`
-                                          }
-                                          style={styles.notifLine}
-                                        >
-                                          <View style={styles.notifMainContent}>
-                                            <View style={styles.notifHeaderRow}>
-                                              <View style={styles.tagContainer}>
-                                                <Text style={styles.roleTagText}>
-                                                  {item.status}
-                                                </Text>
-                                              </View>
-                                              <Text style={styles.notifTime}>
-                                                {item.createdAt
-                                                  ? new Date(
-                                                      item.createdAt,
-                                                    ).toLocaleDateString('en-GB')
-                                                  : ''}
-                                              </Text>
-                                            </View>
-
-                                            <Text style={styles.assetContext}>
-                                              Asset:{' '}
-                                              <Text
-                                                style={{ fontWeight: 'bold' }}
-                                              >
-                                                {item.asset?.name || 'N/A'}
-                                              </Text>
-                                            </Text>
-
-                                            <Text
-                                              style={styles.notifMessage}
-                                              numberOfLines={2}
-                                            >
-                                              "{displayMessage}"
-                                            </Text>
-
-                                            {item.receiver?.name ? (
-                                              <Text style={styles.tapToHideText}>
-                                                Receiver: {item.receiver.name}
-                                              </Text>
-                                            ) : null}
-
-                                            <View style={styles.notifActionRow}>
-                                              {isReturnPending && (
-                                                <TouchableOpacity
-                                                  style={[styles.inlineActionButton, styles.confirmReturnButton]}
-                                                  onPress={() => handleConfirmReturn(item)}
-                                                  activeOpacity={0.8}
-                                                >
-                                                  <Text style={styles.inlineActionButtonText}>Confirm Return</Text>
-                                                </TouchableOpacity>
-                                              )}
-                                              <TouchableOpacity
-                                                style={styles.inlineActionButton}
-                                                onPress={() => hideNotification(item.id)}
-                                                activeOpacity={0.8}
-                                              >
-                                                <Text style={styles.inlineActionButtonText}>Mark as seen</Text>
-                                              </TouchableOpacity>
-                                            </View>
-                                          </View>
-                                        </View>
-                                      );
-                                      },
-                                    )}
-                                  </ScrollView>
-                                )}
-                              </View>
-                            );
-                          },
-                        );
-                      })()
-                    ) : (
-                      <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>
-                          No activity recorded
-                        </Text>
-                      </View>
-                    )}
-                  </View>
+              {/* 3. Middle Row (Distribution, Office/Field, Health & Quick Actions) */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                <View style={{ flex: 1, minWidth: 220 }}>
+                  <AssetDistributionWidget
+                    assignedCount={assignedAssets}
+                    unassignedCount={unassignedAssets}
+                  />
                 </View>
-
-                {/* Quick Actions */}
-                <View style={styles.actionsContainer}>
-                  <Text style={styles.sectionTitle}>Quick Actions</Text>
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('AddEditAsset')}
-                  >
-                    <LinearGradient
-                      colors={['#1E3A5F', '#162D4A']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.addUserButton}
-                    >
-                      <SafeIonicons name="cube-outline" size={20} color="#fff" />
-                      <Text style={styles.addUserButtonText}>
-                        Add New Asset
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() =>
-                      navigation.navigate('AssignAsset', {
-                        supervisor_employeeId: user?.employeeId || '',
-                        supervisorName: user?.fullName || 'Admin',
-                      })
-                    }
-                  >
-                    <LinearGradient
-                      colors={['#1F4C63', '#1A3D51']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.addUserButton}
-                    >
-                      <SafeIonicons
-                        name="hand-right-outline"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.addUserButtonText}>Assign Asset</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('AddCompanyUser')}
-                  >
-                    <LinearGradient
-                      colors={['#334155', '#1E293B']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.addUserButton}
-                    >
-                      <SafeIonicons
-                        name="person-add-outline"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.addUserButtonText}>Add New User</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() =>
-                      navigation.navigate('Reports', {
-                        employeeId: String(user?.employeeId || ''),
-                        roleName: String(user?.roleName || 'Admin'),
-                      })
-                    }
-                  >
-                    <LinearGradient
-                      colors={['#243B6B', '#1E3157']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.addUserButton}
-                    >
-                      <SafeIonicons
-                        name="document-text-outline"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.addUserButtonText}>View Reports</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                <View style={{ flex: 1, minWidth: 220 }}>
+                  <OfficeFieldWidget
+                    officeCount={officeAssets || 0}
+                    fieldCount={fieldAssets || 0}
+                    onOfficePress={() => navigation.navigate('OfficeAssets')}
+                    onFieldPress={() => navigation.navigate('FieldAssets')}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 220 }}>
+                  <AssetHealthWidget
+                    overdueCount={overdueAssets}
+                    maintenanceCount={underMaintenanceAssets}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 220 }}>
+                  <QuickActionsPanel
+                    title="QUICK ACTIONS"
+                    actions={[
+                      {
+                        id: 'assign_asset',
+                        label: 'Assign Asset',
+                        iconName: 'link-outline',
+                        variant: 'secondary',
+                        onPress: () => navigation.navigate('AssignAsset', {
+                          supervisor_employeeId: String(user?.employeeId || ''),
+                          supervisorName: user?.fullName || '',
+                        }),
+                      },
+                      {
+                        id: 'add_user',
+                        label: 'Add New User',
+                        iconName: 'person-add-outline',
+                        variant: 'secondary',
+                        onPress: () => navigation.navigate('AddCompanyUser'),
+                      },
+                      {
+                        id: 'manage_roles',
+                        label: 'Manage Roles',
+                        iconName: 'shield-checkmark-outline',
+                        variant: 'secondary',
+                        onPress: () => navigation.navigate('ManageRoles'),
+                      },
+                      {
+                        id: 'workflows',
+                        label: 'Approval Workflows',
+                        iconName: 'git-network-outline',
+                        variant: 'secondary',
+                        onPress: () => navigation.navigate('ConfigureWorkflows'),
+                      },
+                      {
+                        id: 'billing',
+                        label: 'Billing & Plans',
+                        iconName: 'card-outline',
+                        variant: 'accent',
+                        onPress: () => navigation.navigate('Billing'),
+                      },
+                      {
+                        id: 'view_reports',
+                        label: 'View Reports',
+                        iconName: 'bar-chart-outline',
+                        variant: 'accent',
+                        onPress: () => navigation.navigate('Reports', {
+                          employeeId: String(user?.employeeId || ''),
+                          roleName: user?.roleName || '',
+                        }),
+                      },
+                    ]}
+                  />
                 </View>
               </View>
+
+              {/* 4. Global Activity Feed */}
+              <ActivityFeedWidget
+                activities={notifications.map((n) => ({
+                  id: n.id,
+                  title: n.reason || 'Notification',
+                  subtitle: n.reply || undefined,
+                  time: n.created_at ? new Date(n.created_at).toLocaleTimeString() : undefined,
+                  rawItem: n,
+                }))}
+                onConfirmReturn={handleConfirmReturn}
+                onWorkflowAction={handleWorkflowAction}
+                onHideNotification={hideNotification}
+              />
             </View>
           </ScrollView>
         </View>
-      </SafeAreaView>
-    </ImageBackground>
+      </SafeAreaView >
+
+      {/* DEPRECIATION DETAILS TABLE MODAL */}
+      < Modal
+        visible={isDepreciationModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsDepreciationModalVisible(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20
+        }}>
+          <View style={{
+            width: isDesktopWeb ? '80%' : '100%',
+            maxHeight: '80%',
+            backgroundColor: '#0F172A',
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: '#334155',
+            padding: 20,
+            overflow: 'hidden'
+          }}>
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 15
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="trending-down" size={24} color="#EAB308" />
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#F8FAFC' }}>
+                  Depreciating Assets (less than 60% Life Remaining)
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsDepreciationModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {depreciatingAssets.length === 0 ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <Text style={{ color: '#94A3B8', fontSize: 15 }}>No assets are currently depreciating under 60% life.</Text>
+              </View>
+            ) : (
+              <ScrollView horizontal={true} showsHorizontalScrollIndicator={true}>
+                <View style={{ minWidth: 600 }}>
+                  {/* Table Header */}
+                  <View style={{
+                    flexDirection: 'row',
+                    backgroundColor: '#1E293B',
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 6,
+                    borderBottomWidth: 1,
+                    borderColor: '#334155'
+                  }}>
+                    <Text style={{ flex: 2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Asset Name</Text>
+                    <Text style={{ flex: 1.5, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Serial #</Text>
+                    <Text style={{ flex: 1, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Purchase Price</Text>
+                    <Text style={{ flex: 1.2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Remaining Life</Text>
+                    <Text style={{ flex: 1.2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Book Value</Text>
+                    <Text style={{ flex: 1.5, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Action Recommendation</Text>
+                  </View>
+
+                  {/* Table Body */}
+                  <ScrollView style={{ maxHeight: 400 }}>
+                    {depreciatingAssets.map((item, index) => (
+                      <View key={item.id || index} style={{
+                        flexDirection: 'row',
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                        borderBottomWidth: 1,
+                        borderColor: 'rgba(51, 65, 85, 0.5)',
+                        alignItems: 'center'
+                      }}>
+                        <Text style={{ flex: 2, color: '#F1F5F9', fontSize: 13, fontWeight: '500' }} numberOfLines={1}>{item.name}</Text>
+                        <Text style={{ flex: 1.5, color: '#CBD5E1', fontSize: 13 }} numberOfLines={1}>{item.serialNo || 'N/A'}</Text>
+                        <Text style={{ flex: 1, color: '#CBD5E1', fontSize: 13 }}>₹{parseFloat(item.price || 0).toLocaleString('en-IN')}</Text>
+                        <Text style={{ flex: 1.2, color: item.percentLifeRemaining < 20 ? '#EF4444' : '#F59E0B', fontSize: 13, fontWeight: 'bold' }}>
+                          {item.percentLifeRemaining}%
+                        </Text>
+                        <Text style={{ flex: 1.2, color: '#10B981', fontSize: 13, fontWeight: '600' }}>
+                          ₹{item.remainingValue.toLocaleString('en-IN')}
+                        </Text>
+                        <View style={{ flex: 1.5 }}>
+                          <View style={{
+                            backgroundColor: item.percentLifeRemaining < 20 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                            borderColor: item.percentLifeRemaining < 20 ? '#EF4444' : '#3B82F6',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            paddingVertical: 4,
+                            paddingHorizontal: 8,
+                            alignSelf: 'flex-start'
+                          }}>
+                            <Text style={{
+                              color: item.percentLifeRemaining < 20 ? '#FCA5A5' : '#93C5FD',
+                              fontSize: 11,
+                              fontWeight: 'bold',
+                              textAlign: 'center'
+                            }}>
+                              {item.percentLifeRemaining < 20 ? 'SEND TO SCRAP' : 'UPGRADE ASSET'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal >
+
+    </ImageBackground >
   );
 };
 

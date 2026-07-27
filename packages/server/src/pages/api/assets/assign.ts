@@ -98,12 +98,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             receiverEmployeeId: number,
             reason: string,
             reply?: string,
+            tenantId?: string | null,
         ): Promise<void> => {
             await query(
                 `INSERT INTO "Notifications"
-                 ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
-                 VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW())`,
-                [assetId, assignmentId, senderEmployeeId, receiverEmployeeId, reason, reply ?? null],
+                 ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
+                 VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW(), $7)`,
+                [assetId, assignmentId, senderEmployeeId, receiverEmployeeId, reason, reply ?? null, tenantId ?? null],
             );
         };
 
@@ -120,18 +121,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
 
         const fetchAdminEmployeeIds = async (): Promise<number[]> => {
-            const result = await query(
+            let result = await query(
                 `SELECT DISTINCT u."employeeId"
                  FROM "Users" u
-                 INNER JOIN "Roles" r ON u."roleId" = r."roleId"
-                 WHERE LOWER(r."roleName") IN ('admin', 'super admin', 'superadmin')`,
+                 INNER JOIN "Role_Permissions" rp ON u."roleId" = rp."roleId"
+                 INNER JOIN "Permissions" p ON rp."permissionId" = p.id
+                 WHERE p.code IN ('MANAGE_USERS', 'MANAGE_WORKFLOWS')`,
                 [],
             );
+
+            if (result.rows.length === 0) {
+                result = await query(
+                    `SELECT DISTINCT u."employeeId"
+                     FROM "Users" u
+                     INNER JOIN "Roles" r ON u."roleId" = r."roleId"
+                     WHERE LOWER(r."roleName") IN ('admin', 'super admin', 'superadmin', 'tenant admin', 'tenantadmin')`,
+                    [],
+                );
+            }
 
             return result.rows
                 .map((row: { employeeId: unknown }) => Number(row.employeeId))
                 .filter((id: number) => Number.isFinite(id));
         };
+
+
 
         const {
             assetIds,
@@ -157,39 +171,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     ? assignedDate.trim()
                     : new Date().toISOString().split('T')[0];
 
-        const resolveEmployeeId = async (incomingId: number, roleLabel: 'assignee' | 'assigner'): Promise<number> => {
-            if (!Number.isFinite(incomingId)) {
-                throw new Error(`Invalid ${roleLabel} id`);
+        const resolveEmployeeId = async (incomingId: number, roleLabel: 'assignee' | 'assigner', expectedTenantId?: string | null): Promise<{ employeeId: number, tenantId: string | null }> => {
+            if (Number.isFinite(incomingId) && incomingId > 0) {
+                // Prefer direct employeeId or userId match within expected tenant first
+                if (expectedTenantId) {
+                    const tenantMatch = await query(
+                        `SELECT "employeeId", "tenantId"
+                         FROM "Users"
+                         WHERE ("employeeId" = $1 OR "userId" = $1) AND "tenantId" = $2
+                         LIMIT 1`,
+                        [incomingId, expectedTenantId],
+                    );
+                    if (tenantMatch.rows.length > 0) {
+                        return {
+                            employeeId: Number(tenantMatch.rows[0].employeeId),
+                            tenantId: tenantMatch.rows[0].tenantId || null
+                        };
+                    }
+                }
+
+                const directEmployeeResult = await query(
+                    `SELECT "employeeId", "tenantId"
+                     FROM "Users"
+                     WHERE "employeeId" = $1 OR "userId" = $1
+                     LIMIT 1`,
+                    [incomingId],
+                );
+
+                if (directEmployeeResult.rows.length > 0) {
+                    return {
+                        employeeId: Number(directEmployeeResult.rows[0].employeeId),
+                        tenantId: directEmployeeResult.rows[0].tenantId || null
+                    };
+                }
             }
 
-            // Prefer direct employeeId match to avoid accidental cross-match with userId.
-            const directEmployeeResult = await query(
-                `SELECT "employeeId"
-                 FROM "Users"
-                 WHERE "employeeId" = $1
-                 LIMIT 1`,
-                [incomingId],
-            );
-
-            const directEmployeeId = Number(directEmployeeResult.rows[0]?.employeeId);
-            if (Number.isFinite(directEmployeeId)) {
-                return directEmployeeId;
+            if (roleLabel === 'assigner') {
+                const fallbackResult = await query(
+                    `SELECT "employeeId", "tenantId"
+                     FROM "Users"
+                     WHERE $1::text IS NULL OR "tenantId" = $1
+                     ORDER BY "employeeId" ASC
+                     LIMIT 1`,
+                    [expectedTenantId ?? null],
+                );
+                if (fallbackResult.rows.length > 0) {
+                    return {
+                        employeeId: Number(fallbackResult.rows[0].employeeId),
+                        tenantId: fallbackResult.rows[0].tenantId || null
+                    };
+                }
             }
 
-            const userIdFallbackResult = await query(
-                `SELECT "employeeId"
-                 FROM "Users"
-                 WHERE "userId" = $1
-                 LIMIT 1`,
-                [incomingId],
-            );
-
-            const resolved = Number(userIdFallbackResult.rows[0]?.employeeId);
-            if (!Number.isFinite(resolved)) {
-                throw new Error(`Unable to resolve ${roleLabel} employee id`);
-            }
-
-            return resolved;
+            throw new Error(`Could not resolve ${roleLabel} with id ${incomingId}`);
         };
 
         if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
@@ -204,25 +238,173 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ message: "Invalid assetIds payload" });
         }
 
+        // Retrieve tenantId from the target asset
+        let assetTenantId: string | null = null;
+        if (normalizedAssetIds.length > 0) {
+            const assetTenantRes = await query(
+                `SELECT "tenantId" FROM "Asset_Details" WHERE id = $1 LIMIT 1`,
+                [normalizedAssetIds[0]]
+            );
+            if (assetTenantRes.rows.length > 0) {
+                assetTenantId = assetTenantRes.rows[0].tenantId || null;
+            }
+        }
+
+        const resolvedOperator = await resolveEmployeeId(incomingOperatorId, 'assignee', assetTenantId);
+        const resolvedSupervisor = await resolveEmployeeId(incomingSupervisorId, 'assigner', assetTenantId);
+
+        const resolvedOperatorEmployeeId = resolvedOperator.employeeId;
+        const resolvedSupervisorEmployeeId = resolvedSupervisor.employeeId;
+        const tenantId = assetTenantId || resolvedOperator.tenantId || resolvedSupervisor.tenantId;
+
         if (!Number.isFinite(incomingOperatorId) || !Number.isFinite(incomingSupervisorId)) {
             return res.status(400).json({ message: "Invalid assignee or assigner id" });
         }
 
-        const receiverId = await resolveEmployeeId(incomingOperatorId, 'assignee');
-        const senderId = await resolveEmployeeId(incomingSupervisorId, 'assigner');
+        const receiverId = resolvedOperator.employeeId;
+        const senderId = resolvedSupervisor.employeeId;
 
         // 1. Get Status ID for 'Assigned' with error handling
         const statusResult = await query(`SELECT id FROM "Status" WHERE status = 'Assigned' LIMIT 1`, []);
-        
+
         if (statusResult.rows.length === 0) {
             return res.status(500).json({ message: "System Error: 'Assigned' status not found in database." });
         }
-        
+
         const statusId = statusResult.rows[0].id;
         const senderName = await resolveDisplayName(senderId);
         const receiverName = await resolveDisplayName(receiverId);
         const adminEmployeeIds = await fetchAdminEmployeeIds();
         const adminEmployeeIdSet = new Set(adminEmployeeIds);
+
+        // Check for active Checkout workflow in the tenant
+        const workflowResult = await query(
+            `SELECT id, name FROM "Approval_Workflows" 
+             WHERE "tenantId" = $1 AND "actionType" = 'CHECKOUT' AND "isActive" = true 
+             LIMIT 1`,
+            [tenantId]
+        );
+
+        if (workflowResult.rows.length > 0) {
+            const workflowId = workflowResult.rows[0].id;
+            const workflowName = workflowResult.rows[0].name;
+
+            // Fetch workflow steps
+            const stepsResult = await query(
+                `SELECT "stepSequence", "approverRoleId" FROM "Approval_Workflow_Steps"
+                 WHERE "workflowId" = $1 ORDER BY "stepSequence" ASC`,
+                [workflowId]
+            );
+
+            // If active workflow has step(s) configured, create approval request & notifications
+            if (stepsResult.rows.length > 0) {
+                for (const assetId of normalizedAssetIds) {
+                    // Check if there is already a pending approval for this asset
+                    const pendingCheck = await query(
+                        `SELECT id FROM "Approval_Requests" 
+                         WHERE "assetId" = $1 AND status = 'PENDING' LIMIT 1`,
+                        [assetId]
+                    );
+                    if (pendingCheck.rows.length > 0) {
+                        continue; // Skip
+                    }
+
+                    // Create the request
+                    const requestInsert = await query(
+                        `INSERT INTO "Approval_Requests"
+                         ("tenantId", "assetId", "workflowId", "currentStepSequence", "status", "requestedById", "payload", "createdAt", "updatedAt")
+                         VALUES ($1, $2, $3, 1, 'PENDING', $4, $5, NOW(), NOW())
+                         RETURNING id`,
+                        [
+                            tenantId,
+                            assetId,
+                            workflowId,
+                            senderId,
+                            JSON.stringify({
+                                targetAssigneeId: receiverId,
+                                expectedReturnDate: expected_return_date || null,
+                                projectName: project_name || null,
+                                location: destination || null,
+                                notes,
+                                photoURL,
+                                barcodeURL
+                            })
+                        ]
+                    );
+
+                    const requestId = requestInsert.rows[0].id;
+
+                    // Copy workflow steps
+                    for (const step of stepsResult.rows) {
+                        await query(
+                            `INSERT INTO "Approval_Request_Steps"
+                             ("requestId", "stepSequence", "approverRoleId", "status")
+                             VALUES ($1, $2, $3, 'PENDING')`,
+                            [requestId, step.stepSequence, step.approverRoleId]
+                        );
+                    }
+
+                    // Notify step 1 approvers
+                    const firstStep = stepsResult.rows[0];
+                    const firstRoleId = firstStep.approverRoleId;
+
+                    let approversResult = await query(
+                        `SELECT "employeeId" FROM "Users" WHERE "roleId" = $1 AND "tenantId" = $2`,
+                        [firstRoleId, tenantId]
+                    );
+
+                    if (approversResult.rows.length === 0) {
+                        approversResult = await query(
+                            `SELECT DISTINCT u."employeeId"
+                             FROM "Users" u
+                             LEFT JOIN "Role_Permissions" rp ON u."roleId" = rp."roleId"
+                             LEFT JOIN "Permissions" p ON rp."permissionId" = p.id
+                             WHERE u."tenantId" = $1 AND (
+                               p.code IN ('ASSIGN_ASSETS', 'CONFIRM_RETURN', 'MANAGE_WORKFLOWS', 'MANAGE_USERS')
+                             )`,
+                            [tenantId]
+                        );
+                    }
+
+                    let approverIds = approversResult.rows
+                        .map((r: any) => Number(r.employeeId))
+                        .filter((id: number) => Number.isFinite(id) && id > 0);
+
+                    if (approverIds.length === 0) {
+                        approverIds = Array.from(new Set([senderId, ...adminEmployeeIds]));
+                    }
+
+                    const notificationPayload = {
+                        kind: 'workflow_approval_pending',
+                        requestId: requestId.toString(),
+                        actionType: 'CHECKOUT',
+                        stepSequence: 1,
+                        message: `Pending checkout approval step 1 for asset ${assetId}.`
+                    };
+
+                    for (const approverId of approverIds) {
+                        await query(
+                            `INSERT INTO "Notifications"
+                             ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
+                             VALUES ($1, NULL, $2, $3, $4, $5, 'unread', NOW(), $6)`,
+                            [
+                                assetId,
+                                senderId,
+                                approverId,
+                                `New checkout approval request submitted by ${senderName}.`,
+                                JSON.stringify(notificationPayload),
+                                tenantId
+                            ]
+                        );
+                    }
+                }
+
+                return res.status(200).json({
+                    message: `Checkout requests submitted for approval via workflow: ${workflowName}.`,
+                    pendingApproval: true
+                });
+            }
+        }
 
         const assetMediaMap = new Map<number, MediaPayload>();
 
@@ -313,8 +495,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Each assignment record is immutable - status and dates only change on return
             const assignmentInsert = await query(`
                 INSERT INTO "Asset_Assignments"
-                ("assetId", "operator_employeeId", "supervisor_employeeId", "projectName", "location", "assigned_date", "expected_return_date", "notes", "photoURL", "barcodeURL", "status", "serialNoVerified", "createdAt")
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'assigned', true, NOW())
+                ("assetId", "operator_employeeId", "supervisor_employeeId", "projectName", "location", "assigned_date", "expected_return_date", "notes", "photoURL", "barcodeURL", "status", "serialNoVerified", "createdAt", "tenantId")
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'assigned', true, NOW(), $11)
                 RETURNING id`,
                 [
                     assetId,
@@ -327,6 +509,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     notes,
                     dbPhotoURL ?? null,
                     dbBarcodeURL ?? null,
+                    tenantId,
                 ]
             );
 
@@ -338,6 +521,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 senderId,
                 receiverId,
                 `Asset ${assetId} has been assigned to you by ${senderName}.`,
+                undefined,
+                tenantId
             );
 
             const auditRecipients = new Set<number>([...adminEmployeeIds, senderId]);
@@ -358,13 +543,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     auditReceiverId,
                     reason,
                     reply ?? undefined,
+                    tenantId
                 );
             }
         }));
 
         console.log('[assign] Asset_Assignments media summary:', assignmentMediaSummary);
 
-        return res.status(200).json({ 
+        return res.status(200).json({
             message: `${normalizedAssetIds.length} Assets assigned successfully`,
             assignedTo: receiverId,
             assignedDate: normalizedAssignedDate,

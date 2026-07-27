@@ -23,6 +23,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
   const assetId = id; // For readability and matching legacy logic
 
+  // Auto-migration for useful_life and salvage_value
+  try {
+    await query(`
+      ALTER TABLE "Asset_Details" 
+      ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
+      ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+    `, []);
+  } catch (err) {
+    console.error('[AUTO-MIGRATION ERROR]', err);
+  }
+
   // Handle PUT - Update Asset
   if (req.method === 'PUT') {
     try {
@@ -39,6 +50,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         status,
         photoURL,
         barcodeURL,
+        usefulLife,
+        salvageValue,
         dynamicFields // Expected as array of { fieldId: number, value: string }
       } = req.body;
 
@@ -121,6 +134,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       if (price !== undefined) {
         updates.push(`price = $${paramIndex++}`);
         values.push(price || null);
+      }
+
+      if (usefulLife !== undefined) {
+        updates.push(`"useful_life" = $${paramIndex++}`);
+        values.push(usefulLife !== null ? parseInt(String(usefulLife), 10) : 5);
+      }
+
+      if (salvageValue !== undefined) {
+        updates.push(`"salvage_value" = $${paramIndex++}`);
+        values.push(salvageValue || null);
       }
 
       if (location !== undefined) {
@@ -216,38 +239,35 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         a."asset_Id" AS "barcode",
         a.location,
         a."photoURL",
-        u."fullName" AS "assignedBy",
-        a.assigned_to,
+        COALESCE(u."fullName", u_aa."fullName") AS "assignedBy",
+        COALESCE(assignee."fullName", assignee_aa."fullName") AS "assignedToName",
+        COALESCE(a.assigned_to, aa."operator_employeeId") AS assigned_to,
         a.warranty_expiry AS "warrantyExpiry",
         a.purchase_date AS "purchaseDate",
         a.price,
+        a.useful_life AS "usefulLife",
+        a.salvage_value AS "salvageValue",
         
-        (
-          SELECT "assigned_date"
-          FROM "Asset_Assignments"
-          WHERE "assetId" = a.id AND "tenantId" = $2
-          ORDER BY id DESC
-          LIMIT 1
-        ) AS assigned_date,
-        (
-          SELECT "expected_return_date"
-          FROM "Asset_Assignments"
-          WHERE "assetId" = a.id AND "tenantId" = $2
-          ORDER BY id DESC
-          LIMIT 1
-        ) AS expected_return_date
-        ,(
-          SELECT "projectName"
-          FROM "Asset_Assignments"
-          WHERE "assetId" = a.id AND "tenantId" = $2
-          ORDER BY id DESC
-          LIMIT 1
-        ) AS "projectName"
+        aa.assigned_date AS assigned_date,
+        aa.expected_return_date AS expected_return_date,
+        aa."projectName" AS "projectName"
       FROM "Asset_Details" a
-      LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId"
+      LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId" AND (cat."tenantId" = a."tenantId" OR cat."tenantId" IS NULL OR a."tenantId" IS NULL)
       LEFT JOIN "Status" s ON a.status_id = s.id
-      LEFT JOIN "Users" u ON a.assigned_by = u."employeeId"
-      WHERE a.id = $1 AND a."tenantId" = $2;
+      LEFT JOIN LATERAL (
+        SELECT * FROM "Asset_Assignments"
+        WHERE "assetId" = a.id
+          AND ("tenantId" = $2 OR $2 IS NULL OR "tenantId" IS NULL)
+          AND COALESCE(status, '') <> 'returned'
+          AND "returned_date" IS NULL
+        ORDER BY id DESC
+        LIMIT 1
+      ) aa ON TRUE
+      LEFT JOIN "Users" u ON (u."employeeId" = a.assigned_by OR u."userId" = a.assigned_by) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" u_aa ON (u_aa."employeeId" = aa."supervisor_employeeId" OR u_aa."userId" = aa."supervisor_employeeId") AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" assignee ON (assignee."employeeId" = a.assigned_to OR assignee."userId" = a.assigned_to) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" assignee_aa ON (assignee_aa."employeeId" = aa."operator_employeeId" OR assignee_aa."userId" = aa."operator_employeeId") AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+      WHERE a.id = $1 AND (a."tenantId" = $2 OR $2 IS NULL);
     `;
 
     const result = await query(sqlQuery, [parseInt(assetId), tenantId]);
@@ -281,6 +301,33 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const isPastDue = expectedReturn ? expectedReturn < today : false;
     const isActuallyAssigned = asset.dbStatus === "Assigned" && asset.assigned_to !== null;
 
+    const initialCost = parseFloat(asset.price) || 0;
+    const salvageValueNum = parseFloat(asset.salvageValue) || 0;
+    const usefulLifeNum = parseInt(asset.usefulLife) || 5;
+
+    let remainingValue = initialCost;
+    let percentLifeRemaining = 100;
+    let percentLifeElapsed = 0;
+    let depreciationMessage = null;
+
+    if (initialCost > 0 && usefulLifeNum > 0 && asset.purchaseDate) {
+      const purchaseDate = new Date(asset.purchaseDate);
+      const today = new Date();
+      const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+
+      const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
+      const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
+      remainingValue = initialCost - totalDepreciation;
+
+      percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
+      percentLifeElapsed = Math.min(100, percentLifeElapsed);
+      percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
+
+      if (percentLifeRemaining < 60) {
+        depreciationMessage = `Depreciation alert: remaining life is ${percentLifeRemaining.toFixed(1)}%. Please scrap or upgrade this asset.`;
+      }
+    }
+
     const formatted = {
       assetId: asset.assetId,
       assetName: asset.assetName,
@@ -294,6 +341,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       location: asset.location,
       photoURL: asset.photoURL || null,
       assignedBy: asset.assignedBy || 'N/A',
+      assignedTo: asset.assignedToName || 'N/A',
       warrantyExpiry: formatDate(asset.warrantyExpiry),
       purchaseDate: formatDate(asset.purchaseDate),
       assignedDate: formatDate(asset.assigned_date),
@@ -301,6 +349,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       projectName: asset.projectName || null,
       price: asset.price || null,
       value: asset.price ? parseFloat(asset.price).toLocaleString() : 'N/A',
+      usefulLife: usefulLifeNum,
+      salvageValue: asset.salvageValue || null,
+      remainingValue: parseFloat(remainingValue.toFixed(2)),
+      depreciationMessage,
       dynamicValues: dynamicValuesRes.rows
     };
 
@@ -311,5 +363,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return res.status(500).json({ message: 'Internal server error.' });
   }
 }
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
 
 export default withAuth(handler);

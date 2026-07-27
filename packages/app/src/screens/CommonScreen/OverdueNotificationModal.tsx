@@ -15,7 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { globalColors } from '../../styles/globalStyles';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import { toPersistentDataUrl } from '../../utils/imageHelper';
 
 interface Props {
     visible: boolean;
@@ -58,22 +58,23 @@ const OverdueNotificationModal: React.FC<Props> = ({
                     setErrorText('Camera permission is required to attach proof images.');
                     return;
                 }
-            } else {
-                const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                if (permissionResult.status !== 'granted') {
-                    setErrorText('Media library permission is required to attach proof images.');
-                    return;
-                }
             }
+            // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
 
             const options: ImagePicker.ImagePickerOptions = {
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: useCamera && Platform.OS === 'ios',
+                mediaTypes: ['images'],
+                allowsEditing: true,                 // Enable editing to allow cropping and prevent native crash,
                 allowsMultipleSelection: !useCamera,
                 selectionLimit: 0,
                 quality: 0.2,
                 base64: true,
             };
+
+            // Disable editing/aspect if we are selecting multiple images from the gallery
+            if (options.allowsMultipleSelection) {
+                delete options.allowsEditing;
+                delete options.aspect;
+            }
 
             const result = useCamera
                 ? await ImagePicker.launchCameraAsync(options)
@@ -85,18 +86,13 @@ const OverdueNotificationModal: React.FC<Props> = ({
 
             const selectedImages: string[] = [];
             for (const asset of result.assets) {
-                let base64 = asset.base64;
-                if (!base64 && asset.uri) {
-                    try {
-                        base64 = await FileSystem.readAsStringAsync(asset.uri, {
-                            encoding: 'base64' as any,
-                        });
-                    } catch (err) {
-                        console.warn("Error reading file manually:", err);
+                try {
+                    const dataUrl = await toPersistentDataUrl(asset.uri, asset.mimeType || undefined);
+                    if (dataUrl) {
+                        selectedImages.push(dataUrl);
                     }
-                }
-                if (base64) {
-                    selectedImages.push(`data:image/jpeg;base64,${base64}`);
+                } catch (err) {
+                    console.warn("Error processing image:", err);
                 }
             }
 

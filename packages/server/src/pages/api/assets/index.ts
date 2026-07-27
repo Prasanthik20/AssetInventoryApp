@@ -3,6 +3,10 @@ import query from '@/lib/db';
 import { setCorsHeaders } from '@/lib/corsHeaders';
 import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 
+// Module-level caches to avoid repeating heavy DB operations on every HTTP GET request
+let isMigrated = false;
+const lastOverdueUpdate = new Map<string, number>();
+
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const origin = req.headers.origin as string;
     setCorsHeaders(res, origin);
@@ -23,41 +27,60 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(403).json({ message: 'Tenant ID missing. Please log in again.' });
     }
 
-    console.log(`[DEBUG] User Payload: ${JSON.stringify(req.user)}`);
-    console.log(`[DEBUG] Fetching assets for tenantId: "${tenantId}"`);
+    // 1️⃣ Run auto-migration ONCE per process boot to prevent locking table on every GET
+    if (!isMigrated) {
+        try {
+            await query(`
+                ALTER TABLE "Asset_Details" 
+                ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
+                ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+            `, []);
+            isMigrated = true;
+        } catch (err) {
+            console.error('[AUTO-MIGRATION ERROR]', err);
+        }
+    }
 
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
     const offset = (page - 1) * limit;
+    const includeMedia = req.query.includeMedia === 'true';
     
     let search = (req.query.search as string) || '';
     if (search === 'undefined' || search === 'null') search = '';
     const isSearch = search.trim().length > 0;
 
     try {
-        // 1️⃣ Update assets: Only set to 'Overdue' if it is CURRENTLY assigned to someone
-        const updateQuery = `
-            UPDATE "Asset_Details"
-            SET status_id = (
-                SELECT id FROM "Status" WHERE status = 'Overdue' AND ("tenantId" = $1 OR "tenantId" IS NULL) LIMIT 1
-            )
-            WHERE status_id = (
-                SELECT id FROM "Status" WHERE status = 'Assigned' AND ("tenantId" = $1 OR "tenantId" IS NULL) LIMIT 1
-            )
-            AND "tenantId" = $1
-            AND assigned_to IS NOT NULL
-            AND id IN (
-                SELECT "assetId" FROM "Asset_Assignments"
-                WHERE "expected_return_date" < CURRENT_DATE
-                  AND "tenantId" = $1
-                  AND COALESCE(status, '') <> 'returned'
-                  AND "returned_date" IS NULL
-            );
-        `;
+        // 2️⃣ Throttle the heavy UPDATE query (run at most once per 60s per tenant on page 1)
+        const tenantKey = String(tenantId || 'global');
+        const lastRun = lastOverdueUpdate.get(tenantKey) || 0;
+        const now = Date.now();
 
-        await query(updateQuery, [tenantId]);
+        if (page === 1 && (now - lastRun > 60000)) {
+            lastOverdueUpdate.set(tenantKey, now);
+            const updateQuery = `
+                UPDATE "Asset_Details"
+                SET status_id = (
+                    SELECT id FROM "Status" WHERE status = 'Overdue' AND ("tenantId" = $1 OR "tenantId" IS NULL) LIMIT 1
+                )
+                WHERE status_id = (
+                    SELECT id FROM "Status" WHERE status = 'Assigned' AND ("tenantId" = $1 OR "tenantId" IS NULL) LIMIT 1
+                )
+                AND "tenantId" = $1
+                AND assigned_to IS NOT NULL
+                AND id IN (
+                    SELECT "assetId" FROM "Asset_Assignments"
+                    WHERE "expected_return_date" < CURRENT_DATE
+                      AND "tenantId" = $1
+                      AND COALESCE(status, '') <> 'returned'
+                      AND "returned_date" IS NULL
+                );
+            `;
+            // Execute non-blocking update
+            query(updateQuery, [tenantId]).catch(err => console.error('[OVERDUE UPDATE ERROR]', err));
+        }
 
-        // 2️⃣ Fetch assets with only the LATEST assignment record
+        // 3️⃣ Fetch assets with only the LATEST assignment record
         const sqlQuery = `
             SELECT
                 a.id,
@@ -69,35 +92,42 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 a.location,
                 a."purchase_date" AS "purchaseDate",
                 a.price,
+                a.useful_life AS "usefulLife",
+                a.salvage_value AS "salvageValue",
                 a."warranty_expiry" AS "warrantyExpiry",
                 COALESCE(a."photoURL", aa."photoURL") AS "photoURL",
                 
                 cat.category AS "category",
                 s.status AS "status",
-                u."fullName" AS "assignedBy",
-                assignee."fullName" AS "assignedTo",
+                COALESCE(u."fullName", u_aa."fullName") AS "assignedBy",
+                COALESCE(assignee."fullName", assignee_aa."fullName") AS "assignedTo",
                 
                 aa.id AS "assignmentId",
                 aa."projectName" AS "projectName",
                 aa.expected_return_date AS "expectedReturnDate",
-                aa."operator_employeeId" AS "operatorId",
-                aa."supervisor_employeeId" AS "senderId"
+                COALESCE(aa."operator_employeeId", a.assigned_to) AS "operatorId",
+                COALESCE(aa."supervisor_employeeId", a.assigned_by) AS "senderId"
 
             FROM "Asset_Details" a
-            LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId"
+            LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId" AND (cat."tenantId" = a."tenantId" OR cat."tenantId" IS NULL OR a."tenantId" IS NULL)
             LEFT JOIN "Status" s ON a.status_id = s.id
-            LEFT JOIN "Users" u ON a.assigned_by = u."employeeId"
-            LEFT JOIN "Users" assignee ON a.assigned_to = assignee."employeeId"
             
             LEFT JOIN LATERAL (
                 SELECT * FROM "Asset_Assignments"
                 WHERE "assetId" = a.id
-                  AND ("tenantId" = $1 OR $1 IS NULL)
+                  AND ("tenantId" = $1 OR $1 IS NULL OR "tenantId" IS NULL)
                   AND COALESCE(status, '') <> 'returned'
                   AND "returned_date" IS NULL
                 ORDER BY id DESC
                 LIMIT 1
             ) aa ON TRUE
+
+            LEFT JOIN "Users" u ON (u."employeeId" = a.assigned_by OR u."userId" = a.assigned_by) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" assignee ON (assignee."employeeId" = a.assigned_to OR assignee."userId" = a.assigned_to) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
+            
+            LEFT JOIN "Users" u_aa ON (u_aa."employeeId" = aa."supervisor_employeeId" OR u_aa."userId" = aa."supervisor_employeeId") AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" assignee_aa ON (assignee_aa."employeeId" = aa."operator_employeeId" OR assignee_aa."userId" = aa."operator_employeeId") AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+
             WHERE (a."tenantId" = $1 OR $1 IS NULL)
             ${isSearch ? `AND (a.name ILIKE $2 OR a."asset_Id" ILIKE $2 OR a."serial_no" ILIKE $2)` : ''}
             ORDER BY a.id ASC
@@ -123,32 +153,74 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         ]);
 
         const total = parseInt(countResult.rows[0]?.total || '0');
-        console.log(`[DEBUG] Query results: MainRows=${result.rows.length}, TotalCount=${total}`);
         const totalPages = Math.ceil(total / limit);
 
-        const formattedAssets = result.rows.map(asset => ({
-            id: asset.id.toString(),
-            assetName: asset.assetName,
-            barcode: asset.barcode,
-            controllerKey: asset.controllerKey || null,
-            serialNumber: asset.serialNumber,
-            category: asset.category,
-            status: asset.status,
-            assignedBy: asset.assignedBy || null,
-            assignedTo: asset.assignedTo || null,
-            location: asset.location,
-            purchaseDate: asset.purchaseDate,
-            warrantyExpiry: asset.warrantyExpiry,
-            price: asset.price,
-            photoURL: asset.photoURL || null,
-            barcodeURL: asset.barcodeURL || null,
-            expectedReturnDate: asset.expectedReturnDate || null,
-            projectName: asset.projectName || null,
-            assignmentId: asset.assignmentId ? asset.assignmentId.toString() : null,
-            operatorId: asset.operatorId ? asset.operatorId.toString() : null,
-            senderId: asset.senderId ? asset.senderId.toString() : null,
-            receiverId: asset.operatorId ? asset.operatorId.toString() : null
-        }));
+        // Helper to strip heavy base64 strings from list payloads unless explicitly requested
+        const sanitizeMedia = (val: string | null): string | null => {
+            if (!val) return null;
+            if (includeMedia) return val;
+            if (typeof val === 'string' && val.startsWith('data:')) {
+                return null; // Omit multi-megabyte base64 strings in list responses
+            }
+            return val;
+        };
+
+        const formattedAssets = result.rows.map(asset => {
+            const initialCost = parseFloat(asset.price) || 0;
+            const salvageValueNum = parseFloat(asset.salvageValue) || 0;
+            const usefulLifeNum = parseInt(asset.usefulLife) || 5;
+            
+            let remainingValue = initialCost;
+            let percentLifeRemaining = 100;
+            let percentLifeElapsed = 0;
+            let depreciationMessage = null;
+
+            if (initialCost > 0 && usefulLifeNum > 0 && asset.purchaseDate) {
+                const purchaseDate = new Date(asset.purchaseDate);
+                const today = new Date();
+                const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+                
+                const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
+                const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
+                remainingValue = initialCost - totalDepreciation;
+                
+                percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
+                percentLifeElapsed = Math.min(100, percentLifeElapsed);
+                percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
+
+                if (percentLifeRemaining < 60) {
+                    depreciationMessage = `Depreciation alert: remaining life is ${percentLifeRemaining.toFixed(1)}%. Please scrap or upgrade this asset.`;
+                }
+            }
+
+            return {
+                id: asset.id.toString(),
+                assetName: asset.assetName,
+                barcode: asset.barcode,
+                controllerKey: asset.controllerKey || null,
+                serialNumber: asset.serialNumber,
+                category: asset.category,
+                status: asset.status,
+                assignedBy: asset.assignedBy || null,
+                assignedTo: asset.assignedTo || null,
+                location: asset.location,
+                purchaseDate: asset.purchaseDate,
+                warrantyExpiry: asset.warrantyExpiry,
+                price: asset.price,
+                photoURL: sanitizeMedia(asset.photoURL),
+                barcodeURL: sanitizeMedia(asset.barcodeURL),
+                expectedReturnDate: asset.expectedReturnDate || null,
+                projectName: asset.projectName || null,
+                assignmentId: asset.assignmentId ? asset.assignmentId.toString() : null,
+                operatorId: asset.operatorId ? asset.operatorId.toString() : null,
+                senderId: asset.senderId ? asset.senderId.toString() : null,
+                receiverId: asset.operatorId ? asset.operatorId.toString() : null,
+                usefulLife: usefulLifeNum,
+                salvageValue: asset.salvageValue || null,
+                remainingValue: parseFloat(remainingValue.toFixed(2)),
+                depreciationMessage
+            };
+        });
 
         return res.status(200).json({
             message: 'Assets fetched successfully!',

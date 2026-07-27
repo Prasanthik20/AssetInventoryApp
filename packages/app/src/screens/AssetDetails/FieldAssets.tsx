@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ImageBackground,
   FlatList,
   TouchableOpacity,
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import axios from 'axios';
 import { useNavigation, useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
@@ -17,6 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { navigateToDashboard } from '../../utils/navigation';
 import fieldStyles from './field.styles';
 import { globalColors } from '../../styles/globalStyles';
 import useAssetMeta from '../../hooks/useAssetMeta';
@@ -38,6 +39,7 @@ const FieldAssets: React.FC = () => {
   const route = useRoute<RouteProp<RootStackParamList, 'FieldAssets'>>();
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+  const isNarrowWeb = Platform.OS !== 'web' || width < 420;
   const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
 
   const styles = fieldStyles(isMobileLayout);
@@ -121,15 +123,15 @@ const FieldAssets: React.FC = () => {
     const filtered = userScopedAssets.filter(asset => {
       const categoryMatch = selectedCategory
         ? String(asset.category || '')
-            ?.toLowerCase()
-            .includes(selectedCategory.toLowerCase())
+          ?.toLowerCase()
+          .includes(selectedCategory.toLowerCase())
         : true;
 
       const searchMatch = searchQuery
         ? asset.assetName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          asset.barcode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          asset.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          asset.assignedTo?.toLowerCase().includes(searchQuery.toLowerCase())
+        asset.barcode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        asset.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        asset.assignedTo?.toLowerCase().includes(searchQuery.toLowerCase())
         : true;
 
       return categoryMatch && searchMatch;
@@ -252,7 +254,7 @@ const FieldAssets: React.FC = () => {
       console.log('SENDING CORRECTED PAYLOAD:', payload);
 
       const response = await axios.post(
-        `${baseURL}/api/notifications/supervisor`,
+        `${baseURL}/api/notifications/manager`,
         payload,
       );
 
@@ -322,6 +324,14 @@ const FieldAssets: React.FC = () => {
     );
   };
 
+    const handleGoBack = async () => {
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        await navigateToDashboard(navigation);
+      }
+    };
+
   return (
     <ImageBackground
       source={require('../../assets/Company-bg.webp')}
@@ -342,7 +352,7 @@ const FieldAssets: React.FC = () => {
         >
           <View style={styles.header}>
             <TouchableOpacity
-              onPress={() => navigation.goBack()}
+              onPress={handleGoBack}
               style={styles.backButton}
             >
               <Ionicons name="arrow-back-outline" size={24} color="#E6F3FF" />
@@ -350,7 +360,6 @@ const FieldAssets: React.FC = () => {
             <Text style={styles.headerTitle}>Assets In Fields</Text>
             <View style={{ width: 40 }} />
           </View>
-          {/* 3. Side-by-Side Search and Filter Row */}
           <AssetFiltersBar
             isMobileLayout={isMobileLayout}
             searchValue={searchQuery}
@@ -361,11 +370,10 @@ const FieldAssets: React.FC = () => {
             onCategoryChange={setSelectedCategory}
             categoryOptions={assetCategories}
             categoryAllLabel="All Assets"
-            containerStyle={isMobileLayout ? renderStyles.controlsRowMobile : renderStyles.controlsRow}
-            searchContainerStyle={renderStyles.searchContainerInRow}
+            containerStyle={isNarrowWeb ? renderStyles.controlsRowMobile : renderStyles.controlsRow}
+            searchContainerStyle={isNarrowWeb ? renderStyles.searchContainerInRowMobile : renderStyles.searchContainerInRow}
             searchInputStyle={renderStyles.searchInputInRow}
-            filtersContainerStyle={[renderStyles.dropdownContainer, isMobileLayout && { width: '100%' }]}
-            pickerWrapperStyle={renderStyles.dropdownContainer}
+            pickerWrapperStyle={isNarrowWeb ? renderStyles.dropdownContainerMobile : renderStyles.dropdownContainer}
             pickerStyle={renderStyles.picker}
           />
 
@@ -397,19 +405,22 @@ const FieldAssets: React.FC = () => {
             )}
           </View>
 
-          <FlatList
-            data={filteredAssets}
-            renderItem={renderAsset}
-            keyExtractor={item => item.id.toString()}
-            contentContainerStyle={renderStyles.listContainer}
-            refreshing={loading}
-            onRefresh={fetchAssets}
-            ListEmptyComponent={
-              <Text style={renderStyles.emptyText}>
-                No assets found in the field.
-              </Text>
-            }
-          />
+          <View style={{ flex: 1 }}>
+            <FlatList
+              data={filteredAssets}
+              renderItem={renderAsset}
+              keyExtractor={item => item.id.toString()}
+              style={{ flex: 1 }}
+              contentContainerStyle={renderStyles.listContainer}
+              refreshing={loading}
+              onRefresh={fetchAssets}
+              ListEmptyComponent={
+                <Text style={renderStyles.emptyText}>
+                  No assets found in the field.
+                </Text>
+              }
+            />
+          </View>
 
           {selectedAsset && (
             <OverdueNotificationModal
@@ -454,7 +465,7 @@ const renderStyles = StyleSheet.create({
     fontWeight: 'bold',
     color: globalColors.textBody,
   },
-  
+
   overdueBadge: {
     marginTop: 5,
     backgroundColor: globalColors.brandRed,
@@ -507,11 +518,19 @@ const renderStyles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     gap: 10,
+    marginTop: 10,
+    marginBottom: 10,
+    zIndex: 10,
+    elevation: 10,
   },
   controlsRowMobile: {
     paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingTop: 10,
     gap: 10,
+    marginTop: 10,
+    marginBottom: 10,
+    zIndex: 10,
+    elevation: 10,
   },
   searchContainerInRow: {
     flex: 2,
@@ -520,7 +539,19 @@ const renderStyles = StyleSheet.create({
     backgroundColor: 'rgba(18, 45, 73, 0.86)',
     borderRadius: 10,
     paddingHorizontal: 12,
-    height: 45,
+    height: 54,
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
+  },
+  // Mobile: no flex so height: 54 applies in column layout
+  searchContainerInRowMobile: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 45, 73, 0.86)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 54,
     borderWidth: 1,
     borderColor: 'rgba(159, 207, 255, 0.22)',
   },
@@ -534,7 +565,17 @@ const renderStyles = StyleSheet.create({
     flex: 1.2,
     // backgroundColor: 'rgba(18, 45, 73, 0.86)',
     borderRadius: 10,
-    height: 45,
+    height: 54,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
+    overflow: 'hidden',
+  },
+  // Mobile: no flex so height: 54 applies in column layout
+  dropdownContainerMobile: {
+    width: '100%',
+    borderRadius: 10,
+    height: 54,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(159, 207, 255, 0.22)',
@@ -542,12 +583,12 @@ const renderStyles = StyleSheet.create({
   },
   picker: {
     width: '100%',
-    height: 45,
-    color: '#0a0a0a',
+    height: 54,
+    color: '#E6F3FF',
   },
   searchInput: {
     flex: 1,
-    height: 45,
+    height: 54,
     fontSize: 15,
   },
   listContainer: {

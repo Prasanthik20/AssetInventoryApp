@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Platform,ImageBackground, ScrollView, Image, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform, ImageBackground, ScrollView, Image, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import { globalColors } from '../..//styles/globalStyles';
 import AppSnackbar from 'src/components/common/AppSnackbar';
+import { toPersistentDataUrl } from '../../utils/imageHelper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { navigateToDashboard } from '../../utils/navigation';
 
 type ReturnAssetRouteProp = RouteProp<RootStackParamList, 'ReturnAsset'>;
 
@@ -94,16 +97,11 @@ const ReturnAssetScreen: React.FC = () => {
                     showSnackbar('Camera permission is required.', 'error');
                     return;
                 }
-            } else {
-                const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                if (status !== 'granted') {
-                    showSnackbar('Media library permission is required.', 'error');
-                    return;
-                }
             }
+            // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
 
             const options: ImagePicker.ImagePickerOptions = {
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: useCamera ? Platform.OS === 'ios' : !isBarcode,
                 allowsMultipleSelection: !useCamera && !isBarcode,
                 aspect: isBarcode ? [4, 3] : undefined,
@@ -118,18 +116,13 @@ const ReturnAssetScreen: React.FC = () => {
             if (!result.canceled && result.assets[0]) {
                 const photos: string[] = [];
                 for (const asset of result.assets) {
-                    let base64 = asset.base64;
-                    if (!base64 && asset.uri) {
-                        try {
-                            base64 = await FileSystem.readAsStringAsync(asset.uri, {
-                                encoding: 'base64' as any,
-                            });
-                        } catch (err) {
-                            console.warn("Error reading file manually:", err);
+                    try {
+                        const dataUrl = await toPersistentDataUrl(asset.uri, asset.mimeType || undefined);
+                        if (dataUrl) {
+                            photos.push(dataUrl);
                         }
-                    }
-                    if (base64) {
-                        photos.push(`data:image/jpeg;base64,${base64}`);
+                    } catch (err) {
+                        console.warn("Error processing image:", err);
                     }
                 }
 
@@ -300,9 +293,9 @@ const ReturnAssetScreen: React.FC = () => {
             console.log("RETURN PAYLOAD 👉", payload);
 
             const response = await axios.post(
-                    actorRole === 'supervisor'
-                        ? `${baseURL}/api/supervisor/returnAsset`
-                        : `${baseURL}/api/operator/returnAsset`,
+                actorRole === 'supervisor'
+                    ? `${baseURL}/api/manager/confirm-return`
+                    : `${baseURL}/api/user/return-asset`,
                 payload
             );
 
@@ -335,7 +328,7 @@ const ReturnAssetScreen: React.FC = () => {
 
         return (
             <TouchableOpacity
-            key={String(id)} // Required for .map()
+                key={String(id)} // Required for .map()
                 style={[styles.assetRow, isSelected && styles.assetRowSelected]}
                 onPress={() => toggleAssetSelection(id)}
             >
@@ -380,6 +373,14 @@ const ReturnAssetScreen: React.FC = () => {
     };
 
 
+    const handleGoBack = async () => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            await navigateToDashboard(navigation);
+        }
+    };
+
     return (
         <ImageBackground
             source={require("../../assets/Company-bg.webp")}
@@ -391,7 +392,7 @@ const ReturnAssetScreen: React.FC = () => {
                 <View style={[styles.container, isMobileLayout && { margin: 10, borderRadius: 15 }]}>
                     {/* Header */}
                     <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
                             <Ionicons name="arrow-back" size={24} color="#E6F3FF" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Select Assets to Return</Text>
@@ -399,8 +400,8 @@ const ReturnAssetScreen: React.FC = () => {
                     </View>
 
                     {/* Content Body */}
-                    <ScrollView 
-                        style={styles.body} 
+                    <ScrollView
+                        style={styles.body}
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={isMobileLayout ? { paddingBottom: 20 } : { flex: 1 }}
                     >
@@ -480,7 +481,7 @@ const ReturnAssetScreen: React.FC = () => {
                                     </>
                                 ) : (
                                     <>
-                                
+
                                         <Text style={styles.label}>Proof of Condition</Text>
                                         <TouchableOpacity
                                             style={styles.uploadButton}
@@ -562,14 +563,14 @@ const ReturnAssetScreen: React.FC = () => {
 
                     {/* Footer with actions */}
                     <View style={[styles.footer, isMobileLayout && { justifyContent: 'space-between' }]}>
-                        <TouchableOpacity 
-                            style={[styles.cancelButton, isMobileLayout && { flex: 1, marginRight: 10 }]} 
+                        <TouchableOpacity
+                            style={[styles.cancelButton, isMobileLayout && { flex: 1, marginRight: 10 }]}
                             onPress={() => navigation.goBack()}
                         >
                             <Text style={[styles.buttonText, { color: '#A9C6E4' }]}>Cancel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={isMobileLayout && { flex: 2 }} 
+                        <TouchableOpacity
+                            style={isMobileLayout && { flex: 2 }}
                             onPress={handleReturn}>
                             <LinearGradient colors={['#0EA5E9', '#0F766E']} style={styles.returnButton}>
                                 <Text style={styles.buttonText}>
@@ -625,11 +626,13 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(159, 207, 255, 0.22)'
     },
-    backButton: { position: 'absolute', left: 20, marginTop : 20 },
-    headerTitle: { color: '#E6F3FF', fontSize: 20, fontWeight: 'bold', marginTop : 20 },
-    body: { flex: 1, 
+    backButton: { position: 'absolute', left: 20, marginTop: 20 },
+    headerTitle: { color: '#E6F3FF', fontSize: 20, fontWeight: 'bold', marginTop: 20 },
+    body: {
+        flex: 1,
         paddingHorizontal: Platform.OS !== 'web' ? 15 : 25,
-        paddingTop: 15},
+        paddingTop: 15
+    },
     formBody: { flexDirection: 'row', gap: 25, flex: 1 },
     formColumn: { flex: 1 },
     instructions: {
@@ -677,10 +680,12 @@ const styles = StyleSheet.create({
     },
     checkboxIcon: { marginRight: 15 },
     assetInfo: { flex: 1 },
-    assetName: { fontSize: 15, 
-        fontWeight: '600', 
+    assetName: {
+        fontSize: 15,
+        fontWeight: '600',
         color: '#E6F3FF',
-        flexShrink: 1 },// Prevents pushing content off screen },
+        flexShrink: 1
+    },// Prevents pushing content off screen },
     statusActionContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -741,7 +746,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     footer: {
-      flexDirection: 'row',
+        flexDirection: 'row',
         justifyContent: 'flex-end',
         alignItems: 'center',
         padding: 15,
@@ -749,15 +754,19 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: 'rgba(159, 207, 255, 0.22)',
     },
-    returnButton: { paddingVertical: 14, // Taller for mobile touch
-        paddingHorizontal: 20, 
-        borderRadius: 10, 
-        alignItems: 'center' },
-    cancelButton: { paddingVertical: 14, 
-        paddingHorizontal: 20, 
-        borderRadius: 10, 
+    returnButton: {
+        paddingVertical: 14, // Taller for mobile touch
+        paddingHorizontal: 20,
+        borderRadius: 10,
+        alignItems: 'center'
+    },
+    cancelButton: {
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 10,
         backgroundColor: 'rgba(18, 45, 73, 0.86)',
-        alignItems: 'center'},
+        alignItems: 'center'
+    },
     buttonText: { color: globalColors.surfacePrimary, fontSize: 14, fontWeight: 'bold' },
 });
 

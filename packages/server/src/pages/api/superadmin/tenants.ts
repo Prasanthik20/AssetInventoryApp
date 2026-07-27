@@ -1,5 +1,5 @@
 import type { NextApiResponse } from 'next';
-import query from '@/lib/db';
+import query, { pool } from '@/lib/db';
 import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -22,21 +22,46 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           t."createdAt",
           COALESCE(sub.name, 'No active plan') AS "planName",
           COALESCE(sub.plan_id, 'free-trial') AS "planId",
+          sub."startDate",
+          sub."endDate",
+          admin."fullName" AS "adminName",
+          admin.email AS "adminEmail",
+          admin."phoneNumber" AS "adminPhone",
+          admin.address AS "adminAddress",
           (SELECT COUNT(*)::int FROM "Asset_Details" WHERE "tenantId" = t.id) AS "assetsCount"
         FROM 
           "Tenants" t
         LEFT JOIN LATERAL (
-          SELECT p.name, p.id AS plan_id
+          SELECT p.name, p.id AS plan_id, s."startDate", s."endDate"
           FROM "Subscriptions" s
           JOIN "Plans" p ON s."planId" = p.id
-          WHERE s."tenantId" = t.id AND s.status = 'active'
+          WHERE s."tenantId" = t.id
           ORDER BY s."updatedAt" DESC
           LIMIT 1
         ) sub ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT u."fullName", u.email, u."phoneNumber", u.address
+          FROM "Users" u
+          LEFT JOIN "Roles" r ON u."roleId" = r."roleId"
+          WHERE u."tenantId" = t.id AND (
+            u."isPrimaryContact" = TRUE OR
+            (r."roleName" IS NOT NULL AND (
+              LOWER(r."roleName") IN ('admin', 'super admin', 'superadmin', 'tenant admin', 'tenantadmin')
+              OR EXISTS (
+                SELECT 1 FROM "Role_Permissions" rp
+                JOIN "Permissions" p ON rp."permissionId" = p.id
+                WHERE rp."roleId" = u."roleId" AND p.code IN ('MANAGE_USERS', 'MANAGE_WORKFLOWS')
+              )
+            ))
+          )
+          ORDER BY u."userId" ASC
+          LIMIT 1
+        ) admin ON TRUE
         ORDER BY 
           t."createdAt" DESC;
       `;
       const result = await query(sql);
+      console.log(result.rows)
       return res.status(200).json({ count: result.rows.length, tenants: result.rows });
     } catch (error) {
       console.error('Super Admin Fetch Tenants Error:', error);
@@ -54,7 +79,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       return res.status(400).json({ message: 'Tenant ID, status, and target plan ID are required.' });
     }
 
-    const { pool } = require('@/lib/db');
     let client;
 
     try {

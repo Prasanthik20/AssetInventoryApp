@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // 1️⃣ Get assignment and asset info from the notification
     const notifRes: any = await query(
-      `SELECT "assignmentId", "assetId", "senderId", "receiverId"
+      `SELECT "assignmentId", "assetId", "senderId", "receiverId", "tenantId"
        FROM "Notifications"
        WHERE id = $1`,
       [notificationId]
@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!notifRes.rows.length) return res.status(404).json({ message: "Notification not found" });
 
-    const { assignmentId, assetId, senderId: operatorId, receiverId: supervisorId } = notifRes.rows[0];
+    const { assignmentId, assetId, senderId: operatorId, receiverId: supervisorId, tenantId } = notifRes.rows[0];
 
     // 2️⃣ Update expected return date in Asset_Assignments
     await query(
@@ -60,9 +60,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const extensionMessage = `Asset return date extended by ${daysToExtend} day(s) by supervisor.`;
     await query(
   `INSERT INTO "Notifications" 
-    ("assignmentId", "assetId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
-    VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW())`,
-  [assignmentId, assetId, supervisorId, operatorId, 'Extension Approved', extensionMessage]
+    ("assignmentId", "assetId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
+    VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW(), $7)`,
+  [assignmentId, assetId, supervisorId, operatorId, 'Extension Approved', extensionMessage, tenantId]
 );
 
     // 5️⃣ Optional: mark original notification as resolved

@@ -10,11 +10,14 @@ import {
   Alert,
   Modal,
   SafeAreaView,
+  ImageBackground,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { baseURL } from '../../navigation/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Category {
   id: string;
@@ -42,7 +45,7 @@ export default function CustomCategoryBuilder() {
   };
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // New Category State
   const [newCatModalVisible, setNewCatModalVisible] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -54,8 +57,17 @@ export default function CustomCategoryBuilder() {
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState('text'); // text, date, number
 
+  const [isSubscriptionExpired, setIsSubscriptionExpired] = useState(false);
+
   useEffect(() => {
     fetchCategories();
+    const checkSubscription = async () => {
+      const expired = await AsyncStorage.getItem('isSubscriptionExpired');
+      if (expired) {
+        setIsSubscriptionExpired(JSON.parse(expired));
+      }
+    };
+    checkSubscription();
   }, []);
 
   const fetchCategories = async () => {
@@ -121,284 +133,352 @@ export default function CustomCategoryBuilder() {
     }
   };
 
-  const renderCategory = ({ item }: { item: Category }) => (
-    <TouchableOpacity
-      style={[
-        styles.categoryCard,
-        selectedCategory?.id === item.id && styles.selectedCard
-      ]}
-      onPress={() => fetchFields(item)}
-    >
-      <View style={styles.cardHeader}>
-        <Ionicons name="folder-open-outline" size={24} color="#4F46E5" />
-        <View style={styles.badgeContainer}>
-          {item.isSystemCategory && <Text style={styles.systemBadge}>System</Text>}
-          {item.isCustom && <Text style={styles.customBadge}>Custom</Text>}
+  const renderCategory = ({ item }: { item: Category }) => {
+    const isSelected = selectedCategory?.id === item.id;
+    return (
+      <TouchableOpacity
+        style={[
+          styles.categoryCard,
+          isSelected && styles.selectedCard
+        ]}
+        onPress={() => fetchFields(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.cardHeader}>
+          <Ionicons name="folder-open-outline" size={22} color={isSelected ? "#8B5CF6" : "#38BDF8"} />
+          <View style={styles.badgeContainer}>
+            {item.isSystemCategory && <Text style={styles.systemBadge}>System</Text>}
+            {item.isCustom && <Text style={styles.customBadge}>Custom</Text>}
+          </View>
         </View>
-      </View>
-      <Text style={styles.categoryName}>{item.category}</Text>
-    </TouchableOpacity>
-  );
+        <Text style={[styles.categoryName, isSelected && styles.selectedCategoryName]}>{item.category}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-      <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleGoBack} style={{ marginRight: 12 }}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Asset Categories</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setNewCatModalVisible(true)}
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.addButtonText}>New Category</Text>
-        </TouchableOpacity>
-      </View>
+    <ImageBackground
+      source={require('../../assets/Company-bg.webp')}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={22} color="#F8FAFC" />
+              </TouchableOpacity>
+              <Text style={styles.title}>Asset Categories</Text>
+            </View>
 
-      <View style={styles.layout}>
-        {/* Left Column: Categories List */}
-        <View style={styles.leftColumn}>
-          {loading ? (
-            <ActivityIndicator size="large" color="#4F46E5" style={{ marginTop: 20 }} />
-          ) : (
-            <FlatList
-              data={categories}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={renderCategory}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}
-            />
-          )}
-        </View>
+            {!isSubscriptionExpired && (
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => setNewCatModalVisible(true)}
+              >
+                <Ionicons name="add" size={20} color="#FFFFFF" />
+                <Text style={styles.addButtonText}>New Category</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-        {/* Right Column: Dynamic Fields Builder */}
-        <View style={styles.rightColumn}>
-          {selectedCategory ? (
-            <View style={styles.fieldsContainer}>
-              <Text style={styles.fieldsTitle}>
-                Fields for {selectedCategory.category}
-              </Text>
-              
-              <View style={styles.addFieldContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Field Name (e.g. Calibration Date)"
-                  value={newFieldName}
-                  onChangeText={setNewFieldName}
-                />
-                
-                <View style={styles.typeSelector}>
-                  {['text', 'number', 'date'].map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={[
-                        styles.typeBadge,
-                        newFieldType === type && styles.typeBadgeActive
-                      ]}
-                      onPress={() => setNewFieldType(type)}
-                    >
-                      <Text style={[
-                        styles.typeText,
-                        newFieldType === type && styles.typeTextActive
-                      ]}>
-                        {type.toUpperCase()}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <TouchableOpacity style={styles.saveFieldButton} onPress={handleAddField}>
-                  <Text style={styles.saveFieldText}>Add Field</Text>
-                </TouchableOpacity>
-              </View>
-
-              {fieldsLoading ? (
-                <ActivityIndicator size="small" color="#4F46E5" />
+          {/* Layout Columns */}
+          <View style={styles.layout}>
+            {/* Left Column: Categories List */}
+            <View style={styles.leftColumn}>
+              <Text style={styles.columnHeader}>Categories</Text>
+              {loading ? (
+                <ActivityIndicator size="large" color="#8B5CF6" style={{ marginTop: 20 }} />
               ) : (
                 <FlatList
-                  data={fields}
+                  data={categories}
                   keyExtractor={(item) => item.id.toString()}
-                  renderItem={({ item }) => (
-                    <View style={styles.fieldRow}>
-                      <Text style={styles.fieldName}>{item.fieldName}</Text>
-                      <Text style={styles.fieldType}>{item.fieldType}</Text>
-                    </View>
-                  )}
-                  ListEmptyComponent={
-                    <Text style={styles.emptyFields}>No custom fields defined yet.</Text>
-                  }
+                  renderItem={renderCategory}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
                 />
               )}
             </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="construct-outline" size={48} color="#CBD5E1" />
-              <Text style={styles.emptyStateText}>Select a category to manage its dynamic fields.</Text>
-            </View>
-          )}
-        </View>
-      </View>
 
-      {/* New Category Modal */}
-      <Modal visible={newCatModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Create Custom Category</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g. Survey Equipment"
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setNewCatModalVisible(false)}
-              >
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleCreateCategory}>
-                <Text style={styles.saveText}>Create</Text>
-              </TouchableOpacity>
+            {/* Right Column: Dynamic Fields Builder */}
+            <View style={styles.rightColumn}>
+              {selectedCategory ? (
+                <View style={styles.fieldsContainer}>
+                  <Text style={styles.fieldsTitle}>
+                    Fields for <Text style={{ color: '#8B5CF6' }}>{selectedCategory.category}</Text>
+                  </Text>
+
+                  <View style={styles.addFieldContainer}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Field Name (e.g. Calibration Date)"
+                      placeholderTextColor="#64748B"
+                      value={newFieldName}
+                      onChangeText={setNewFieldName}
+                    />
+
+                    <View style={styles.typeSelector}>
+                      {['text', 'number', 'date'].map((type) => (
+                        <TouchableOpacity
+                          key={type}
+                          style={[
+                            styles.typeBadge,
+                            newFieldType === type && styles.typeBadgeActive
+                          ]}
+                          onPress={() => setNewFieldType(type)}
+                        >
+                          <Text style={[
+                            styles.typeText,
+                            newFieldType === type && styles.typeTextActive
+                          ]}>
+                            {type.toUpperCase()}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {!isSubscriptionExpired && (
+                      <TouchableOpacity style={styles.saveFieldButton} onPress={handleAddField}>
+                        <Text style={styles.saveFieldText}>+ Add Custom Field</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {fieldsLoading ? (
+                    <ActivityIndicator size="small" color="#8B5CF6" />
+                  ) : (
+                    <FlatList
+                      data={fields}
+                      keyExtractor={(item) => item.id.toString()}
+                      renderItem={({ item }) => (
+                        <View style={styles.fieldRow}>
+                          <Text style={styles.fieldName}>{item.fieldName}</Text>
+                          <View style={styles.fieldTypeBadge}>
+                            <Text style={styles.fieldType}>{item.fieldType}</Text>
+                          </View>
+                        </View>
+                      )}
+                      ListEmptyComponent={
+                        <Text style={styles.emptyFields}>No custom fields defined yet.</Text>
+                      }
+                    />
+                  )}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="construct-outline" size={48} color="#64748B" />
+                  <Text style={styles.emptyStateText}>Select a category on the left to manage its custom fields.</Text>
+                </View>
+              )}
             </View>
           </View>
+
+          {/* New Category Modal */}
+          <Modal visible={newCatModalVisible} transparent animationType="fade">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Create Custom Category</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. Survey Equipment"
+                  placeholderTextColor="#64748B"
+                  value={newCategoryName}
+                  onChangeText={setNewCategoryName}
+                />
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setNewCatModalVisible(false)}
+                  >
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.saveButton} onPress={handleCreateCategory}>
+                    <Text style={styles.saveText}>Create</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
-      </Modal>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#0B1220',
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0B1220',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
     padding: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: '#F8FAFC',
   },
   addButton: {
     flexDirection: 'row',
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#8B5CF6',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 8,
     alignItems: 'center',
   },
   addButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontWeight: 'bold',
-    marginLeft: 8,
+    fontSize: 13,
+    marginLeft: 6,
   },
   layout: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
     gap: 16,
   },
   leftColumn: {
     flex: 1,
-    maxWidth: 350,
+    maxWidth: Platform.OS === 'web' ? 340 : '100%',
+  },
+  columnHeader: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   rightColumn: {
     flex: 2,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
     padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
   },
   categoryCard: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   selectedCard: {
-    borderColor: '#4F46E5',
-    backgroundColor: '#EEF2FF',
+    borderColor: '#8B5CF6',
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   badgeContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   systemBadge: {
     fontSize: 10,
-    backgroundColor: '#E2E8F0',
-    color: '#475569',
-    paddingHorizontal: 6,
+    backgroundColor: 'rgba(148, 163, 184, 0.15)',
+    color: '#94A3B8',
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
+    fontWeight: '600',
     overflow: 'hidden',
   },
   customBadge: {
     fontSize: 10,
-    backgroundColor: '#DBEAFE',
-    color: '#2563EB',
-    paddingHorizontal: 6,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    color: '#38BDF8',
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
+    fontWeight: '600',
     overflow: 'hidden',
   },
   categoryName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#CBD5E1',
+  },
+  selectedCategoryName: {
+    color: '#F8FAFC',
+    fontWeight: '700',
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 40,
   },
   emptyStateText: {
     marginTop: 16,
-    color: '#64748B',
-    fontSize: 16,
+    color: '#94A3B8',
+    fontSize: 14,
+    textAlign: 'center',
   },
   fieldsContainer: {
     flex: 1,
   },
   fieldsTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: '#F8FAFC',
     marginBottom: 16,
   },
   addFieldContainer: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
     marginBottom: 20,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: '#0F172A',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
+    borderColor: '#334155',
+    borderRadius: 8,
     padding: 12,
+    color: '#F8FAFC',
+    fontSize: 13,
     marginBottom: 12,
   },
   typeSelector: {
@@ -409,75 +489,94 @@ const styles = StyleSheet.create({
   typeBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#E2E8F0',
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   typeBadgeActive: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#8B5CF6',
+    borderColor: '#8B5CF6',
   },
   typeText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '700',
   },
   typeTextActive: {
-    color: '#fff',
+    color: '#FFFFFF',
   },
   saveFieldButton: {
     backgroundColor: '#10B981',
-    padding: 12,
-    borderRadius: 6,
+    padding: 11,
+    borderRadius: 8,
     alignItems: 'center',
   },
   saveFieldText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontWeight: 'bold',
+    fontSize: 13,
   },
   fieldRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#334155',
   },
   fieldName: {
-    fontSize: 16,
-    color: '#1E293B',
+    fontSize: 14,
+    color: '#F8FAFC',
     fontWeight: '500',
   },
+  fieldTypeBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+  },
   fieldType: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 11,
+    color: '#38BDF8',
+    fontWeight: 'bold',
     textTransform: 'uppercase',
   },
   emptyFields: {
     textAlign: 'center',
-    color: '#94A3B8',
+    color: '#64748B',
     marginTop: 20,
+    fontSize: 13,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#0F172A',
     padding: 24,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
     width: '90%',
     maxWidth: 400,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#F8FAFC',
     marginBottom: 16,
   },
   modalInput: {
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
+    borderColor: '#334155',
+    borderRadius: 8,
     padding: 12,
+    color: '#F8FAFC',
+    fontSize: 14,
     marginBottom: 20,
   },
   modalActions: {
@@ -486,20 +585,23 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cancelButton: {
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   cancelText: {
-    color: '#64748B',
+    color: '#94A3B8',
     fontWeight: 'bold',
+    fontSize: 13,
   },
   saveButton: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#8B5CF6',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   saveText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontWeight: 'bold',
+    fontSize: 13,
   },
 });
