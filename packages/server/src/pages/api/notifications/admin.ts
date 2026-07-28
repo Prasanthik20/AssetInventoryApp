@@ -43,9 +43,10 @@ async function handler(
 
       FROM "Notifications" n
       LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
-      LEFT JOIN "Users" s ON s."employeeId" = n."senderId"
-      LEFT JOIN "Users" r ON r."employeeId" = n."receiverId"
-      WHERE n."tenantId" = $1
+      LEFT JOIN "Users" s ON CAST(s."employeeId" AS text) = CAST(n."senderId" AS text) AND (s."tenantId" = n."tenantId" OR n."tenantId" IS NULL)
+      LEFT JOIN "Users" r ON CAST(r."employeeId" AS text) = CAST(n."receiverId" AS text) AND (r."tenantId" = n."tenantId" OR n."tenantId" IS NULL)
+      WHERE (n."tenantId" = $1 OR $1 IS NULL OR n."tenantId" IS NULL)
+        AND n.status IN ('unread', 'replied', 'received', 'pending')
       ORDER BY n.created_at DESC;
     `;
 

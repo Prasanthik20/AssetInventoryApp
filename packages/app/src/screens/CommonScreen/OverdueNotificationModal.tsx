@@ -11,20 +11,36 @@ import {
     Platform,
     Alert,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { globalColors } from '../../styles/globalStyles';
 import * as ImagePicker from 'expo-image-picker';
 import { toPersistentDataUrl } from '../../utils/imageHelper';
 
+export interface ExtensionOption {
+    label: string;
+    days: number;
+}
+
+export const EXTENSION_OPTIONS: ExtensionOption[] = [
+    { label: '3 Days', days: 3 },
+    { label: '5 Days', days: 5 },
+    { label: '7 Days', days: 7 },
+    { label: '10 Days', days: 10 },
+    { label: '15 Days', days: 15 },
+    { label: '30 Days', days: 30 },
+];
+
 interface Props {
     visible: boolean;
     onClose: () => void;
-    onSubmit: (reason: string, proofImages?: string[]) => void;
+    onSubmit: (reason: string, proofImages?: string[], extensionDays?: number) => void;
     assetName: string;
     title?: string;
     requireProofImages?: boolean;
     minProofImages?: number;
+    showExtensionOptions?: boolean;
+    isManager?: boolean;
 }
 
 const OverdueNotificationModal: React.FC<Props> = ({
@@ -35,20 +51,29 @@ const OverdueNotificationModal: React.FC<Props> = ({
     title,
     requireProofImages = false,
     minProofImages = 4,
+    showExtensionOptions,
+    isManager = false,
 }) => {
+    // If isManager is true, duration options are hidden by default unless explicitly overridden
+    const shouldShowChips = showExtensionOptions !== undefined ? showExtensionOptions : !isManager;
 
     const [reason, setReason] = useState('');
     const [proofImages, setProofImages] = useState<string[]>([]);
+    const [selectedDays, setSelectedDays] = useState<number>(7);
     const [errorText, setErrorText] = useState('');
 
-    // 🔥 Auto-clear input each time modal opens
     useEffect(() => {
         if (visible) {
-            setReason('');
+            if (isManager) {
+                setReason(`Your assigned asset "${assetName}" is overdue. Please provide the reason for overdue status and request an extension if required.`);
+            } else {
+                setReason('');
+            }
             setProofImages([]);
+            setSelectedDays(7);
             setErrorText('');
         }
-    }, [visible]);
+    }, [visible, isManager, assetName]);
 
     const pickImage = async (useCamera: boolean) => {
         try {
@@ -59,18 +84,16 @@ const OverdueNotificationModal: React.FC<Props> = ({
                     return;
                 }
             }
-            // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
 
             const options: ImagePicker.ImagePickerOptions = {
                 mediaTypes: ['images'],
-                allowsEditing: true,                 // Enable editing to allow cropping and prevent native crash,
+                allowsEditing: true,
                 allowsMultipleSelection: !useCamera,
                 selectionLimit: 0,
                 quality: 0.2,
                 base64: true,
             };
 
-            // Disable editing/aspect if we are selecting multiple images from the gallery
             if (options.allowsMultipleSelection) {
                 delete options.allowsEditing;
                 delete options.aspect;
@@ -109,26 +132,6 @@ const OverdueNotificationModal: React.FC<Props> = ({
         }
     };
 
-    const processResult = (result: ImagePicker.ImagePickerResult) => {
-        if (!result.canceled && result.assets) {
-            const selectedImages = result.assets
-                .map((asset) => {
-                    if (asset.base64) {
-                        return `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
-                    }
-                    return null;
-                })
-                .filter((value): value is string => Boolean(value));
-
-            if (selectedImages.length > 0) {
-                setProofImages((prev) => [...prev, ...selectedImages]);
-                setErrorText('');
-            } else {
-                setErrorText('No valid images processed.');
-            }
-        }
-    };
-
     const handlePickProofImages = () => {
         if (Platform.OS === 'web') {
             pickImage(false);
@@ -147,7 +150,7 @@ const OverdueNotificationModal: React.FC<Props> = ({
 
     const handleSubmit = () => {
         if (!reason.trim()) {
-            setErrorText('Please provide details.');
+            setErrorText(isManager ? 'Please enter message to employee.' : 'Please provide reason for overdue/extension.');
             return;
         }
 
@@ -157,8 +160,18 @@ const OverdueNotificationModal: React.FC<Props> = ({
         }
 
         setErrorText('');
-        onSubmit(reason, requireProofImages ? proofImages : undefined);
+
+        if (isManager) {
+            onSubmit(reason.trim(), requireProofImages ? proofImages : undefined, undefined);
+        } else {
+            const selectedOptionLabel = EXTENSION_OPTIONS.find(o => o.days === selectedDays)?.label || `${selectedDays} Days`;
+            const formattedPayloadMessage = `Reason: ${reason.trim()}\nRequested Extension: ${selectedOptionLabel} (${selectedDays} days)`;
+
+            onSubmit(formattedPayloadMessage, requireProofImages ? proofImages : undefined, selectedDays);
+        }
     };
+
+    const modalTitleText = title || (isManager ? 'Ask Employee for Overdue Reason' : 'Provide Overdue Reason & Request Extension');
 
     return (
         <Modal
@@ -177,18 +190,50 @@ const OverdueNotificationModal: React.FC<Props> = ({
 
                     {/* TITLE */}
                     <Text style={styles.modalTitle}>
-                        {title || 'Provide Details'}
+                        {modalTitleText}
                     </Text>
 
                     {/* SUBTITLE */}
                     <Text style={styles.modalSubtitle}>
-                        Enter message for: <Text style={{ fontWeight: 'bold' }}>{assetName}</Text>
+                        Asset: <Text style={{ fontWeight: 'bold', color: '#22D3EE' }}>{assetName}</Text>
                     </Text>
 
-                    {/* INPUT */}
+                    {/* EXTENSION DAYS DURATION PICKER CHIPS (Employee Mode) */}
+                    {shouldShowChips && (
+                        <View style={styles.durationSection}>
+                            <Text style={styles.sectionLabel}>Select Required Extension Duration:</Text>
+                            <View style={styles.chipsRow}>
+                                {EXTENSION_OPTIONS.map((opt) => {
+                                    const isSelected = selectedDays === opt.days;
+                                    return (
+                                        <TouchableOpacity
+                                            key={opt.days}
+                                            style={[styles.chip, isSelected && styles.chipSelected]}
+                                            onPress={() => setSelectedDays(opt.days)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons
+                                                name={isSelected ? "checkmark-circle" : "time-outline"}
+                                                size={14}
+                                                color={isSelected ? "#FFF" : "#94A3B8"}
+                                            />
+                                            <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                                                {opt.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                    )}
+
+                    {/* REASON INPUT */}
+                    <Text style={styles.inputLabel}>
+                        {isManager ? 'Message to Employee:' : 'Reason / Remarks for Extension:'}
+                    </Text>
                     <TextInput
                         style={styles.reasonInput}
-                        placeholder="Enter your message..."
+                        placeholder={isManager ? "Enter notification message to employee..." : "Explain why asset return date needs to be extended..."}
                         placeholderTextColor="#888"
                         multiline
                         value={reason}
@@ -220,11 +265,11 @@ const OverdueNotificationModal: React.FC<Props> = ({
                     {/* SUBMIT BUTTON */}
                     <TouchableOpacity onPress={handleSubmit} style={styles.submitButton}>
                         <LinearGradient
-                            colors={['#27B2C3', '#40D69B']}
+                            colors={isManager ? ['#DC2626', '#EF4444'] : ['#27B2C3', '#40D69B']}
                             style={styles.submitButtonGradient}
                         >
                             <Text style={styles.submitButtonText}>
-                                {title?.includes("Reply") ? "Send Reply" : "Send Notification"}
+                                {isManager ? 'Send Overdue Alert to Employee' : `Submit Extension Request (${selectedDays} Days)`}
                             </Text>
                         </LinearGradient>
                     </TouchableOpacity>
@@ -235,10 +280,6 @@ const OverdueNotificationModal: React.FC<Props> = ({
     );
 };
 
-// ---------------------------
-// 🔹 STYLES
-// ---------------------------
-
 const styles = StyleSheet.create({
     centeredView: {
         flex: 1,
@@ -248,12 +289,12 @@ const styles = StyleSheet.create({
     },
     modalView: {
         width: '90%',
-        maxWidth: 500,
+        maxWidth: 520,
         backgroundColor: globalColors.surfacePrimary,
         borderRadius: 20,
-        padding: 25,
+        padding: 24,
         alignItems: 'center',
-        elevation: 6,
+        elevation: 10,
     },
     closeButton: {
         position: 'absolute',
@@ -261,37 +302,83 @@ const styles = StyleSheet.create({
         right: 15,
     },
     modalTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: 'bold',
         color: globalColors.textTitle,
-        marginBottom: 10,
+        marginBottom: 6,
         textAlign: 'center',
     },
     modalSubtitle: {
-        fontSize: 15,
+        fontSize: 14,
         color: globalColors.textSecondary,
         textAlign: 'center',
-        marginBottom: 20,
-        lineHeight: 22,
+        marginBottom: 16,
+        lineHeight: 20,
+    },
+    durationSection: {
+        width: '100%',
+        marginBottom: 14,
+    },
+    sectionLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#E2E8F0',
+        marginBottom: 8,
+    },
+    chipsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    chip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingVertical: 8,
+        paddingHorizontal: 13,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+    },
+    chipSelected: {
+        backgroundColor: '#0284C7',
+        borderColor: '#38BDF8',
+    },
+    chipText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#94A3B8',
+    },
+    chipTextSelected: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+    },
+    inputLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#E2E8F0',
+        alignSelf: 'flex-start',
+        marginBottom: 6,
     },
     reasonInput: {
         width: '100%',
-        height: 120,
+        height: 100,
         backgroundColor: globalColors.surfacePrimary,
         borderRadius: 10,
         borderWidth: 1,
         borderColor: globalColors.borderSoft,
-        padding: 15,
-        fontSize: 15,
+        padding: 12,
+        fontSize: 14,
         textAlignVertical: 'top',
-        marginBottom: 20,
+        marginBottom: 16,
         color: globalColors.textTitle,
     },
     errorText: {
         color: '#F97373',
         fontSize: 13,
         alignSelf: 'flex-start',
-        marginTop: -10,
+        marginTop: -6,
         marginBottom: 12,
     },
     submitButton: {
@@ -300,17 +387,17 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     submitButtonGradient: {
-        paddingVertical: 15,
+        paddingVertical: 14,
         alignItems: 'center',
     },
     submitButtonText: {
         color: globalColors.surfacePrimary,
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: 'bold',
     },
     proofContainer: {
         width: '100%',
-        marginBottom: 16,
+        marginBottom: 14,
     },
     proofButton: {
         width: '100%',
@@ -324,7 +411,7 @@ const styles = StyleSheet.create({
     proofButtonText: {
         color: globalColors.textTitle,
         fontWeight: '700',
-        fontSize: 14,
+        fontSize: 13,
     },
     proofHintText: {
         color: globalColors.textSecondary,
@@ -332,8 +419,8 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     proofThumbnail: {
-        width: 64,
-        height: 64,
+        width: 60,
+        height: 60,
         borderRadius: 8,
         marginRight: 8,
         borderWidth: 1,

@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: "Method not allowed" });
   } catch (error: any) {
     console.error("Manager API Error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: error?.message || "Internal server error", details: String(error) });
   }
 }
 
@@ -26,37 +26,53 @@ async function getManagerNotifications(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const managerId = Number(req.query.id || req.query.managerId || req.query.supervisorId);
+  const managerIdRaw = req.query.id || req.query.managerId || req.query.supervisorId;
 
-  if (!managerId) {
+  if (!managerIdRaw) {
     return res.status(400).json({ message: "Manager ID required" });
   }
 
-  const sql = `
-    SELECT
-      n.id                    AS "notificationId",
-      n.reason,
-      n.reply,
-      n.status,
-      n.created_at            AS "createdAt",
-      n."assignmentId",
-      n."senderId",
-      n."receiverId",
-      ad.id                   AS "assetId",
-      ad.name                 AS "assetName",
-      u."fullName"            AS "operatorName"
+  const managerIdStr = String(managerIdRaw).trim();
 
-    FROM "Notifications" n
-    LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
-    LEFT JOIN "Users" u ON u."employeeId" = n."senderId" 
+  try {
+    const sql = `
+      SELECT
+        n.id                    AS "notificationId",
+        n.reason,
+        n.reply,
+        n.status,
+        n.created_at            AS "createdAt",
+        n."assignmentId",
+        n."senderId",
+        n."receiverId",
+        n."tenantId",
+        ad.id                   AS "assetId",
+        ad.name                 AS "assetName",
+        COALESCE(u."fullName", 'Employee') AS "operatorName"
 
-    WHERE n."receiverId" = $1
-      AND n.status IN ('unread', 'replied', 'received')
-    ORDER BY n.created_at DESC
-  `;
+      FROM "Notifications" n
+      LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
+      LEFT JOIN "Users" u ON CAST(u."employeeId" AS text) = CAST(n."senderId" AS text) AND (u."tenantId" = n."tenantId" OR n."tenantId" IS NULL)
 
-  const { rows } = await query(sql, [managerId]);
-  return res.status(200).json(rows);
+      WHERE (
+        CAST(n."receiverId" AS text) = $1
+        OR n."receiverId" IS NULL
+      )
+      AND (
+        n."tenantId" = (SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = $1 LIMIT 1)
+        OR n."tenantId" IS NULL
+        OR (SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = $1 LIMIT 1) IS NULL
+      )
+        AND n.status IN ('unread', 'replied', 'received')
+      ORDER BY n.created_at DESC
+    `;
+
+    const { rows } = await query(sql, [managerIdStr]);
+    return res.status(200).json(rows);
+  } catch (error: any) {
+    console.error("GET Manager Notifications Error:", error);
+    return res.status(500).json({ message: error?.message || "Failed to fetch manager notifications", details: String(error) });
+  }
 }
 
 /* ===========================
@@ -66,17 +82,26 @@ async function sendOverdueNotification(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { assetId, assignmentId, operatorId, userId, receiverId, reason } = req.body;
+  const { assetId, assignmentId, operatorId, receiverId, reason, tenantId } = req.body;
 
-  const senderEmployeeId = userId || operatorId;
+  const senderEmployeeId = operatorId;
   if (!assetId || !senderEmployeeId || !receiverId || !reason) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
+  let resolvedTenantId = tenantId || null;
+  if (!resolvedTenantId) {
+    const tenantQuery = await query(
+      `SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = $1 LIMIT 1`,
+      [String(senderEmployeeId)]
+    );
+    resolvedTenantId = tenantQuery.rows[0]?.tenantId || null;
+  }
+
   const sql = `
     INSERT INTO "Notifications"
-      ("assetId", "assignmentId", "senderId", "receiverId", "reason", "status")
-    VALUES ($1, $2, $3, $4, $5, 'unread')
+      ("assetId", "assignmentId", "senderId", "receiverId", "reason", "status", "tenantId")
+    VALUES ($1, $2, $3, $4, $5, 'unread', $6)
     RETURNING *;
   `;
 
@@ -86,6 +111,7 @@ async function sendOverdueNotification(
     senderEmployeeId,
     receiverId,
     reason,
+    resolvedTenantId,
   ]);
 
   return res.status(201).json(rows[0]);

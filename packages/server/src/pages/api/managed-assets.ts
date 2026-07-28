@@ -44,6 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         assigner."fullName" AS "assignedBy",
         aa.id AS "assignmentId",
         aa."projectName" AS "projectName",
+        aa.assigned_date AS "assignedDate",
         aa.expected_return_date AS "expectedReturnDate",
         aa."operator_employeeId" AS "operatorId",
         aa."supervisor_employeeId" AS "senderId"
@@ -60,7 +61,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ORDER BY id DESC
         LIMIT 1
       ) aa ON TRUE
-      WHERE (a.assigned_to = $1 OR aa."operator_employeeId" = $1 OR a.assigned_by = $1 OR aa."supervisor_employeeId" = $1)
+      WHERE (
+        CAST(a.assigned_to AS text) = CAST($1 AS text)
+        OR CAST(aa."operator_employeeId" AS text) = CAST($1 AS text)
+        OR CAST(a.assigned_by AS text) = CAST($1 AS text)
+        OR CAST(aa."supervisor_employeeId" AS text) = CAST($1 AS text)
+      )
+      AND (
+        a."tenantId" = (SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = CAST($1 AS text) LIMIT 1)
+        OR a."tenantId" IS NULL
+      )
         AND LOWER(COALESCE(s.status, '')) IN ('assigned', 'overdue')
       ORDER BY a.id ASC`,
       [managerEmployeeId],
@@ -113,6 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         photoURL: row.photoURL || '',
         barcodeURL: row.barcodeURL || null,
         expectedReturnDate: row.expectedReturnDate || null,
+        assignedDate: row.assignedDate || null,
         projectName: row.projectName || null,
         assignmentId: row.assignmentId ? row.assignmentId.toString() : null,
         operatorId: row.operatorId ? row.operatorId.toString() : null,

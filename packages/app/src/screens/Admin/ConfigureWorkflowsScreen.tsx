@@ -299,7 +299,8 @@ export default function ConfigureWorkflowsScreen() {
                           key={r.roleId}
                           label={`Approver: ${r.roleName}`}
                           value={r.roleId}
-                          color={Platform.OS === 'web' ? '#071425' : '#E6F3FF'}
+                          color={Platform.OS === 'web' ? '#F8FAFC' : '#E6F3FF'}
+                          style={{ backgroundColor: '#0F172A', color: '#F8FAFC' }}
                         />
                       ))}
                     </Picker>
@@ -390,8 +391,8 @@ const styles = StyleSheet.create({
     marginRight: 12
   },
   stepBadgeText: { color: '#071425', fontSize: 13, fontWeight: 'bold' },
-  pickerContainer: { flex: 1, backgroundColor: 'rgba(18, 45, 73, 0.6)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(159, 207, 255, 0.1)', marginRight: 10, overflow: 'hidden' },
-  picker: { color: '#E6F3FF', height: 44, width: '100%' },
+  pickerContainer: { flex: 1, backgroundColor: '#0F172A', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34, 211, 238, 0.3)', marginRight: 10, overflow: 'hidden' },
+  picker: { color: '#F8FAFC', backgroundColor: '#0F172A', height: 44, width: '100%', paddingHorizontal: 10, fontWeight: '600', outlineStyle: 'none' as any, cursor: 'pointer' as any },
   removeBtn: { padding: 10 },
 
   saveBtn: { backgroundColor: '#22D3EE', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 20 },

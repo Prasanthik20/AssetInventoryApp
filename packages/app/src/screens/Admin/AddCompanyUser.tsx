@@ -44,13 +44,14 @@ const AddCompanyUser: React.FC = () => {
                 });
                 if (response.data && response.data.roles) {
                     setRolesList(response.data.roles);
+                    setRole(response.data.roles[0].roleName);
                     // Default to 'Supervisor' if found, otherwise first role
-                    const supervisorRole = response.data.roles.find((r: any) => r.roleName === 'Supervisor');
-                    if (supervisorRole) {
-                        setRole(supervisorRole.roleName);
-                    } else if (response.data.roles.length > 0) {
-                        setRole(response.data.roles[0].roleName);
-                    }
+                    // const supervisorRole = response.data.roles.find((r: any) => r.roleName === 'Supervisor');
+                    // if (supervisorRole) {
+                    // setRole(supervisorRole.roleName);
+                    // } else if (response.data.roles.length > 0) {
+                    // setRole(response.data.roles[0].roleName);
+                    // }
                 }
             } catch (error) {
                 console.error("Fetch roles error in AddCompanyUser:", error);

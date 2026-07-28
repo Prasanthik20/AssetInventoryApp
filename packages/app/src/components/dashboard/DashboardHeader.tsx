@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ActivityItem } from './ActivityFeedWidget';
+import { NotificationDrawer } from './NotificationDrawer';
 
 interface DashboardHeaderProps {
   companyName?: string;
@@ -8,6 +10,11 @@ interface DashboardHeaderProps {
   userRole?: string;
   onSearch?: (query: string) => void;
   onLogout?: () => void;
+  activities?: ActivityItem[];
+  onConfirmReturn?: (item: any) => void;
+  onWorkflowAction?: (item: any, action: 'approve' | 'reject') => void;
+  onHideNotification?: (id: number) => void;
+  onExtendDate?: (notificationId: number, days: number) => void;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -16,7 +23,16 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   userRole = 'Asset Management',
   onSearch,
   onLogout,
+  activities = [],
+  onConfirmReturn,
+  onWorkflowAction,
+  onHideNotification,
+  onExtendDate,
 }) => {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const unreadCount = activities.length;
+
   return (
     <View style={styles.headerContainer}>
       {/* Brand / Logo */}
@@ -45,18 +61,52 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         />
       </View>
 
-      {/* User Chip & Logout */}
+      {/* User Chip, Highlighted Notification Bell & Logout */}
       <View style={styles.userContainer}>
+        {/* Highlighted Notification Bell Button */}
+        <TouchableOpacity
+          style={[styles.bellButton, unreadCount > 0 && styles.bellButtonActive]}
+          onPress={() => setDrawerOpen(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name={unreadCount > 0 ? "notifications" : "notifications-outline"}
+            size={20}
+            color={unreadCount > 0 ? "#38BDF8" : "#E2E8F0"}
+          />
+          {unreadCount > 0 && (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* User Profile Chip */}
         <View style={styles.userChip}>
           <Ionicons name="person-circle-outline" size={20} color="#38BDF8" />
           <Text style={styles.userName} numberOfLines={1}>{userName}</Text>
         </View>
+
+        {/* Logout Button */}
         {onLogout && (
-          <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
+          <TouchableOpacity style={styles.logoutButton} onPress={onLogout} activeOpacity={0.8}>
             <Ionicons name="log-out-outline" size={18} color="#94A3B8" />
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Right Side Notification Slider Drawer */}
+      <NotificationDrawer
+        visible={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        activities={activities}
+        onConfirmReturn={onConfirmReturn}
+        onWorkflowAction={onWorkflowAction}
+        onHideNotification={onHideNotification}
+        onExtendDate={onExtendDate}
+      />
     </View>
   );
 };
@@ -144,7 +194,46 @@ const styles = StyleSheet.create({
   userContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+  },
+  bellButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  bellButtonActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: '#38BDF8',
+    shadowColor: '#38BDF8',
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#0F172A',
+  },
+  bellBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
   },
   userChip: {
     flexDirection: 'row',

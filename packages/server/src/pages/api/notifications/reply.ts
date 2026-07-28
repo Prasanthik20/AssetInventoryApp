@@ -43,7 +43,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ message: "Original notification not found" });
     }
 
-    const { assetId, assignmentId, reason, tenantId } = original.rows[0];
+    let { assetId, assignmentId, reason, tenantId } = original.rows[0];
+
+    let resolvedTenantId = tenantId || null;
+    if (!resolvedTenantId && senderId) {
+      const userTenantRes = await query(
+        `SELECT "tenantId" FROM "Users" WHERE "employeeId" = $1 LIMIT 1`,
+        [Number(senderId)]
+      );
+      resolvedTenantId = userTenantRes.rows[0]?.tenantId || null;
+    }
 
     let storedReplyMessage = replyMessage;
 
@@ -99,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `INSERT INTO "Notifications" 
     ("senderId", "receiverId", "assetId", "assignmentId", "reason", "reply", "status", "tenantId") 
     VALUES ($1, $2, $3, $4, $5, $6, 'received', $7) RETURNING *`,
-    [Number(senderId), Number(receiverId), assetId, assignmentId, reason, storedReplyMessage, tenantId]
+    [Number(senderId), Number(receiverId), assetId, assignmentId, reason, storedReplyMessage, resolvedTenantId]
   );
 
     // Mark both sides as received so sender and receiver see the same state
