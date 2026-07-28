@@ -22,8 +22,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
   const { tenantId, userId } = req.user;
 
-  if (!actionType || !['CHECKOUT', 'RETURN'].includes(actionType)) {
-    return res.status(400).json({ message: 'actionType must be "CHECKOUT" or "RETURN"' });
+  if (!actionType || !['CHECKOUT', 'RETURN', 'EXTENSION'].includes(actionType)) {
+    return res.status(400).json({ message: 'actionType must be "CHECKOUT", "RETURN" or "EXTENSION"' });
   }
 
   if (!assetId) {
@@ -31,9 +31,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 
   try {
-    // 1. Resolve requester employeeId
+    // 1. Resolve requester employeeId and role
     const userResult = await query(
-      'SELECT "employeeId", "fullName" FROM "Users" WHERE "userId" = $1 LIMIT 1',
+      `SELECT u."employeeId", u."fullName", r."roleName"
+       FROM "Users" u
+       LEFT JOIN "Roles" r ON u."roleId" = r."roleId"
+       WHERE u."userId" = $1 LIMIT 1`,
       [userId]
     );
     if (userResult.rows.length === 0) {
@@ -41,6 +44,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
     const requesterEmployeeId = Number(userResult.rows[0].employeeId);
     const requesterName = userResult.rows[0].fullName;
+    const requesterRole = String(userResult.rows[0].roleName || '').toLowerCase();
 
     // Verify asset exists
     const assetCheck = await query('SELECT name, status_id FROM "Asset_Details" WHERE id = $1 LIMIT 1', [assetId]);
@@ -48,15 +52,86 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       return res.status(404).json({ message: 'Asset not found' });
     }
 
+    const isTenantAdmin = ['tenant admin', 'admin', 'super admin', 'superadmin'].includes(requesterRole);
+
+    // If EXTENSION request is submitted by Tenant Admin directly, it's auto-approved
+    if (actionType === 'EXTENSION' && isTenantAdmin) {
+      const payload = typeof req.body.payload === 'string'
+        ? JSON.parse(req.body.payload)
+        : req.body.payload || req.body;
+      const daysToExtend = Math.max(1, parseInt(String(payload.extendedDays || req.body.daysToExtend || 5)) || 5);
+      const assignmentId = payload.assignmentId || req.body.assignmentId;
+
+      await query(
+        `UPDATE "Asset_Assignments"
+         SET expected_return_date = GREATEST(COALESCE(expected_return_date, CURRENT_DATE), CURRENT_DATE) + ($1 * INTERVAL '1 day'),
+             status = 'assigned'
+         WHERE id = $2`,
+        [daysToExtend, assignmentId]
+      );
+
+      const statusRes = await query(`SELECT id FROM "Status" WHERE LOWER(status) = 'assigned' LIMIT 1`);
+      if (statusRes.rows.length) {
+        await query(
+          `UPDATE "Asset_Details" SET status_id = $1 WHERE id = $2`,
+          [statusRes.rows[0].id, assetId]
+        );
+      }
+
+      if (payload.originalNotificationId || req.body.originalNotificationId) {
+        await query(
+          `UPDATE "Notifications" SET status = 'resolved' WHERE id = $1`,
+          [payload.originalNotificationId || req.body.originalNotificationId]
+        );
+      }
+
+      return res.status(200).json({
+        status: 'APPROVED',
+        message: 'Extension completed successfully (Auto-Approved by Tenant Admin).'
+      });
+    }
+
     // 2. Fetch active workflow config for this action type and tenant
-    const workflowResult = await query(
+    let workflowResult = await query(
       `SELECT id, name FROM "Approval_Workflows" 
        WHERE "tenantId" = $1 AND "actionType" = $2 AND "isActive" = true 
        LIMIT 1`,
       [tenantId, actionType]
     );
 
-    const hasWorkflow = workflowResult.rows.length > 0;
+    let hasWorkflow = workflowResult.rows.length > 0;
+
+    if (!hasWorkflow && actionType === 'EXTENSION') {
+      // Find Tenant Admin role
+      const adminRoleRes = await query(
+        `SELECT "roleId" FROM "Roles" 
+         WHERE ("tenantId" = $1 OR "tenantId" IS NULL) AND LOWER("roleName") IN ('tenant admin', 'admin') 
+         LIMIT 1`,
+        [tenantId]
+      );
+      const adminRoleId = adminRoleRes.rows[0]?.roleId;
+      if (adminRoleId) {
+        const insertWf = await query(
+          `INSERT INTO "Approval_Workflows" ("tenantId", "name", "actionType", "isActive")
+           VALUES ($1, 'Default Extension Workflow', 'EXTENSION', true)
+           RETURNING id`,
+          [tenantId]
+        );
+        const newWfId = insertWf.rows[0].id;
+        await query(
+          `INSERT INTO "Approval_Workflow_Steps" ("workflowId", "stepSequence", "approverRoleId")
+           VALUES ($1, 1, $2)`,
+          [newWfId, adminRoleId]
+        );
+        
+        // Re-fetch workflow
+        workflowResult = await query(
+          `SELECT id, name FROM "Approval_Workflows" WHERE id = $1 LIMIT 1`,
+          [newWfId]
+        );
+        hasWorkflow = true;
+      }
+    }
 
     if (!hasWorkflow) {
       // 3. Fallback: Auto-approve and perform action immediately
@@ -126,6 +201,22 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const workflow = workflowResult.rows[0];
     const workflowId = workflow.id;
 
+    const requestPayload = actionType === 'EXTENSION'
+      ? {
+          assignmentId: req.body.assignmentId,
+          extendedDays: req.body.extendedDays,
+          originalNotificationId: req.body.originalNotificationId
+        }
+      : {
+          targetAssigneeId,
+          expectedReturnDate,
+          projectName,
+          location,
+          notes,
+          photoURL,
+          barcodeURL
+        };
+
     // Create the Request
     const requestInsert = await query(
       `INSERT INTO "Approval_Requests"
@@ -137,15 +228,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         assetId,
         workflowId,
         requesterEmployeeId,
-        JSON.stringify({
-          targetAssigneeId,
-          expectedReturnDate,
-          projectName,
-          location,
-          notes,
-          photoURL,
-          barcodeURL
-        })
+        JSON.stringify(requestPayload)
       ]
     );
 

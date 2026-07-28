@@ -8,6 +8,7 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
   useWindowDimensions,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityItem } from './ActivityFeedWidget';
@@ -20,6 +21,7 @@ interface NotificationDrawerProps {
   onWorkflowAction?: (item: any, action: 'approve' | 'reject') => void;
   onHideNotification?: (id: number) => void;
   onExtendDate?: (notificationId: number, days: number) => void;
+  onReplyNotification?: (item: any, replyMessage: string) => void;
 }
 
 const parseNotificationPayload = (raw: any, defaultTitle: string, defaultSubtitle?: string) => {
@@ -89,9 +91,13 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   onWorkflowAction,
   onHideNotification,
   onExtendDate,
+  onReplyNotification,
 }) => {
   const { width, height } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<'ALL' | 'APPROVALS' | 'RETURNS' | 'ASSIGNMENTS'>('ALL');
+  const [replyingNotifId, setReplyingNotifId] = useState<string | number | null>(null);
+  const [extendReason, setExtendReason] = useState<string>('');
+  const [selectedDays, setSelectedDays] = useState<number>(5);
 
   if (!visible) return null;
 
@@ -209,6 +215,10 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                   const canConfirmReturn = raw && isReturnPending(raw) && onConfirmReturn;
                   const canWorkflowAction = raw && isWorkflowApprovalPending(raw) && onWorkflowAction;
                   const canExtend = raw && isExtensionEligible(raw, displayMessage) && onExtendDate;
+                  const isOverdueAlert = raw && 
+                    (String(raw.reason || '').toLowerCase().includes('overdue') || 
+                     String(item.title || '').toLowerCase().includes('overdue')) &&
+                    ['unread', 'pending', 'received'].includes(String(raw.status || '').toLowerCase());
 
                   const badgeColor =
                     eventType === 'approval'
@@ -303,7 +313,79 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                             <Text style={styles.btnMutedText}>Dismiss</Text>
                           </TouchableOpacity>
                         )}
+
+                        {isOverdueAlert && onReplyNotification && notifId && replyingNotifId !== notifId && (
+                          <TouchableOpacity
+                            style={[styles.btn, styles.btnPrimary]}
+                            onPress={() => setReplyingNotifId(notifId)}
+                          >
+                            <Ionicons name="chatbubble-ellipses-outline" size={14} color="#FFF" />
+                            <Text style={styles.btnText}>Reply</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
+
+                      {isOverdueAlert && onReplyNotification && notifId && replyingNotifId === notifId && (
+                        <View style={styles.replySectionContainer}>
+                          {/* Reason Input */}
+                          <Text style={styles.replyLabel}>Reason to extend days:</Text>
+                          <TextInput
+                            style={styles.replyInput}
+                            placeholder="Type reason here (e.g. Project deadline extended)..."
+                            placeholderTextColor="#64748B"
+                            value={extendReason}
+                            onChangeText={setExtendReason}
+                            multiline
+                            numberOfLines={2}
+                          />
+
+                          {/* Days Selection Chips */}
+                          <Text style={[styles.replyLabel, { marginTop: 10 }]}>Extension duration:</Text>
+                          <View style={styles.daysChipRow}>
+                            {[3, 5, 7, 10, 15, 30].map((days) => {
+                              const isActive = selectedDays === days;
+                              return (
+                                <TouchableOpacity
+                                  key={days}
+                                  style={[styles.daysChip, isActive && styles.daysChipActive]}
+                                  onPress={() => setSelectedDays(days)}
+                                >
+                                  <Text style={[styles.daysChipText, isActive && styles.daysChipTextActive]}>
+                                    {days} Days
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+
+                          {/* Action Buttons (Submit & Cancel) */}
+                          <View style={styles.replyActionRow}>
+                            <TouchableOpacity
+                              style={styles.btnCancelReply}
+                              onPress={() => {
+                                setReplyingNotifId(null);
+                                setExtendReason('');
+                              }}
+                            >
+                              <Text style={styles.btnCancelReplyText}>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={[styles.btn, styles.btnSuccess]}
+                              onPress={() => {
+                                const baseMsg = extendReason.trim() || 'I need the asset for extra days, please extend';
+                                const msg = `${baseMsg} (${selectedDays} Days)`;
+                                onReplyNotification(raw, msg);
+                                setReplyingNotifId(null);
+                                setExtendReason('');
+                              }}
+                            >
+                              <Ionicons name="send-outline" size={12} color="#FFF" />
+                              <Text style={styles.btnText}>Send Request</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
                     </View>
                   );
                 })}
@@ -531,6 +613,77 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   btnMutedText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  replySectionContainer: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.15)',
+  },
+  replyLabel: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  daysChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  daysChip: {
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  daysChipText: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  daysChipActive: {
+    backgroundColor: '#38BDF8',
+    borderColor: '#38BDF8',
+  },
+  daysChipTextActive: {
+    color: '#0F172A',
+    fontWeight: '800',
+  },
+  replyInput: {
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderRadius: 6,
+    color: '#F8FAFC',
+    fontSize: 12,
+    padding: 8,
+    textAlignVertical: 'top',
+    marginBottom: 8,
+    minHeight: 48,
+  },
+  replyActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  btnCancelReply: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  btnCancelReplyText: {
     color: '#94A3B8',
     fontSize: 11,
     fontWeight: '600',

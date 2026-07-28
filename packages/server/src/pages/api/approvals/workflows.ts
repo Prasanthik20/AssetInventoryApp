@@ -59,8 +59,8 @@ async function handler(req: any, res: NextApiResponse) {
   if (req.method === 'POST') {
     const { name, actionType, isActive, steps } = req.body;
 
-    if (!name || !actionType || !['CHECKOUT', 'RETURN'].includes(actionType)) {
-      return res.status(400).json({ message: 'name and actionType ("CHECKOUT" or "RETURN") are required' });
+    if (!name || !actionType || !['CHECKOUT', 'RETURN', 'EXTENSION'].includes(actionType)) {
+      return res.status(400).json({ message: 'name and actionType ("CHECKOUT", "RETURN" or "EXTENSION") are required' });
     }
 
     if (!Array.isArray(steps)) {

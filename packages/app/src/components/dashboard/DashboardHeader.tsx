@@ -15,6 +15,7 @@ interface DashboardHeaderProps {
   onWorkflowAction?: (item: any, action: 'approve' | 'reject') => void;
   onHideNotification?: (id: number) => void;
   onExtendDate?: (notificationId: number, days: number) => void;
+  onReplyNotification?: (item: any, replyMessage: string) => void;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -28,6 +29,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onWorkflowAction,
   onHideNotification,
   onExtendDate,
+  onReplyNotification,
 }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -106,6 +108,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         onWorkflowAction={onWorkflowAction}
         onHideNotification={onHideNotification}
         onExtendDate={onExtendDate}
+        onReplyNotification={onReplyNotification}
       />
     </View>
   );

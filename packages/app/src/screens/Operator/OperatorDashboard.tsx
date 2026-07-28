@@ -526,6 +526,13 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                       time: n.created_at ? new Date(n.created_at).toLocaleTimeString() : undefined,
                       rawItem: n,
                     }))}
+                    onReplyNotification={async (item, msg) => {
+                      try {
+                        await handleReplySubmit(msg, item);
+                      } catch (error) {
+                        console.error('Drawer reply error:', error);
+                      }
+                    }}
                 />
 
                 <ScrollView

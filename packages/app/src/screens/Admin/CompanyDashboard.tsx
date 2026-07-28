@@ -270,10 +270,19 @@ const CompanyDashboard: React.FC<Props> = ({
 
   const handleExtendDate = async (notificationId: number, days: number = 5) => {
     try {
-      await axios.post(`${baseURL}/api/assets/extend-return-date`, {
-        notificationId: Number(notificationId),
-        daysToExtend: days,
-      });
+      const token = await AsyncStorage.getItem('token');
+      await axios.post(
+        `${baseURL}/api/assets/extend-return-date`,
+        {
+          notificationId: Number(notificationId),
+          daysToExtend: days,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
 
       setNotifications((prev) => prev.filter((n) => Number(n.id) !== Number(notificationId)));
       fetchDashboardData();

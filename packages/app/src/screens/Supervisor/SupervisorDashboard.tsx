@@ -416,12 +416,18 @@ const SupervisorDashboard: React.FC<Props> = ({
 
   const handleExtendDate = async (notificationId: number, days: number) => {
     try {
+      const token = await AsyncStorage.getItem('token');
       const response = await axios.post(
         `${baseURL}/api/assets/extend-return-date`,
         {
           notificationId,
           daysToExtend: days,
         },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
       );
 
       showSnackbar(response.data.extensionMessage || 'Return date extended.', 'success');

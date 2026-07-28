@@ -283,6 +283,36 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           ]
         );
 
+      } else if (actionType === 'EXTENSION') {
+        const daysToExtend = Math.max(1, parseInt(String(payload.extendedDays || 5)) || 5);
+        const assignmentId = payload.assignmentId;
+
+        // 1. Update Expected Return Date & Assignment Status
+        await query(
+          `UPDATE "Asset_Assignments"
+           SET expected_return_date = GREATEST(COALESCE(expected_return_date, CURRENT_DATE), CURRENT_DATE) + ($1 * INTERVAL '1 day'),
+               status = 'assigned'
+           WHERE id = $2 OR (id = (SELECT id FROM "Asset_Assignments" WHERE "assetId" = $3 AND COALESCE(status, '') <> 'returned' ORDER BY id DESC LIMIT 1))`,
+          [daysToExtend, assignmentId, assetId]
+        );
+
+        // 2. Update Asset_Details status to Assigned
+        const statusRes = await query(`SELECT id FROM "Status" WHERE LOWER(status) = 'assigned' LIMIT 1`);
+        if (statusRes.rows.length) {
+          await query(
+            `UPDATE "Asset_Details" SET status_id = $1 WHERE id = $2`,
+            [statusRes.rows[0].id, assetId]
+          );
+        }
+
+        // 3. Resolve parent notification
+        if (payload.originalNotificationId) {
+          await query(
+            `UPDATE "Notifications" SET status = 'resolved' WHERE id = $1`,
+            [payload.originalNotificationId]
+          );
+        }
+
       } else {
         // RETURN
         const statusRes = await query(`SELECT id FROM "Status" WHERE status = 'Unassigned' LIMIT 1`);
