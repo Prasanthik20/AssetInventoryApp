@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   FlatList,
   TouchableOpacity,
   Platform,
@@ -15,8 +14,9 @@ import {
   useWindowDimensions,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation, Route, RouteProp } from '@react-navigation/native';
+import { useNavigation, Route, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import axios from 'axios';
 import { Picker } from '@react-native-picker/picker';
@@ -25,6 +25,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import OverdueNotificationModal from '../CommonScreen/OverdueNotificationModal';
 import { supervisorStyles } from './supervisor.styles';
 import AppSnackbar from 'src/components/common/AppSnackbar';
+import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
+import { StatMetricCard } from '../../components/dashboard/StatMetricCard';
+import { AssetDistributionWidget } from '../../components/dashboard/AssetDistributionWidget';
+import { AssetHealthWidget } from '../../components/dashboard/AssetHealthWidget';
+import { QuickActionsPanel } from '../../components/dashboard/QuickActionsPanel';
 
 type SupervisorDashboardNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -123,10 +128,22 @@ const SupervisorDashboard: React.FC<Props> = ({
 
   const styles = supervisorStyles({ width, height: useWindowDimensions().height });
 
-  const [metricsData, setMetricsData] = useState({
+  const [metricsData, setMetricsData] = useState<{
+    totalAssets: number;
+    officeAssets: number;
+    fieldAssets: number;
+    overdueAssets?: number;
+    underMaintenanceAssets?: number;
+    assignedAssets?: number;
+    unassignedAssets?: number;
+  }>({
     totalAssets: 0,
     officeAssets: 0,
     fieldAssets: 0,
+    overdueAssets: 0,
+    underMaintenanceAssets: 0,
+    assignedAssets: 0,
+    unassignedAssets: 0,
   });
   const [supervisorAssignedAssets, setSupervisorAssignedAssets] = useState<any[]>([]);
   const [operatorReplies, setOperatorReplies] = useState<OperatorReply[]>([]);
@@ -139,6 +156,7 @@ const SupervisorDashboard: React.FC<Props> = ({
   const [selectedItem, setSelectedItem] = useState<OperatorReply | null>(null);
   const [extendModalVisible, setExtendModalVisible] = useState(false); // Removed duplicate state
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
+  const [isSubscriptionExpired, setIsSubscriptionExpired] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     visible: boolean;
     message: string;
@@ -176,17 +194,18 @@ const SupervisorDashboard: React.FC<Props> = ({
   ];
 
   const fetchDashboardData = async () => {
-    if (!user?.employeeId) return;
+    const targetId = user?.employeeId || user?.id || user?.userId;
+    if (!targetId) return;
     try {
       setLoading(true);
 
       const [metricsRes, repliesRes, assetsRes, supervisorAssetsRes] = await Promise.all([
         axios.get(`${baseURL}/api/dashboard/metrics`),
         axios.get(
-          `${baseURL}/api/notifications/supervisor?id=${user?.employeeId}`,
+          `${baseURL}/api/notifications/manager?id=${targetId}`,
         ),
         axios.get(`${baseURL}/api/assets`),
-        axios.get(`${baseURL}/api/supervisor/assets?id=${user?.employeeId}`),
+        axios.get(`${baseURL}/api/managed-assets?id=${targetId}`),
       ]);
       const rawData = Array.isArray(repliesRes.data)
         ? repliesRes.data
@@ -251,9 +270,21 @@ const SupervisorDashboard: React.FC<Props> = ({
       setLoading(false);
     }
   };
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboardData();
+    }, [user?.employeeId])
+  );
+
   useEffect(() => {
-    fetchDashboardData();
-  }, [user?.employeeId]);
+    const loadSubscriptionStatus = async () => {
+      const expiredStr = await AsyncStorage.getItem('isSubscriptionExpired');
+      if (expiredStr) {
+        setIsSubscriptionExpired(JSON.parse(expiredStr));
+      }
+    };
+    loadSubscriptionStatus();
+  }, []);
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('user');
@@ -341,6 +372,35 @@ const SupervisorDashboard: React.FC<Props> = ({
     }
   };
 
+  const handleWorkflowAction = async (item: OperatorReply, action: 'approve' | 'reject') => {
+    try {
+      const parsed = JSON.parse(item.reply || '{}');
+      const requestId = Number(parsed.requestId);
+      const token = await AsyncStorage.getItem('token');
+
+      const response = await axios.post(
+        `${baseURL}/api/approvals/action`,
+        {
+          requestId,
+          action,
+          notes: action === 'approve' ? 'Approved via Supervisor Dashboard' : 'Rejected via Supervisor Dashboard'
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      showSnackbar(response.data.message || 'Action executed successfully.', 'success');
+      setOperatorReplies((prev) => prev.filter((n) => n.notificationId !== item.notificationId));
+      fetchDashboardData();
+    } catch (error: any) {
+      console.error('Workflow action error:', error?.response?.data || error);
+      showSnackbar(error?.response?.data?.message || 'Failed to execute workflow action.', 'error');
+    }
+  };
+
   const hideNotification = async (notificationId: number) => {
     try {
       await axios.put(`${baseURL}/api/notifications/hide`, { id: Number(notificationId) });
@@ -356,12 +416,18 @@ const SupervisorDashboard: React.FC<Props> = ({
 
   const handleExtendDate = async (notificationId: number, days: number) => {
     try {
+      const token = await AsyncStorage.getItem('token');
       const response = await axios.post(
         `${baseURL}/api/assets/extend-return-date`,
         {
           notificationId,
           daysToExtend: days,
         },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
       );
 
       showSnackbar(response.data.extensionMessage || 'Return date extended.', 'success');
@@ -388,106 +454,84 @@ const SupervisorDashboard: React.FC<Props> = ({
       blurRadius={5}
     >
       <SafeAreaView style={styles.safeArea}>
+        <DashboardHeader
+          companyName={user?.supervisorName || user?.fullName || 'Manager Portal'}
+          userName={user?.fullName || 'Manager'}
+          userRole="Manager / Lead"
+          onLogout={handleLogout}
+          activities={operatorReplies.map((n) => ({
+            id: n.notificationId,
+            title: n.reason || `${n.assetName} notification`,
+            subtitle: n.reply || undefined,
+            rawItem: {
+              id: n.notificationId,
+              reason: n.reason,
+              reply: n.reply,
+              status: n.status,
+              senderName: n.operatorName,
+            },
+          }))}
+          onHideNotification={hideNotification}
+          onExtendDate={(notifId, days) => handleExtendDate(notifId, days)}
+        />
+
         <ScrollView
           style={styles.screenScroll}
-          contentContainerStyle={styles.screenScrollContent}
+          contentContainerStyle={{ padding: 16 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* --- Header is now separate from the main content container --- */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <View style={styles.logoBg}>
-                <Feather name="box" size={24} color="#fff" />
-              </View>
-              <Text style={styles.headerTitle}>{user?.supervisorName}</Text>
-            </View>
-            <View style={styles.headerRight}>
-              <Feather name="user" size={16} color="#A9C6E4" />
-              <Text style={styles.userText}>{user?.fullName}</Text>
-              {/* <Switch
-              trackColor={{ false: '#E9E9EA', true: '#34C759' }}
-              thumbColor="#f4f3f4"
-              value={true}
-              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-            /> */}
-
-              <Feather
-                name="settings"
-                size={20}
-                color="#A9C6E4"
-                style={{ marginLeft: 5 }}
-              />
-
-              {/* 🔴 ADD LOGOUT BUTTON HERE */}
-              <TouchableOpacity onPress={handleLogout}>
-                <Feather
-                  name="log-out"
-                  size={22}
-                  color="#F97373"
-                  style={{ marginLeft: 10 }}
-                />
-              </TouchableOpacity>
-            </View>
+          {/* 1. Metric Cards Grid */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+            <StatMetricCard
+              title="TOTAL ASSETS"
+              count={metricsData.totalAssets || 0}
+              iconName="hardware-chip-outline"
+              accentColor="#22D3EE"
+              onPress={() => navigation.navigate('TotalAssetDetails')}
+            />
+            <StatMetricCard
+              title="OFFICE ASSETS"
+              count={metricsData.officeAssets || 0}
+              iconName="business-outline"
+              accentColor="#38BDF8"
+              onPress={() => navigation.navigate('OfficeAssets')}
+            />
+            <StatMetricCard
+              title="ASSETS IN FIELD"
+              count={metricsData.fieldAssets || 0}
+              iconName="map-outline"
+              accentColor="#8B5CF6"
+              onPress={() => navigation.navigate('FieldAssets')}
+            />
+            <StatMetricCard
+              title="MY MANAGED ASSETS"
+              count={supervisorAssignedAssets.length}
+              iconName="file-tray-full-outline"
+              accentColor="#F59E0B"
+              onPress={() =>
+                navigation.navigate('FieldAssets', {
+                  employeeId: String(user?.employeeId || ''),
+                  operatorName: String(user?.fullName || user?.supervisorName || ''),
+                })
+              }
+            />
           </View>
 
-          {/* --- Main content area is now a separate container --- */}
-
-          <View style={styles.container}>
-            {/* Metrics */}
-            <View
-              style={[
-                styles.metricsGrid,
-                isMobileLayout && { flexDirection: 'column', gap: 10 },
-              ]}
-            >
-              {metrics.map((m, index) => (
-                <View style={styles.metricBox}>
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.metricRow,
-                      m.title === 'Assets in Field' && styles.metricBoxField,
-                      isMobileLayout && { width: '100%' },
-                    ]}
-                    disabled={!m.navigateTo}
-                    onPress={() =>
-                      m.navigateTo && navigation.navigate(m.navigateTo as any)
-                    }
-                  >
-                    <Ionicons name={m.icon as any} size={24} color="#22D3EE" />
-                    <Text style={styles.metricTitle}>{m.title}</Text>
-                  </TouchableOpacity>
-                   <Text style={styles.metricValue}>{m.value}</Text>
-                  {m.title === 'Assets in Field' && (
-                    <View style={styles.locationMiniGrid}>
-                      {fieldLocationStats.length === 0 ? (
-                        <Text style={styles.locationMiniEmpty}>
-                          No location data
-                        </Text>
-                      ) : (
-                        fieldLocationStats.slice(0, 4).map(item => (
-                          <View
-                          key={item.location}
-                          style={styles.locationMiniCell}
-                          >
-                            <Text
-                              style={styles.locationMiniName}
-                              numberOfLines={1}
-                            >
-                              {item.location}
-                            </Text>
-                            <Text style={styles.locationMiniCount}>
-                              {item.count}
-                            </Text>
-                          </View>
-                        ))
-                      )}
-                    </View>
-                  )}
-                 
-                </View>
-              ))}
+          {/* 2. Distribution & Health Row */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+            <View style={{ flex: 1, minWidth: 240 }}>
+              <AssetDistributionWidget
+                assignedCount={metricsData.fieldAssets || 0}
+                unassignedCount={metricsData.officeAssets || 0}
+              />
             </View>
+            <View style={{ flex: 1, minWidth: 240 }}>
+              <AssetHealthWidget
+                overdueCount={metricsData.overdueAssets || 0}
+                maintenanceCount={metricsData.underMaintenanceAssets || 0}
+              />
+            </View>
+          </View>
 
             {/* --- Side-by-side content --- */}
             {/* Loading OR Content */}
@@ -508,6 +552,8 @@ const SupervisorDashboard: React.FC<Props> = ({
                     roleName={user?.roleName}
                     supervisorName={user?.supervisorName}
                     supervisorAssignedAssets={supervisorAssignedAssets}
+                    isSubscriptionExpired={isSubscriptionExpired}
+                    user={user}
                   />
                 </View>
                 <View style={styles.mobileBlockBottom}>
@@ -518,6 +564,7 @@ const SupervisorDashboard: React.FC<Props> = ({
                     openExtendModal={openExtendModal}
                     openReceiptModal={openReceiptModal}
                     onConfirmReturn={handleConfirmReturn}
+                    onWorkflowAction={handleWorkflowAction}
                     hideNotification={hideNotification}
                   />
                 </View>
@@ -531,6 +578,7 @@ const SupervisorDashboard: React.FC<Props> = ({
                   openExtendModal={openExtendModal}
                   openReceiptModal={openReceiptModal}
                   onConfirmReturn={handleConfirmReturn}
+                  onWorkflowAction={handleWorkflowAction}
                   hideNotification={hideNotification}
                 />
                 <QuickActionsSection
@@ -540,11 +588,10 @@ const SupervisorDashboard: React.FC<Props> = ({
                   employeeId={user?.employeeId}
                   roleName={user?.roleName}
                   supervisorName={user?.supervisorName}
-                  supervisorAssignedAssets={supervisorAssignedAssets}
+                  user={user}
                 />
               </View>
             )}
-          </View>
 
           {/* Bottom Navigation (desktop only) */}
           {/* {!isMobileLayout && (
@@ -667,111 +714,110 @@ const QuickActionsSection = ({
   supervisorName,
   supervisorAssignedAssets,
   isMobileLayout,
-}: any) => (
-  <View
-    style={[
-      styles.actionsSection,
-      isMobileLayout
-        ? {
-            flex: 1,
-            minWidth: 'auto',
-            minHeight: 'auto',
-            marginBottom: 0,
-            width: '100%',
-            position: 'relative',
-            zIndex: 2,
-          }
-        : { flexBasis: '32%', maxWidth: 360, height: 'auto' },
-    ]}
-  >
-    <Text style={styles.sectionTitle}>Quick Actions</Text>
-    <TouchableOpacity
-      style={[styles.actionButton, styles.blueButton]}
-      onPress={() => navigation.navigate('AddEditAsset')}
-    >
-      <Ionicons
-        name="add-circle-outline"
-        size={20}
-        color="#fff"
-        style={styles.actionIcon}
-      />
-      <Text style={styles.actionButtonText}>Add New Asset</Text>
-    </TouchableOpacity>
-    <TouchableOpacity
-      onPress={() =>
-        navigation.navigate('AssignAsset', {
-          supervisor_employeeId: employeeId,
-          supervisorName: supervisorName,
-        })
-      }
-    >
-      <View style={[styles.actionButton, { backgroundColor: '#0F766E' }]}> 
-        <Ionicons
-          name="swap-horizontal-outline"
-          size={20}
-          color="#fff"
-          style={styles.actionIcon}
-        />
-        <Text style={styles.actionButtonText}>Assign Asset</Text>
-      </View>
-    </TouchableOpacity>
-    <TouchableOpacity
-      onPress={() =>
+  isSubscriptionExpired,
+  user,
+}: any) => {
+  const permissions = Array.isArray(user?.permissions) && user.permissions.length > 0 ? user.permissions : null;
+
+  const canAssign = permissions ? permissions.includes('ASSIGN_ASSETS') : true;
+  const canReturn = permissions ? permissions.includes('INITIATE_RETURN') : true;
+  const canViewReports = permissions ? permissions.includes('VIEW_REPORTS') : true;
+
+  const actions: Array<{
+    id: string;
+    label: string;
+    iconName: keyof typeof Ionicons.glyphMap;
+    onPress: () => void;
+    variant?: 'primary' | 'secondary' | 'accent' | 'warning';
+  }> = [
+    ...(!isSubscriptionExpired
+      ? [
+          {
+            id: 'add_asset',
+            label: '+ Add New Asset',
+            iconName: 'add-circle-outline' as const,
+            variant: 'primary' as const,
+            onPress: () => navigation.navigate('AddEditAsset'),
+          },
+          ...(canAssign
+            ? [
+                {
+                  id: 'assign_asset',
+                  label: 'Assign Asset',
+                  iconName: 'link-outline' as const,
+                  variant: 'secondary' as const,
+                  onPress: () =>
+                    navigation.navigate('AssignAsset', {
+                      supervisor_employeeId: employeeId,
+                      supervisorName: supervisorName,
+                    }),
+                },
+              ]
+            : []),
+        ]
+      : []),
+    {
+      id: 'my_assigned_assets',
+      label: 'My Assigned Assets',
+      iconName: 'list-outline' as const,
+      variant: 'secondary' as const,
+      onPress: () =>
         navigation.navigate('FieldAssets', {
           employeeId: String(employeeId || ''),
           operatorName: String(supervisorName || ''),
-        })
-      }
+        }),
+    },
+    ...(canReturn
+      ? [
+          {
+            id: 'return_assigned_assets',
+            label: 'Return Assigned Assets',
+            iconName: 'return-up-back-outline' as const,
+            variant: 'secondary' as const,
+            onPress: () =>
+              navigation.navigate('ReturnAsset', {
+                assets: supervisorAssignedAssets || [],
+                supervisorEmployeeId: String(employeeId || ''),
+                returnByRole: 'supervisor',
+              }),
+          },
+        ]
+      : []),
+    ...(canViewReports
+      ? [
+          {
+            id: 'view_reports',
+            label: 'View Reports',
+            iconName: 'bar-chart-outline' as const,
+            variant: 'accent' as const,
+            onPress: () =>
+              navigation.navigate('Reports', {
+                employeeId: String(employeeId || ''),
+                roleName: String(roleName || 'Supervisor'),
+              }),
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <View
+      style={[
+        isMobileLayout
+          ? {
+              flex: 1,
+              width: '100%',
+              marginBottom: 0,
+              position: 'relative',
+              zIndex: 2,
+            }
+          : { flexBasis: '32%', maxWidth: 360, height: 'auto' },
+      ]}
     >
-      <View style={[styles.actionButton, { backgroundColor: '#0369A1' }]}> 
-        <Ionicons
-          name="list-outline"
-          size={20}
-          color="#fff"
-          style={styles.actionIcon}
-        />
-        <Text style={styles.actionButtonText}>My Assigned Assets</Text>
-      </View>
-    </TouchableOpacity>
-    <TouchableOpacity
-      onPress={() =>
-        navigation.navigate('ReturnAsset', {
-          assets: supervisorAssignedAssets || [],
-          supervisorEmployeeId: String(employeeId || ''),
-          returnByRole: 'supervisor',
-        })
-      }
-    >
-      <View style={[styles.actionButton, { backgroundColor: '#1E40AF' }]}> 
-        <Ionicons
-          name="return-up-back-outline"
-          size={20}
-          color="#fff"
-          style={styles.actionIcon}
-        />
-        <Text style={styles.actionButtonText}>Return Assigned Assets</Text>
-      </View>
-    </TouchableOpacity>
-    <TouchableOpacity
-      onPress={() =>
-        navigation.navigate('Reports', {
-          employeeId: String(employeeId || ''),
-          roleName: String(roleName || 'Supervisor'),
-        })
-      }
-    >
-      <View style={[styles.actionButton, { backgroundColor: '#4C1D95' }]}> 
-        <Ionicons
-          name="document-text-outline"
-          size={20}
-          color="#fff"
-          style={styles.actionIcon}
-        />
-        <Text style={styles.actionButtonText}>View Reports</Text>
-      </View>
-    </TouchableOpacity>
-  </View>
-);
+      <QuickActionsPanel title="QUICK ACTIONS" actions={actions} />
+    </View>
+  );
+};
 
 const ActivitySection = ({
   styles,
@@ -779,6 +825,7 @@ const ActivitySection = ({
   openExtendModal,
   openReceiptModal,
   onConfirmReturn,
+  onWorkflowAction,
   hideNotification,
   isMobileLayout,
 }: any) => (
@@ -864,6 +911,30 @@ const ActivitySection = ({
               >
                 <Text style={styles.extendButtonText}>Confirm Return</Text>
               </TouchableOpacity>
+            )}
+            {(() => {
+              try {
+                if (!item.reply) return false;
+                const parsed = JSON.parse(item.reply);
+                return parsed.kind === 'workflow_approval_pending' && ['unread', 'replied'].includes(item.status);
+              } catch {
+                return false;
+              }
+            })() && (
+              <>
+                <TouchableOpacity
+                  onPress={() => onWorkflowAction(item, 'approve')}
+                  style={[styles.extendButton, { backgroundColor: '#14532D', marginLeft: 8 }]}
+                >
+                  <Text style={styles.extendButtonText}>Approve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => onWorkflowAction(item, 'reject')}
+                  style={[styles.extendButton, { backgroundColor: '#991B1B', marginLeft: 8 }]}
+                >
+                  <Text style={styles.extendButtonText}>Reject</Text>
+                </TouchableOpacity>
+              </>
             )}
             <TouchableOpacity
               onPress={() => hideNotification(item.notificationId)}

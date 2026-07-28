@@ -106,28 +106,19 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
             keyboardShouldPersistTaps="handled"
           >
             <View
-              style={[
-                styles.loginContainer,
-                isMobileLayout && styles.loginContainerMobile,
-              ]}
+              style={isMobileLayout ? styles.loginContainerMobile : styles.loginContainer}
             >
               {/* Left Decorative Panel */}
               <View
-                style={[
-                  styles.leftPanel,
-                  isMobileLayout && styles.leftPanelMobile,
-                ]}
+                style={isMobileLayout ? styles.leftPanelMobile : styles.leftPanel}
               >
                 <Image
-                  source={require('../../assets/nscllp.png')}
-                  style={[styles.image, isMobileLayout && styles.imageMobile]}
+                  source={require('../../assets/Asq_Logo_IV.png')}
+                  style={isMobileLayout ? styles.imageMobile : styles.image}
                   resizeMode="contain"
                 />
                 <Text
-                  style={[
-                    styles.leftTitle,
-                    isMobileLayout && styles.leftTitleMobile,
-                  ]}
+                  style={isMobileLayout ? styles.leftTitleMobile : styles.leftTitle}
                 >
                   A SQUARE TECHNOLOGIES
                 </Text>
@@ -135,26 +126,16 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
               </View>
 
               {/* Right Form Panel */}
-              {/* <KeyboardAvoidingView
-                            behavior={Platform.OS === "android" ? "height" : "padding"}
-                            style={{ flex: 1 }}
-                        > */}
               <View
-                style={[
-                  styles.rightPanel,
-                  isMobileLayout && styles.rightPanelMobile,
-                ]}
+                style={isMobileLayout ? styles.rightPanelMobile : styles.rightPanel}
               >
                 <View style={styles.logoContainer}>
                   <Image
                     source={require('../../assets/Login_logo.jpg')}
-                    style={[styles.logo, isMobileLayout && styles.logoMobile]}
+                    style={isMobileLayout ? styles.logoMobile : styles.logo}
                   />
                   <Text
-                    style={[
-                      styles.welcome,
-                      isMobileLayout && styles.welcomeMobile,
-                    ]}
+                    style={isMobileLayout ? styles.welcomeMobile : styles.welcome}
                   >
                     Welcome !
                   </Text>
@@ -235,15 +216,7 @@ export default function CompanyLoginScreen({ setUser }: CompanyLoginProps) {
                     <Text style={styles.registerLink}>Register Now</Text>
                   </TouchableOpacity>
                 </View>
-
-                {/* <View style={styles.platformIcons}>
-                  <Text style={styles.platformText}>
-                    🌐 Web 📱 Android 
-                    {/* 🍎 iOS */}
-                  {/* </Text> */}
-                {/* </View> */}
               </View>
-              {/* </KeyboardAvoidingView> */}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -288,8 +261,13 @@ const styles = StyleSheet.create({
   loginContainerMobile: {
     flexDirection: 'column',
     width: '92%',
-    minHeight: 650,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(7, 24, 42, 0.84)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(159, 207, 255, 0.22)',
     marginVertical: 20,
+    elevation: 10,
   },
   leftPanel: {
     // flex: 1.2,
@@ -299,7 +277,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(18, 45, 73, 0.7)',
   },
   leftPanelMobile: {
-    flex: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    backgroundColor: 'rgba(18, 45, 73, 0.7)',
   },
   image: {
     width: 300,
@@ -318,6 +299,10 @@ const styles = StyleSheet.create({
   },
   leftTitleMobile: {
     fontSize: 20,
+    color: '#E6F3FF',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 1,
   },
   leftSubtitle: {
     fontSize: 16,
@@ -333,6 +318,8 @@ const styles = StyleSheet.create({
   },
   rightPanelMobile: {
     padding: 20,
+    backgroundColor: 'rgba(7, 24, 42, 1)',
+    justifyContent: 'flex-start',
   },
   logoContainer: {
     alignItems: 'center',
@@ -347,6 +334,8 @@ const styles = StyleSheet.create({
   logoMobile: {
     width: 60,
     height: 50,
+    marginBottom: 10,
+    borderRadius: 8,
   },
   welcome: {
     color: '#E6F3FF',
@@ -354,7 +343,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   welcomeMobile: {
+    color: '#E6F3FF',
     fontSize: 22,
+    fontWeight: '600',
   },
   signInText: {
     color: '#A9C6E4',

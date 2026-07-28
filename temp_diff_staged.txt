@@ -1,0 +1,1980 @@
+diff --git a/.gitignore b/.gitignore
+index 25f1e6b..c05aaee 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -45,7 +45,7 @@ local.properties
+ **/.gemini/
+ .android/
+ .ios/
+-
++*\deploy_exact
+ 
+ !scripts/deploy_final
+ # node.js
+diff --git a/E2E_TEST_SCENARIOS.md b/E2E_TEST_SCENARIOS.md
+index a31e974..b638cc0 100644
+--- a/E2E_TEST_SCENARIOS.md
++++ b/E2E_TEST_SCENARIOS.md
+@@ -232,14 +232,9 @@ AndroidManifest.java
+   <uses-permission android:name="android.permission.CAMERA"/>
+   <uses-permission android:name="android.permission.READ_CONTACTS"/>
+   <uses-permission android:name="android.permission.WRITE_CONTACTS"/>
+-  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+-  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+-  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+-  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
+   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+   <uses-permission android:name="android.permission.VIBRATE"/>
+-  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+   <queries>
+     <intent>
+       <action android:name="android.intent.action.VIEW"/>
+@@ -261,4 +256,10 @@ AndroidManifest.java
+       </intent-filter>
+     </activity>
+   </application>
+-</manifest>
+\ No newline at end of file
++</manifest>
++
++
++
++
++
++add depreciation value to all assets... if about to end life ot <60% of life set a message regarding the depreciation of the asset and time to take action either send to scarp or updgrade the asset. provide proper screens add these details
+\ No newline at end of file
+diff --git a/deploy steps b/deploy steps
+index a85f59e..503801f 100644
+--- a/deploy steps	
++++ b/deploy steps	
+@@ -47,9 +47,9 @@ cp -r public/. deploy_exact/public/ && \
+ cd deploy_exact && \
+ zip -r ../deploy.zip . && \
+ cd .. && \
+-az webapp deploy --name asset-api --resource-group asquaretechrg --src-path deploy.zip --type zip
++az webapp deploy --name asq-asset-api --resource-group asquaretechrg --src-path deploy.zip --type zip
+ 
+ 
+ debug:
+-az webapp log tail --name asset-api --resource-group asquaretechrg
++az webapp log tail --name asq-asset-api --resource-group asquaretechrg
+ ls -F packages/server/deploy_final/
+diff --git a/packages/app/android/app/build.gradle b/packages/app/android/app/build.gradle
+index a404d7e..daadcc4 100644
+--- a/packages/app/android/app/build.gradle
++++ b/packages/app/android/app/build.gradle
+@@ -92,8 +92,8 @@ android {
+         applicationId 'com.assetmgmt.com'
+         minSdkVersion rootProject.ext.minSdkVersion
+         targetSdkVersion rootProject.ext.targetSdkVersion
+-        versionCode 119
+-        versionName "1.1.9"
++        versionCode 120
++        versionName "1.2.1"
+ 
+         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+     }
+diff --git a/packages/app/android/app/src/main/AndroidManifest.xml b/packages/app/android/app/src/main/AndroidManifest.xml
+index 941ad28..dcec7fb 100644
+--- a/packages/app/android/app/src/main/AndroidManifest.xml
++++ b/packages/app/android/app/src/main/AndroidManifest.xml
+@@ -5,14 +5,15 @@
+   <uses-permission android:name="android.permission.INTERNET"/>
+   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+   <uses-permission android:name="android.permission.READ_CONTACTS"/>
+-  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+-  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+-  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+   <uses-permission android:name="android.permission.VIBRATE"/>
+   <uses-permission android:name="android.permission.WRITE_CONTACTS"/>
+-  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
++  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
++  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
++  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
++  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
++  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove"/>
+   <queries>
+     <intent>
+       <action android:name="android.intent.action.VIEW"/>
+diff --git a/packages/app/app.json b/packages/app/app.json
+index 3bf365f..0fb6aa0 100644
+--- a/packages/app/app.json
++++ b/packages/app/app.json
+@@ -38,13 +38,16 @@
+         "android.permission.CAMERA",
+         "android.permission.READ_CONTACTS",
+         "android.permission.WRITE_CONTACTS",
+-        "android.permission.READ_MEDIA_IMAGES",
+-        "android.permission.READ_MEDIA_VIDEO",
+         "android.permission.RECORD_AUDIO",
+         "android.permission.POST_NOTIFICATIONS",
++        "android.permission.VIBRATE"
++      ],
++      "blockedPermissions": [
+         "android.permission.READ_EXTERNAL_STORAGE",
+         "android.permission.WRITE_EXTERNAL_STORAGE",
+-        "android.permission.VIBRATE"
++        "android.permission.READ_MEDIA_IMAGES",
++        "android.permission.READ_MEDIA_VIDEO",
++        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+       ],
+       "intentFilters": [
+         {
+diff --git a/packages/app/dist/index.html b/packages/app/dist/index.html
+index 9f1a662..1898afe 100644
+--- a/packages/app/dist/index.html
++++ b/packages/app/dist/index.html
+@@ -32,6 +32,6 @@
+     </noscript>
+     <!-- The root element for your Expo app. -->
+     <div id="root"></div>
+-  <script src="/_expo/static/js/web/index-5ea937f6f26a11f4c1106cf8033ee1db.js" defer></script>
++  <script src="/_expo/static/js/web/index-250cceb447827f4ec0062bd7df0bffb5.js" defer></script>
+ </body>
+ </html>
+diff --git a/packages/app/fix_assign.js b/packages/app/fix_assign.js
+index 7cc5454..07c0e2e 100644
+--- a/packages/app/fix_assign.js
++++ b/packages/app/fix_assign.js
+@@ -91,13 +91,8 @@ const codeToInsert = `
+           showSnackbar('Camera permission is required.', 'error');
+           return;
+         }
+-      } else {
+-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+-        if (status !== 'granted') {
+-          showSnackbar('Media library permission is required.', 'error');
+-          return;
+-        }
+       }
++      // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
+ 
+       const options: ImagePicker.ImagePickerOptions = {
+         mediaTypes: ['images'],
+diff --git a/packages/app/package-lock.json b/packages/app/package-lock.json
+index ca46f6e..cf53705 100644
+--- a/packages/app/package-lock.json
++++ b/packages/app/package-lock.json
+@@ -22,7 +22,7 @@
+         "expo": "~54.0.0",
+         "expo-checkbox": "~5.0.8",
+         "expo-file-system": "~19.0.17",
+-        "expo-image-picker": "~17.0.10",
++        "expo-image-picker": "^55.0.10",
+         "expo-linear-gradient": "~15.0.8",
+         "expo-notifications": "~0.29.11",
+         "expo-print": "~15.0.7",
+@@ -5056,21 +5056,21 @@
+       }
+     },
+     "node_modules/expo-image-loader": {
+-      "version": "6.0.0",
+-      "resolved": "https://registry.npmjs.org/expo-image-loader/-/expo-image-loader-6.0.0.tgz",
+-      "integrity": "sha512-nKs/xnOGw6ACb4g26xceBD57FKLFkSwEUTDXEDF3Gtcu3MqF3ZIYd3YM+sSb1/z9AKV1dYT7rMSGVNgsveXLIQ==",
++      "version": "55.0.1",
++      "resolved": "https://registry.npmjs.org/expo-image-loader/-/expo-image-loader-55.0.1.tgz",
++      "integrity": "sha512-o8gCo1j59XpXDh0/llgNYPcnfecYQhafQAO0yw5pb+kukPizvNoEqea8tFQIIQmNYqxd6Ljgs7lLXed0gXpOdQ==",
+       "license": "MIT",
+       "peerDependencies": {
+         "expo": "*"
+       }
+     },
+     "node_modules/expo-image-picker": {
+-      "version": "17.0.11",
+-      "resolved": "https://registry.npmjs.org/expo-image-picker/-/expo-image-picker-17.0.11.tgz",
+-      "integrity": "sha512-/apkoyukDvsCHHb9fzP+F34A1uQqSzUtYH/2P/xJACNEwq+mwEXjXvVU8bzlJq6ih0Qo1+tpVivIa7B9kYSwOQ==",
++      "version": "55.0.21",
++      "resolved": "https://registry.npmjs.org/expo-image-picker/-/expo-image-picker-55.0.21.tgz",
++      "integrity": "sha512-Q8PHfZ/w9CJ+OmZmU59kgQSdQBn/mXbnF3NTv7CbBSkeaG3vb966Ee5ZcHrj1OuVCJppDbQpSGtexRUuFBJ3JA==",
+       "license": "MIT",
+       "dependencies": {
+-        "expo-image-loader": "~6.0.0"
++        "expo-image-loader": "~55.0.1"
+       },
+       "peerDependencies": {
+         "expo": "*"
+diff --git a/packages/app/src/components/common/AssetCard.tsx b/packages/app/src/components/common/AssetCard.tsx
+index d10dd09..559ac1a 100644
+--- a/packages/app/src/components/common/AssetCard.tsx
++++ b/packages/app/src/components/common/AssetCard.tsx
+@@ -82,6 +82,22 @@ const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, i
+             <Text style={styles.label}>Assigned By</Text>
+             <Text style={styles.value}>{asset.assignedBy || '—'}</Text>
+           </View>
++          {asset.depreciationMessage && (
++            <View style={{
++              flexDirection: 'row',
++              alignItems: 'center',
++              backgroundColor: 'rgba(239, 68, 68, 0.12)',
++              borderColor: 'rgba(239, 68, 68, 0.3)',
++              borderWidth: 1,
++              borderRadius: 6,
++              padding: 6,
++              marginTop: 6
++            }}>
++              <Text style={{ color: '#FCA5A5', fontSize: 11, flex: 1 }} numberOfLines={1}>
++                ⚠️ {asset.depreciationMessage}
++              </Text>
++            </View>
++          )}
+           <View style={styles.actionRow}>
+             <TouchableOpacity onPress={handlePress} style={styles.actionButton}>
+               <Text style={styles.actionText}>Details</Text>
+@@ -125,6 +141,22 @@ const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, i
+               <Text style={styles.label}>Assigned By</Text>
+               <Text style={styles.value}>{asset.assignedBy || '—'}</Text>
+             </View>
++            {asset.depreciationMessage && (
++              <View style={{
++                flexDirection: 'row',
++                alignItems: 'center',
++                backgroundColor: 'rgba(239, 68, 68, 0.12)',
++                borderColor: 'rgba(239, 68, 68, 0.3)',
++                borderWidth: 1,
++                borderRadius: 6,
++                padding: 6,
++                marginTop: 6
++              }}>
++                <Text style={{ color: '#FCA5A5', fontSize: 11, flex: 1 }} numberOfLines={1}>
++                  ⚠️ {asset.depreciationMessage}
++                </Text>
++              </View>
++            )}
+             <View style={styles.actionRow}>
+               <TouchableOpacity onPress={handlePress} style={styles.actionButton}>
+                 <Text style={styles.actionText}>Details</Text>
+@@ -174,7 +206,7 @@ const styles = StyleSheet.create({
+   },
+ 
+   row: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 4 },
+-  label: { color: '#A9C6E4', fontSize: 12, flex: 1 },
++  label: { color: '#f2f5faff', fontSize: 12, flex: 1 },
+   value: { color: '#E6F3FF', fontSize: 12, flex: 2, textAlign: 'right' },
+   statusBadge: {
+     paddingHorizontal: 8,
+diff --git a/packages/app/src/config/api.ts b/packages/app/src/config/api.ts
+index b0d4540..c49e516 100644
+--- a/packages/app/src/config/api.ts
++++ b/packages/app/src/config/api.ts
+@@ -12,7 +12,7 @@ import { Platform } from 'react-native';
+ const ENV = {
+   dev: {
+     // 10.0.2.2 = host machine from Android emulator; use LAN IP (e.g. 192.168.0.6) for physical device
+-    apiUrl: 'http://10.0.2.2:3000',
++    apiUrl: 'http://localhost:3000',//'http://10.0.2.2:3000',
+     wsUrl: 'ws://10.0.2.2:3000',
+     timeout: 30000,
+   },
+@@ -53,7 +53,7 @@ const getPlatformConfig = () => {
+     // For production: use Azure backend
+     const isDev = __DEV__;
+     return {
+-      apiUrl:  getEnv().apiUrl,
++      apiUrl: getEnv().apiUrl,
+       timeout: 30000,
+     };
+   }
+diff --git a/packages/app/src/navigation/types.ts b/packages/app/src/navigation/types.ts
+index e86d4cd..dcc3783 100644
+--- a/packages/app/src/navigation/types.ts
++++ b/packages/app/src/navigation/types.ts
+@@ -31,6 +31,10 @@ export type Asset = {
+   receiverId?: string | number;
+   operatorId?: string | number;
+   dynamicValues?: any[];
++  usefulLife?: number;
++  salvageValue?: string;
++  depreciationMessage?: string | null;
++  remainingValue?: number;
+ };
+ 
+ export type AssetAssignment = {
+@@ -120,4 +124,4 @@ const WEB_DEV_API_URL =
+ const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
+ 
+ // Keep all app screens on the same backend in development.
+-export const baseURL = 'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net' //DEV_API_URL; //http://localhost:3000'; //PROD_API_URL
++export const baseURL = 'http://localhost:3000'; //'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net' //DEV_API_URL; //http://localhost:3000'; //PROD_API_URL
+diff --git a/packages/app/src/screens/Admin/CompanyDashboard.tsx b/packages/app/src/screens/Admin/CompanyDashboard.tsx
+index 5939ea4..cfec28a 100644
+--- a/packages/app/src/screens/Admin/CompanyDashboard.tsx
++++ b/packages/app/src/screens/Admin/CompanyDashboard.tsx
+@@ -8,6 +8,7 @@ import {
+   Platform,
+   ScrollView,
+   useWindowDimensions,
++  Modal,
+ } from 'react-native';
+ import { SafeAreaView } from 'react-native-safe-area-context';
+ import { Feather, Ionicons } from '@expo/vector-icons';
+@@ -137,6 +138,9 @@ const CompanyDashboard: React.FC<Props> = ({
+   const [loading, setLoading] = useState(true);
+   const [notifications, setNotifications] = useState<any[]>([]);
+   const [user, setUser] = useState<any>(null);
++  const [depreciatingAssetsCount, setDepreciatingAssetsCount] = useState<number>(0);
++  const [depreciatingAssets, setDepreciatingAssets] = useState<any[]>([]);
++  const [isDepreciationModalVisible, setIsDepreciationModalVisible] = useState(false);
+   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+   const [totalCategories, setTotalCategories] = useState<number>(0);
+   const [subscription, setSubscription] = useState<any>(null);
+@@ -199,10 +203,12 @@ const CompanyDashboard: React.FC<Props> = ({
+       setUnderMaintenanceAssets(data.underMaintenanceAssets);
+       setFieldLocationStats(data.fieldLocationStats || []);
+       setTotalCategories(data.totalCategories || 0);
+-      
++      setDepreciatingAssetsCount(data.depreciatingAssetsCount || 0);
++      setDepreciatingAssets(data.depreciatingAssets || []);
++
+       const sub = data.subscription || null;
+       setSubscription(sub);
+-      
++
+       if (sub && sub.endDate) {
+         const endDate = new Date(sub.endDate);
+         endDate.setHours(23, 59, 59, 999);
+@@ -213,7 +219,7 @@ const CompanyDashboard: React.FC<Props> = ({
+         setIsSubscriptionExpired(false);
+         AsyncStorage.setItem('isSubscriptionExpired', JSON.stringify(false));
+       }
+-      
++
+     } catch (error: any) {
+       console.log('Dashboard API Error:', error.response?.data || error.message);
+     } finally {
+@@ -259,7 +265,7 @@ const CompanyDashboard: React.FC<Props> = ({
+   const hideNotification = async (id: number) => {
+     try {
+       const token = await AsyncStorage.getItem('token');
+-      await axios.put(`${baseURL}/api/notifications/hide`, 
++      await axios.put(`${baseURL}/api/notifications/hide`,
+         { id },
+         {
+           headers: {
+@@ -297,7 +303,7 @@ const CompanyDashboard: React.FC<Props> = ({
+ 
+     try {
+       const token = await AsyncStorage.getItem('token');
+-      await axios.post(`${baseURL}/api/assets/confirm-return`, 
++      await axios.post(`${baseURL}/api/assets/confirm-return`,
+         {
+           notificationId,
+           ...(hasAssignmentId ? { assignmentId } : { assetId }),
+@@ -345,7 +351,7 @@ const CompanyDashboard: React.FC<Props> = ({
+       source={require('../../assets/Company-bg.webp')}
+       style={styles.backgroundImage}
+       resizeMode="cover"
+-      // blurRadius={5}
++    // blurRadius={5}
+     >
+       <SafeAreaView style={styles.safeArea}>
+         <View style={styles.container}>
+@@ -410,7 +416,7 @@ const CompanyDashboard: React.FC<Props> = ({
+                       Renews: {new Date(subscription.endDate).toLocaleDateString()}
+                     </Text>
+                   </View>
+-                  
++
+                   {/* Users Progress Bar */}
+                   <View style={{ marginBottom: 10 }}>
+                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+@@ -622,6 +628,19 @@ const CompanyDashboard: React.FC<Props> = ({
+                     {underMaintenanceAssets}
+                   </Text>
+                 </View>
++                <View style={styles.metricBox}>
++                  <TouchableOpacity
++                    style={styles.metricRow}
++                    activeOpacity={0.8}
++                    onPress={() => setIsDepreciationModalVisible(true)}
++                  >
++                    <SafeIonicons name="trending-down-outline" size={24} color="#EAB308" />
++                    <Text style={styles.metricLabel}>Depreciating Assets</Text>
++                  </TouchableOpacity>
++                  <Text style={styles.metricValue}>
++                    {depreciatingAssetsCount}
++                  </Text>
++                </View>
+               </View>
+ 
+               {/* Bottom Content Row - Side-by-Side on Web */}
+@@ -727,71 +746,71 @@ const CompanyDashboard: React.FC<Props> = ({
+                                         const displayMessage = parseNotificationMessage(item.reply, item.reason);
+ 
+                                         return (
+-                                        <View
+-                                          key={
+-                                            item.id || `${groupIndex}-${index}`
+-                                          }
+-                                          style={styles.notifLine}
+-                                        >
+-                                          <View style={styles.notifMainContent}>
+-                                            <View style={styles.notifHeaderRow}>
+-                                              <View style={styles.tagContainer}>
+-                                                <Text style={styles.roleTagText}>
+-                                                  {item.status}
+-                                                </Text>
+-                                              </View>
+-                                              <Text style={styles.notifTime}>
+-                                                {item.createdAt
+-                                                  ? new Date(
++                                          <View
++                                            key={
++                                              item.id || `${groupIndex}-${index}`
++                                            }
++                                            style={styles.notifLine}
++                                          >
++                                            <View style={styles.notifMainContent}>
++                                              <View style={styles.notifHeaderRow}>
++                                                <View style={styles.tagContainer}>
++                                                  <Text style={styles.roleTagText}>
++                                                    {item.status}
++                                                  </Text>
++                                                </View>
++                                                <Text style={styles.notifTime}>
++                                                  {item.createdAt
++                                                    ? new Date(
+                                                       item.createdAt,
+                                                     ).toLocaleDateString('en-GB')
+-                                                  : ''}
++                                                    : ''}
++                                                </Text>
++                                              </View>
++
++                                              <Text style={styles.assetContext}>
++                                                Asset:{' '}
++                                                <Text
++                                                  style={{ fontWeight: 'bold' }}
++                                                >
++                                                  {item.asset?.name || 'N/A'}
++                                                </Text>
+                                               </Text>
+-                                            </View>
+ 
+-                                            <Text style={styles.assetContext}>
+-                                              Asset:{' '}
+                                               <Text
+-                                                style={{ fontWeight: 'bold' }}
++                                                style={styles.notifMessage}
++                                                numberOfLines={2}
+                                               >
+-                                                {item.asset?.name || 'N/A'}
+-                                              </Text>
+-                                            </Text>
+-
+-                                            <Text
+-                                              style={styles.notifMessage}
+-                                              numberOfLines={2}
+-                                            >
+-                                              "{displayMessage}"
+-                                            </Text>
+-
+-                                            {item.receiver?.name ? (
+-                                              <Text style={styles.tapToHideText}>
+-                                                Receiver: {item.receiver.name}
++                                                "{displayMessage}"
+                                               </Text>
+-                                            ) : null}
+ 
+-                                            <View style={styles.notifActionRow}>
+-                                              {isReturnPending && (
++                                              {item.receiver?.name ? (
++                                                <Text style={styles.tapToHideText}>
++                                                  Receiver: {item.receiver.name}
++                                                </Text>
++                                              ) : null}
++
++                                              <View style={styles.notifActionRow}>
++                                                {isReturnPending && (
++                                                  <TouchableOpacity
++                                                    style={[styles.inlineActionButton, styles.confirmReturnButton]}
++                                                    onPress={() => handleConfirmReturn(item)}
++                                                    activeOpacity={0.8}
++                                                  >
++                                                    <Text style={styles.inlineActionButtonText}>Confirm Return</Text>
++                                                  </TouchableOpacity>
++                                                )}
+                                                 <TouchableOpacity
+-                                                  style={[styles.inlineActionButton, styles.confirmReturnButton]}
+-                                                  onPress={() => handleConfirmReturn(item)}
++                                                  style={styles.inlineActionButton}
++                                                  onPress={() => hideNotification(item.id)}
+                                                   activeOpacity={0.8}
+                                                 >
+-                                                  <Text style={styles.inlineActionButtonText}>Confirm Return</Text>
++                                                  <Text style={styles.inlineActionButtonText}>Mark as seen</Text>
+                                                 </TouchableOpacity>
+-                                              )}
+-                                              <TouchableOpacity
+-                                                style={styles.inlineActionButton}
+-                                                onPress={() => hideNotification(item.id)}
+-                                                activeOpacity={0.8}
+-                                              >
+-                                                <Text style={styles.inlineActionButtonText}>Mark as seen</Text>
+-                                              </TouchableOpacity>
++                                              </View>
+                                             </View>
+                                           </View>
+-                                        </View>
+-                                      );
++                                        );
+                                       },
+                                     )}
+                                   </ScrollView>
+@@ -814,7 +833,7 @@ const CompanyDashboard: React.FC<Props> = ({
+                 {/* Quick Actions */}
+                 <View style={styles.actionsContainer}>
+                   <Text style={styles.sectionTitle}>Quick Actions</Text>
+-                  
++
+                   {!isSubscriptionExpired && (
+                     <>
+                       <TouchableOpacity
+@@ -922,6 +941,121 @@ const CompanyDashboard: React.FC<Props> = ({
+           </ScrollView>
+         </View>
+       </SafeAreaView>
++      {/* DEPRECIATION DETAILS TABLE MODAL */}
++      <Modal
++        visible={isDepreciationModalVisible}
++        transparent={true}
++        animationType="fade"
++        onRequestClose={() => setIsDepreciationModalVisible(false)}
++      >
++        <View style={{
++          flex: 1,
++          backgroundColor: 'rgba(0, 0, 0, 0.6)',
++          justifyContent: 'center',
++          alignItems: 'center',
++          padding: 20
++        }}>
++          <View style={{
++            width: isDesktopWeb ? '80%' : '100%',
++            maxHeight: '80%',
++            backgroundColor: '#0F172A',
++            borderRadius: 12,
++            borderWidth: 1,
++            borderColor: '#334155',
++            padding: 20,
++            overflow: 'hidden'
++          }}>
++            <View style={{
++              flexDirection: 'row',
++              justifyContent: 'space-between',
++              alignItems: 'center',
++              marginBottom: 15
++            }}>
++              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
++                <Ionicons name="trending-down" size={24} color="#EAB308" />
++                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#F8FAFC' }}>
++                  Depreciating Assets (less than 60% Life Remaining)
++                </Text>
++              </View>
++              <TouchableOpacity onPress={() => setIsDepreciationModalVisible(false)}>
++                <Ionicons name="close" size={24} color="#94A3B8" />
++              </TouchableOpacity>
++            </View>
++
++            {depreciatingAssets.length === 0 ? (
++              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
++                <Text style={{ color: '#94A3B8', fontSize: 15 }}>No assets are currently depreciating under 60% life.</Text>
++              </View>
++            ) : (
++              <ScrollView horizontal={true} showsHorizontalScrollIndicator={true}>
++                <View style={{ minWidth: 600 }}>
++                  {/* Table Header */}
++                  <View style={{
++                    flexDirection: 'row',
++                    backgroundColor: '#1E293B',
++                    paddingVertical: 10,
++                    paddingHorizontal: 12,
++                    borderRadius: 6,
++                    borderBottomWidth: 1,
++                    borderColor: '#334155'
++                  }}>
++                    <Text style={{ flex: 2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Asset Name</Text>
++                    <Text style={{ flex: 1.5, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Serial #</Text>
++                    <Text style={{ flex: 1, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Purchase Price</Text>
++                    <Text style={{ flex: 1.2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Remaining Life</Text>
++                    <Text style={{ flex: 1.2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Book Value</Text>
++                    <Text style={{ flex: 1.5, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Action Recommendation</Text>
++                  </View>
++
++                  {/* Table Body */}
++                  <ScrollView style={{ maxHeight: 400 }}>
++                    {depreciatingAssets.map((item, index) => (
++                      <View key={item.id || index} style={{
++                        flexDirection: 'row',
++                        paddingVertical: 12,
++                        paddingHorizontal: 12,
++                        borderBottomWidth: 1,
++                        borderColor: 'rgba(51, 65, 85, 0.5)',
++                        alignItems: 'center'
++                      }}>
++                        <Text style={{ flex: 2, color: '#F1F5F9', fontSize: 13, fontWeight: '500' }} numberOfLines={1}>{item.name}</Text>
++                        <Text style={{ flex: 1.5, color: '#CBD5E1', fontSize: 13 }} numberOfLines={1}>{item.serialNo || 'N/A'}</Text>
++                        <Text style={{ flex: 1, color: '#CBD5E1', fontSize: 13 }}>₹{parseFloat(item.price || 0).toLocaleString('en-IN')}</Text>
++                        <Text style={{ flex: 1.2, color: item.percentLifeRemaining < 20 ? '#EF4444' : '#F59E0B', fontSize: 13, fontWeight: 'bold' }}>
++                          {item.percentLifeRemaining}%
++                        </Text>
++                        <Text style={{ flex: 1.2, color: '#10B981', fontSize: 13, fontWeight: '600' }}>
++                          ₹{item.remainingValue.toLocaleString('en-IN')}
++                        </Text>
++                        <View style={{ flex: 1.5 }}>
++                          <View style={{
++                            backgroundColor: item.percentLifeRemaining < 20 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',
++                            borderColor: item.percentLifeRemaining < 20 ? '#EF4444' : '#3B82F6',
++                            borderWidth: 1,
++                            borderRadius: 4,
++                            paddingVertical: 4,
++                            paddingHorizontal: 8,
++                            alignSelf: 'flex-start'
++                          }}>
++                            <Text style={{
++                              color: item.percentLifeRemaining < 20 ? '#FCA5A5' : '#93C5FD',
++                              fontSize: 11,
++                              fontWeight: 'bold',
++                              textAlign: 'center'
++                            }}>
++                              {item.percentLifeRemaining < 20 ? 'SEND TO SCRAP' : 'UPGRADE ASSET'}
++                            </Text>
++                          </View>
++                        </View>
++                      </View>
++                    ))}
++                  </ScrollView>
++                </View>
++              </ScrollView>
++            )}
++          </View>
++        </View>
++      </Modal>
+     </ImageBackground>
+   );
+ };
+diff --git a/packages/app/src/screens/AssetDetails/AddEditAsset.tsx b/packages/app/src/screens/AssetDetails/AddEditAsset.tsx
+index eef7c09..78885b1 100644
+--- a/packages/app/src/screens/AssetDetails/AddEditAsset.tsx
++++ b/packages/app/src/screens/AssetDetails/AddEditAsset.tsx
+@@ -98,6 +98,8 @@ const AddEditAsset: React.FC = () => {
+     photoURL: "",
+     assignmentId: 0,
+     isOverdue: false,
++    usefulLife: 5,
++    salvageValue: "",
+   });
+ 
+   const [assetData, setAssetData] = useState<Omit<Asset, 'assetId'>>(getInitialAssetData);
+@@ -454,6 +456,22 @@ const AddEditAsset: React.FC = () => {
+       }
+     }
+ 
++    if (assetData.usefulLife !== undefined && assetData.usefulLife !== null && String(assetData.usefulLife).trim() !== "") {
++      const numericLife = Number(assetData.usefulLife);
++      if (Number.isNaN(numericLife) || numericLife <= 0) {
++        showSnackbar('Useful life must be a valid positive number of years.', 'error');
++        return false;
++      }
++    }
++
++    if (assetData.salvageValue !== undefined && assetData.salvageValue !== null && String(assetData.salvageValue).trim() !== "") {
++      const numericSalvage = Number(assetData.salvageValue);
++      if (Number.isNaN(numericSalvage) || numericSalvage < 0) {
++        showSnackbar('Salvage value must be a valid non-negative number.', 'error');
++        return false;
++      }
++    }
++
+     return true;
+   };
+ 
+@@ -472,6 +490,8 @@ const AddEditAsset: React.FC = () => {
+         location: String(assetData.location || '').trim(),
+         modelNumber: String(assetData.modelNumber || '').trim(),
+         price: String(assetData.price || '').trim(),
++        usefulLife: assetData.usefulLife !== undefined && String(assetData.usefulLife).trim() !== "" ? parseInt(String(assetData.usefulLife), 10) : 5,
++        salvageValue: String(assetData.salvageValue || '').trim(),
+         dynamicFields: Object.entries(dynamicValues).map(([fieldId, value]) => ({
+           fieldId: parseInt(fieldId),
+           value
+@@ -718,6 +738,32 @@ const AddEditAsset: React.FC = () => {
+                     />
+                   </View>
+ 
++                  <Text style={styles.label}>Useful Life (Years)</Text>
++                  <View style={styles.inputGroup}>
++                    <Feather name="hash" size={16} color="#22D3EE" style={styles.inputIcon} />
++                    <TextInput
++                      style={styles.textInput}
++                      placeholder="5"
++                      placeholderTextColor="#999"
++                      value={assetData.usefulLife !== undefined && assetData.usefulLife !== null ? String(assetData.usefulLife) : "5"}
++                      onChangeText={v => handleInputChange('usefulLife', v)}
++                      keyboardType="numeric"
++                    />
++                  </View>
++
++                  <Text style={styles.label}>Salvage / Scrap Value</Text>
++                  <View style={styles.inputGroup}>
++                    <Feather name="dollar-sign" size={16} color="#22D3EE" style={styles.inputIcon} />
++                    <TextInput
++                      style={styles.textInput}
++                      placeholder="0.00"
++                      placeholderTextColor="#999"
++                      value={assetData.salvageValue || ""}
++                      onChangeText={v => handleInputChange('salvageValue', v)}
++                      keyboardType="numeric"
++                    />
++                  </View>
++
+                   <Text style={styles.label}>Barcode Image</Text>
+                   <TouchableOpacity
+                     style={styles.imageUploadBox}
+diff --git a/packages/app/src/screens/AssetDetails/AssetFullDetails.tsx b/packages/app/src/screens/AssetDetails/AssetFullDetails.tsx
+index 250736f..72be7c4 100644
+--- a/packages/app/src/screens/AssetDetails/AssetFullDetails.tsx
++++ b/packages/app/src/screens/AssetDetails/AssetFullDetails.tsx
+@@ -1,7 +1,7 @@
+ import React, { useEffect, useRef, useState } from 'react';
+-import { View, Text, StyleSheet, SafeAreaView, ImageBackground,Platform,ScrollView, TouchableOpacity, Switch, Image, TextInput, useWindowDimensions, Modal, Alert } from 'react-native';
++import { View, Text, StyleSheet, SafeAreaView, ImageBackground, Platform, ScrollView, TouchableOpacity, Switch, Image, TextInput, useWindowDimensions, Modal, Alert } from 'react-native';
+ import { LinearGradient } from 'expo-linear-gradient';
+-import { Feather,FontAwesome, MaterialCommunityIcons,Ionicons } from '@expo/vector-icons';
++import { Feather, FontAwesome, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+ import { Asset, RootStackParamList, baseURL } from '../../navigation/types';
+ import useAssetMeta from "../../hooks/useAssetMeta";
+@@ -54,15 +54,15 @@ const FieldPicker = ({
+         <Ionicons name="chevron-down" size={16} color="#A9C6E4" />
+     </TouchableOpacity>
+ );
+-const DisplayField = ({ label, value, icon, children, editable, onChangeText }: { 
+-    label: string, 
+-    value?: string, 
+-    icon?: any, 
++const DisplayField = ({ label, value, icon, children, editable, onChangeText }: {
++    label: string,
++    value?: string,
++    icon?: any,
+     children?: React.ReactNode,
+     editable?: boolean,
+-    onChangeText?: (text: string) => void 
++    onChangeText?: (text: string) => void
+ }) => (
+-     <View style={styles.fieldContainer}>
++    <View style={styles.fieldContainer}>
+         <View style={styles.labelContainer}>
+             {icon && iconMap[icon]}
+             <Text style={styles.label}>{label}</Text>
+@@ -84,15 +84,15 @@ const DisplayField = ({ label, value, icon, children, editable, onChangeText }:
+     </View>
+ );
+ const formatDate = (dateValue?: string | Date | null) => {
+-  if (!dateValue) return "N/A";
++    if (!dateValue) return "N/A";
+ 
+-  const date = dateValue instanceof Date
+-    ? dateValue
+-    : new Date(dateValue);
++    const date = dateValue instanceof Date
++        ? dateValue
++        : new Date(dateValue);
+ 
+-  return isNaN(date.getTime())
+-    ? "N/A"
+-    : date.toLocaleDateString();
++    return isNaN(date.getTime())
++        ? "N/A"
++        : date.toLocaleDateString();
+ };
+ 
+ 
+@@ -107,12 +107,12 @@ const AssetFullDetails: React.FC = () => {
+     const { width } = useWindowDimensions();
+     const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+     const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
+-    
++
+     const styles = assetStyles(isMobileLayout);
+     // Edit mode state
+     const [isEditMode, setIsEditMode] = useState(false);
+     const [currentAsset, setCurrentAsset] = useState<Asset | null>(asset || null);
+-    
++
+     // Editable fields state
+     const [assetName, setAssetName] = useState(asset?.assetName || '');
+     const [selectedCategory, setSelectedCategory] = useState(String(asset?.category || ''));
+@@ -135,6 +135,9 @@ const AssetFullDetails: React.FC = () => {
+     const [showStatusPicker, setShowStatusPicker] = useState(false);
+     const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+     const [showAssigneePicker, setShowAssigneePicker] = useState(false);
++    const [usefulLife, setUsefulLife] = useState<number | string>(asset?.usefulLife || 5);
++    const [salvageValue, setSalvageValue] = useState(asset?.salvageValue || '');
++    const [refreshCount, setRefreshCount] = useState(0);
+     const [showAssignedDatePicker, setShowAssignedDatePicker] = useState(false);
+     const [assignableUsers, setAssignableUsers] = useState<AssigneeOption[]>([]);
+     const [snackbar, setSnackbar] = useState<{
+@@ -267,7 +270,9 @@ const AssetFullDetails: React.FC = () => {
+                     setAssignedTo(d.assignedTo || 'Admin Role');
+                     setPhotoURL(d.photoURL || '');
+                     setBarcodeURL(d.barcodeURL || '');
+-                    
++                    setUsefulLife(d.usefulLife || 5);
++                    setSalvageValue(d.salvageValue || '');
++
+                     setCurrentAsset({
+                         ...asset,
+                         ...d,
+@@ -279,7 +284,7 @@ const AssetFullDetails: React.FC = () => {
+             }
+         };
+         fetchFullDetails();
+-    }, [asset?.id, asset?.assetId]);
++    }, [asset?.id, asset?.assetId, refreshCount]);
+ 
+     const handleDynamicValueChange = (fieldId: any, val: string) => {
+         setDynamicValues(prev => prev.map(dv => dv.fieldId == fieldId ? { ...dv, value: val } : dv));
+@@ -287,8 +292,8 @@ const AssetFullDetails: React.FC = () => {
+ 
+     const pickImage = async (useCamera: boolean, isBarcode: boolean) => {
+         try {
+-            const result = useCamera 
+-                ? await ImagePicker.launchCameraAsync({ quality: 0.5 }) 
++            const result = useCamera
++                ? await ImagePicker.launchCameraAsync({ quality: 0.5 })
+                 : await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
+ 
+             if (!result.canceled) {
+@@ -342,7 +347,7 @@ const AssetFullDetails: React.FC = () => {
+             );
+         }
+     };
+-    
++
+     const handleSaveAsset = async () => {
+         try {
+             const finalId = asset?.id || asset?.assetId;
+@@ -390,7 +395,7 @@ const AssetFullDetails: React.FC = () => {
+                 }
+                 return;
+             }
+-            
++
+             // Check each field for changes
+             if (assetName !== asset.assetName) {
+                 updateData.assetName = assetName;
+@@ -422,12 +427,12 @@ const AssetFullDetails: React.FC = () => {
+             if (assignedTo !== (asset.assignedTo || '')) {
+                 updateData.assignedTo = assignedTo;
+             }
+-            
++
+             // Include photoURL if it changed and is not empty
+             if (photoURL && photoURL !== initialPhotoURL) {
+                 updateData.photoURL = photoURL;
+             }
+-            
++
+             // Include barcodeURL if it changed and is not empty
+             if (barcodeURL && barcodeURL !== initialBarcodeURL) {
+                 updateData.barcodeURL = barcodeURL;
+@@ -442,6 +447,15 @@ const AssetFullDetails: React.FC = () => {
+                 value: dv.value
+             }));
+ 
++            const parsedUsefulLife = usefulLife !== "" ? parseInt(String(usefulLife), 10) : 5;
++            const finalUsefulLife = isNaN(parsedUsefulLife) ? 5 : parsedUsefulLife;
++            if (finalUsefulLife !== (currentAsset?.usefulLife || 5)) {
++                updateData.usefulLife = finalUsefulLife;
++            }
++            if (salvageValue !== (currentAsset?.salvageValue || '')) {
++                updateData.salvageValue = salvageValue;
++            }
++
+             if (changedDynamicFields.length > 0) {
+                 updateData.dynamicFields = changedDynamicFields;
+             }
+@@ -461,7 +475,8 @@ const AssetFullDetails: React.FC = () => {
+             if (response.status === 200) {
+                 showSnackbar("Asset updated successfully", 'success');
+                 setIsEditMode(false);
+-                
++                setRefreshCount(prev => prev + 1);
++
+                 // Update currentAsset state
+                 const updatedAsset = {
+                     ...(currentAsset || asset),
+@@ -477,6 +492,8 @@ const AssetFullDetails: React.FC = () => {
+                     assignedTo,
+                     photoURL,
+                     barcodeURL,
++                    usefulLife,
++                    salvageValue,
+                     dynamicValues
+                 };
+                 setCurrentAsset(updatedAsset as Asset);
+@@ -487,7 +504,7 @@ const AssetFullDetails: React.FC = () => {
+             showSnackbar(errorMsg, 'error');
+         }
+     };
+-    
++
+     const handleEditToggle = () => {
+         if (isEditMode) {
+             // Cancel edit mode - reset fields to currentAsset
+@@ -506,13 +523,15 @@ const AssetFullDetails: React.FC = () => {
+             setAssignedTo(resetSource?.assignedTo || 'Admin Role');
+             setPhotoURL(resetSource?.photoURL || '');
+             setBarcodeURL(resetSource?.barcodeURL || '');
++            setUsefulLife(resetSource?.usefulLife || 5);
++            setSalvageValue(resetSource?.salvageValue || '');
+             if (resetSource?.dynamicValues) {
+                 setDynamicValues(resetSource.dynamicValues);
+             }
+         }
+         setIsEditMode(!isEditMode);
+     };
+-    
++
+     if (!asset) {
+         return <Text>Asset not found!</Text>;
+     }
+@@ -542,32 +561,32 @@ const AssetFullDetails: React.FC = () => {
+                                 )}
+                             </View>
+                             {!isMobileLayout && (
+-                            <View style={styles.headerRight}>
+-                                <Feather name="user" size={16} color="#A9C6E4" />
+-                                {/* <Text style={styles.userText}>Supervisor</Text> */}
+-                                {/* <Switch
++                                <View style={styles.headerRight}>
++                                    <Feather name="user" size={16} color="#A9C6E4" />
++                                    {/* <Text style={styles.userText}>Supervisor</Text> */}
++                                    {/* <Switch
+                                     trackColor={{ false: "#E9E9EA", true: "#34C759" }}
+                                     thumbColor={"#f4f3f4"} value={true}
+                                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                 /> */}
+-                                <Feather name="settings" size={20} color="#A9C6E4" style={{ marginLeft: 5 }} />
+-                            </View>
+-                            )}  
++                                    <Feather name="settings" size={20} color="#A9C6E4" style={{ marginLeft: 5 }} />
++                                </View>
++                            )}
+                         </View>
+ 
+                         {/* Details Body */}
+-                       <ScrollView showsVerticalScrollIndicator={false}>
++                        <ScrollView showsVerticalScrollIndicator={false}>
+                             <View style={[
+-                                styles.formBody, 
+-                                isMobileLayout && { flexDirection: 'column', gap: 0 } 
++                                styles.formBody,
++                                isMobileLayout && { flexDirection: 'column', gap: 0 }
+                             ]}>
+-                                
++
+                                 <View style={styles.formColumn}>
+                                     <Text style={styles.sectionTitle}>General Details</Text>
+-                                    <DisplayField 
+-                                        label="Asset Name" 
+-                                        value={assetName} 
+-                                        icon="truck" 
++                                    <DisplayField
++                                        label="Asset Name"
++                                        value={assetName}
++                                        icon="truck"
+                                         editable={isEditMode && !isAssignedCardEdit}
+                                         onChangeText={setAssetName}
+                                     />
+@@ -601,28 +620,89 @@ const AssetFullDetails: React.FC = () => {
+                                             <Text style={styles.valueText}>{statusValue || 'N/A'}</Text>
+                                         )}
+                                     </DisplayField>
+-                                    <DisplayField 
+-                                        label="Model Number" 
+-                                        value={modelNumber} 
+-                                        icon="archive" 
++                                    <DisplayField
++                                        label="Model Number"
++                                        value={modelNumber}
++                                        icon="archive"
+                                         editable={isEditMode && !isAssignedCardEdit}
+                                         onChangeText={setModelNumber}
+                                     />
+-                                    <DisplayField 
+-                                        label="Serial Number" 
+-                                        value={serialNumber} 
+-                                        icon="hash" 
++                                    <DisplayField
++                                        label="Serial Number"
++                                        value={serialNumber}
++                                        icon="hash"
+                                         editable={isEditMode && !isAssignedCardEdit}
+                                         onChangeText={setSerialNumber}
+                                     />
+-                                    <DisplayField 
+-                                        label="Price" 
+-                                        value={price} 
+-                                        icon="dollar" 
++                                    <DisplayField
++                                        label="Price"
++                                        value={price}
++                                        icon="dollar"
+                                         editable={isEditMode && !isAssignedCardEdit}
+                                         onChangeText={setPrice}
+                                     />
+ 
++                                    {/* DEPRECIATION DISPLAY AND SETTINGS */}
++                                    {isEditMode && !isAssignedCardEdit ? (
++                                        <View style={{ marginTop: 15 }}>
++                                            <Text style={[styles.sectionTitle, { color: '#EAB308', marginTop: 10 }]}>Depreciation Settings</Text>
++                                            <DisplayField
++                                                label="Useful Life (Years)"
++                                                value={usefulLife !== undefined && usefulLife !== null ? String(usefulLife) : "5"}
++                                                icon="hash"
++                                                editable={true}
++                                                onChangeText={(v) => setUsefulLife(v)}
++                                            />
++                                            <DisplayField
++                                                label="Salvage / Scrap Value"
++                                                value={salvageValue}
++                                                icon="dollar"
++                                                editable={true}
++                                                onChangeText={setSalvageValue}
++                                            />
++                                        </View>
++                                    ) : (
++                                        currentAsset && (
++                                            <View style={{ marginTop: 15 }}>
++                                                <Text style={[styles.sectionTitle, { color: '#EAB308', marginTop: 10 }]}>Depreciation & Life</Text>
++                                                <DisplayField
++                                                    label="Useful Life (Years)"
++                                                    value={usefulLife ? `${usefulLife} Years` : '5 Years'}
++                                                    icon="hash"
++                                                />
++                                                <DisplayField
++                                                    label="Salvage / Scrap Value"
++                                                    value={salvageValue ? `₹${parseFloat(salvageValue).toLocaleString('en-IN')}` : '₹0'}
++                                                    icon="dollar"
++                                                />
++                                                <DisplayField
++                                                    label="Remaining Book Value"
++                                                    value={currentAsset.remainingValue !== undefined ? `₹${currentAsset.remainingValue.toLocaleString('en-IN')}` : 'N/A'}
++                                                    icon="dollar"
++                                                />
++                                                {currentAsset.depreciationMessage && (
++                                                    <View style={{
++                                                        marginTop: 10,
++                                                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
++                                                        borderColor: '#EF4444',
++                                                        borderWidth: 1,
++                                                        borderRadius: 8,
++                                                        padding: 12,
++                                                        marginBottom: 10
++                                                    }}>
++                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
++                                                            <Ionicons name="warning" size={16} color="#EF4444" />
++                                                            <Text style={{ color: '#EF4444', fontWeight: 'bold', fontSize: 13 }}>Action Required</Text>
++                                                        </View>
++                                                        <Text style={{ color: '#FCA5A5', fontSize: 13, lineHeight: 18 }}>
++                                                            {currentAsset.depreciationMessage}
++                                                        </Text>
++                                                    </View>
++                                                )}
++                                            </View>
++                                        )
++                                    )}
++
+                                     {/* 🔹 DYNAMIC FIELDS DISPLAY/EDIT */}
+                                     {dynamicValues.length > 0 && (
+                                         <View style={{ marginTop: 20 }}>
+@@ -642,7 +722,7 @@ const AssetFullDetails: React.FC = () => {
+                                 </View>
+ 
+                                 <View style={styles.formColumn}>
+-                                    <TouchableOpacity 
++                                    <TouchableOpacity
+                                         onPress={handleImageUpload}
+                                         style={styles.mobileImageContainer}
+                                         disabled={!isEditMode}
+@@ -659,15 +739,15 @@ const AssetFullDetails: React.FC = () => {
+                                             </View>
+                                         )}
+                                     </TouchableOpacity>
+-                                     <Text style={styles.barcodeText}>Asset ID: {asset.barcode || 'N/A'}</Text>
++                                    <Text style={styles.barcodeText}>Asset ID: {asset.barcode || 'N/A'}</Text>
+                                     {/* Barcode Image with Upload */}
+-                                    <TouchableOpacity 
++                                    <TouchableOpacity
+                                         onPress={handleBarcodeUpload}
+                                         style={styles.barcodeContainer}
+                                         disabled={!isEditMode}
+                                     >
+                                         {barcodeURL ? (
+-                                     <Image source={{ uri: barcodeURL }} style={styles.barcodeImage} />
++                                            <Image source={{ uri: barcodeURL }} style={styles.barcodeImage} />
+                                         ) : (
+                                             <View style={styles.barcodeUploadPlaceholder}>
+                                                 <Feather name="maximize" size={24} color="#A9C6E4" />
+@@ -675,8 +755,8 @@ const AssetFullDetails: React.FC = () => {
+                                             </View>
+                                         )}
+                                     </TouchableOpacity>
+-                                   
+-                                    <DisplayField 
++
++                                    <DisplayField
+                                         label="Location"
+                                         value={location}
+                                         icon="map-pin"
+@@ -787,11 +867,11 @@ const AssetFullDetails: React.FC = () => {
+                                 </View>
+                             </View>
+                         </ScrollView>
+-                        
++
+                         {/* Action Buttons */}
+                         <View style={[styles.footer, isMobileLayout && { justifyContent: 'space-between' }]}>
+                             {!isSubscriptionExpired && (
+-                                <TouchableOpacity 
++                                <TouchableOpacity
+                                     style={isMobileLayout && { flex: 1 }}
+                                     onPress={isEditMode ? handleSaveAsset : handleEditToggle}
+                                 >
+@@ -806,14 +886,14 @@ const AssetFullDetails: React.FC = () => {
+                                     </LinearGradient>
+                                 </TouchableOpacity>
+                             )}
+-                            <TouchableOpacity 
+-                                style={[styles.cancelButton, isMobileLayout && { flex: 1 }]} 
++                            <TouchableOpacity
++                                style={[styles.cancelButton, isMobileLayout && { flex: 1 }]}
+                                 onPress={isEditMode ? handleEditToggle : () => navigation.goBack()}
+                             >
+-                                <Text style={[styles.buttonText, { color: '#A9C6E4' }]}> 
++                                <Text style={[styles.buttonText, { color: '#A9C6E4' }]}>
+                                     {isEditMode ? 'Cancel' : 'Go Back'}
+                                 </Text>
+-                        </TouchableOpacity>
++                            </TouchableOpacity>
+                         </View>
+                     </View>
+                 </View>
+@@ -944,7 +1024,7 @@ const AssetFullDetails: React.FC = () => {
+ const styles = StyleSheet.create({
+     fieldContainer: { marginBottom: 12 },
+     labelContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, marginLeft: 5 },
+-    label: { fontSize: 12, color: globalColors.textBody, fontWeight: '500' }, // Light text
++    label: { fontSize: 12, color: '#f0f3f7ff', fontWeight: '500' }, // Light text
+     fieldIcon: { marginRight: 6 },
+     valueBox: {
+         backgroundColor: 'rgba(18, 45, 73, 0.86)',
+@@ -959,7 +1039,7 @@ const styles = StyleSheet.create({
+         borderColor: '#34D399',
+         borderWidth: 2,
+     },
+-     valueText: {
++    valueText: {
+         fontSize: 14,
+         color: '#E6F3FF',
+         fontWeight: '500',
+diff --git a/packages/app/src/screens/AssetDetails/addstyles.tsx b/packages/app/src/screens/AssetDetails/addstyles.tsx
+index a6ce1c5..db11a43 100644
+--- a/packages/app/src/screens/AssetDetails/addstyles.tsx
++++ b/packages/app/src/screens/AssetDetails/addstyles.tsx
+@@ -7,7 +7,7 @@ export function addStyles(isMobileLayout: boolean) {
+     panelStrong: 'rgba(7, 24, 42, 0.9)',
+     panelMuted: 'rgba(18, 45, 73, 0.86)',
+     border: 'rgba(159, 207, 255, 0.22)',
+-    textPrimary: '#E6F3FF',
++    textPrimary: '#f0f3f7ff',
+     textSecondary: '#A9C6E4',
+     accent: '#34D399',
+   };
+@@ -155,7 +155,7 @@ export function addStyles(isMobileLayout: boolean) {
+     },
+     label: {
+       fontSize: 12,
+-      color: theme.textSecondary,
++      color: '#f2f5faff',
+       marginBottom: 6,
+       fontWeight: '700',
+       marginLeft: 4,
+diff --git a/packages/app/src/screens/CommonScreen/BillingScreen.tsx b/packages/app/src/screens/CommonScreen/BillingScreen.tsx
+index 4911f68..df56fcc 100644
+--- a/packages/app/src/screens/CommonScreen/BillingScreen.tsx
++++ b/packages/app/src/screens/CommonScreen/BillingScreen.tsx
+@@ -121,12 +121,7 @@ const BillingScreen: React.FC = () => {
+ 
+   const pickImage = async () => {
+     try {
+-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+-      if (!permission.granted) {
+-        showSnackbar('Gallery permission is required to upload receipt.', 'error');
+-        return;
+-      }
+-
++      // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
+       const result = await ImagePicker.launchImageLibraryAsync({
+         mediaTypes: ImagePicker.MediaTypeOptions.Images,
+         allowsEditing: true,
+diff --git a/packages/app/src/screens/SuperAdmin/SuperAdminDashboard.tsx b/packages/app/src/screens/SuperAdmin/SuperAdminDashboard.tsx
+index ea0e507..7bc4b32 100644
+--- a/packages/app/src/screens/SuperAdmin/SuperAdminDashboard.tsx
++++ b/packages/app/src/screens/SuperAdmin/SuperAdminDashboard.tsx
+@@ -12,6 +12,7 @@ import {
+   ActivityIndicator,
+   TextInput,
+   Switch,
++  Modal,
+ } from "react-native";
+ import { SafeAreaView } from "react-native-safe-area-context";
+ import { LinearGradient } from "expo-linear-gradient";
+@@ -70,9 +71,12 @@ export default function SuperAdminDashboard({ setUser }: any) {
+     totalTenants: 0,
+     activeSubscriptions: 0,
+     pendingRenewals: 0,
+-    totalAssetsOnPlatform: 0
++    totalAssetsOnPlatform: 0,
++    depreciatingAssetsCount: 0
+   });
+   const [companies, setCompanies] = useState<Company[]>([]);
++  const [depreciatingAssets, setDepreciatingAssets] = useState<any[]>([]);
++  const [isDepreciationModalVisible, setIsDepreciationModalVisible] = useState(false);
+   const [plans, setPlans] = useState<PlanPackage[]>([]);
+ 
+   // Sort states
+@@ -127,6 +131,7 @@ export default function SuperAdminDashboard({ setUser }: any) {
+       // 1. Fetch Global Stats
+       const statsRes = await axios.get(`${baseURL}/api/superadmin/stats`, { headers });
+       setStats(statsRes.data);
++      setDepreciatingAssets(statsRes.data.depreciatingAssets || []);
+ 
+       // 2. Fetch Tenants
+       const tenantsRes = await axios.get(`${baseURL}/api/superadmin/tenants`, { headers });
+@@ -388,12 +393,19 @@ export default function SuperAdminDashboard({ setUser }: any) {
+                 <Text style={styles.statLabel}>Pending Renewal Requests</Text>
+               </View>
+               <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
+-                <TouchableOpacity onPress={() => setIsAssetsVisible(true)}>
++                <TouchableOpacity onPress={() => setIsAssetsVisible(true)} style={{ alignItems: 'center' }}>
+                   <Ionicons name="cube-outline" size={26} color="#EC4899" />
+                   <Text style={styles.statNumber}>{stats.totalAssetsOnPlatform}</Text>
+                   <Text style={styles.statLabel}>Platform Assets Logged</Text>
+                 </TouchableOpacity>
+               </View>
++              <View style={[styles.statCard, isMobileLayout && { flexBasis: '100%' }]}>
++                <TouchableOpacity onPress={() => setIsDepreciationModalVisible(true)} style={{ alignItems: 'center' }}>
++                  <Ionicons name="trending-down-outline" size={26} color="#EAB308" />
++                  <Text style={styles.statNumber}>{(stats as any).depreciatingAssetsCount ?? 0}</Text>
++                  <Text style={styles.statLabel}>Depreciating Assets</Text>
++                </TouchableOpacity>
++              </View>
+             </View>
+ 
+             {/* Client Companies Listing */}
+@@ -881,6 +893,132 @@ export default function SuperAdminDashboard({ setUser }: any) {
+           </View>
+         )}
+ 
++        {/* DEPRECIATION DETAILS TABLE MODAL FOR SUPER ADMIN */}
++        <Modal
++          visible={isDepreciationModalVisible}
++          transparent={true}
++          animationType="fade"
++          onRequestClose={() => setIsDepreciationModalVisible(false)}
++        >
++          <View style={{
++            flex: 1,
++            backgroundColor: 'rgba(0, 0, 0, 0.7)',
++            justifyContent: 'center',
++            alignItems: 'center',
++            padding: 20
++          }}>
++            <View style={{
++              width: isDesktopWeb ? '85%' : '100%',
++              maxHeight: '85%',
++              backgroundColor: '#07182a',
++              borderRadius: 20,
++              borderWidth: 1,
++              borderColor: 'rgba(159, 207, 255, 0.22)',
++              padding: 24,
++              overflow: 'hidden'
++            }}>
++              <View style={{
++                flexDirection: 'row',
++                justifyContent: 'space-between',
++                alignItems: 'center',
++                marginBottom: 20,
++                borderBottomWidth: 1,
++                borderBottomColor: 'rgba(159, 207, 255, 0.12)',
++                paddingBottom: 12,
++              }}>
++                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
++                  <Ionicons name="trending-down" size={24} color="#EAB308" />
++                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E6F3FF' }}>
++                    Platform Depreciating Assets (lessthan 60% Life Remaining)
++                  </Text>
++                </View>
++                <TouchableOpacity onPress={() => setIsDepreciationModalVisible(false)}>
++                  <Ionicons name="close-circle-outline" size={26} color="#FF4D4D" />
++                </TouchableOpacity>
++              </View>
++
++              {depreciatingAssets.length === 0 ? (
++                <View style={{ paddingVertical: 40, alignItems: 'center' }}>
++                  <Text style={{ color: '#A9C6E4', fontSize: 15 }}>No assets are currently depreciating under 60% life across the platform.</Text>
++                </View>
++              ) : (
++                <ScrollView horizontal={true} showsHorizontalScrollIndicator={true}>
++                  <View style={{ minWidth: 750 }}>
++                    {/* Table Header */}
++                    <View style={{
++                      flexDirection: 'row',
++                      backgroundColor: 'rgba(18, 45, 73, 0.86)',
++                      paddingVertical: 10,
++                      paddingHorizontal: 12,
++                      borderRadius: 10,
++                      borderWidth: 1,
++                      borderColor: 'rgba(159, 207, 255, 0.22)',
++                      marginBottom: 6
++                    }}>
++                      <Text style={{ flex: 1.5, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Organization</Text>
++                      <Text style={{ flex: 2, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Asset Name</Text>
++                      <Text style={{ flex: 1.5, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Serial #</Text>
++                      <Text style={{ flex: 1, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Purchase Price</Text>
++                      <Text style={{ flex: 1.2, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Remaining Life</Text>
++                      <Text style={{ flex: 1.2, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Book Value</Text>
++                      <Text style={{ flex: 1.5, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Action Required</Text>
++                    </View>
++
++                    {/* Table Body */}
++                    <ScrollView style={{ maxHeight: 450 }}>
++                      {depreciatingAssets.map((item, index) => (
++                        <View key={item.id || index} style={{
++                          flexDirection: 'row',
++                          paddingVertical: 12,
++                          paddingHorizontal: 12,
++                          borderBottomWidth: 1,
++                          borderColor: 'rgba(159, 207, 255, 0.12)',
++                          alignItems: 'center',
++                          backgroundColor: 'rgba(7, 24, 42, 0.92)'
++                        }}>
++                          <Text style={{ flex: 1.5, color: '#E6F3FF', fontSize: 13, fontWeight: 'bold' }} numberOfLines={1}>{item.tenantName}</Text>
++                          <Text style={{ flex: 2, color: '#A9C6E4', fontSize: 13 }} numberOfLines={1}>{item.name}</Text>
++                          <Text style={{ flex: 1.5, color: '#A9C6E4', fontSize: 13 }} numberOfLines={1}>{item.serialNo || 'N/A'}</Text>
++                          <Text style={{ flex: 1, color: '#A9C6E4', fontSize: 13 }}>₹{parseFloat(item.price || 0).toLocaleString('en-IN')}</Text>
++                          <Text style={{ flex: 1.2, color: item.percentLifeRemaining < 20 ? '#EF4444' : '#F59E0B', fontSize: 13, fontWeight: 'bold' }}>
++                            {item.percentLifeRemaining}%
++                          </Text>
++                          <Text style={{ flex: 1.2, color: '#34D399', fontSize: 13, fontWeight: '600' }}>
++                            ₹{item.remainingValue.toLocaleString('en-IN')}
++                          </Text>
++                          <View style={{ flex: 1.5 }}>
++                            <View style={{
++                              backgroundColor: item.percentLifeRemaining < 20 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',
++                              borderColor: item.percentLifeRemaining < 20 ? '#EF4444' : '#3B82F6',
++                              borderWidth: 1,
++                              borderRadius: 4,
++                              paddingVertical: 4,
++                              paddingHorizontal: 8,
++                              alignSelf: 'flex-start'
++                            }}>
++                              <Text style={{
++                                color: item.percentLifeRemaining < 20 ? '#FCA5A5' : '#93C5FD',
++                                fontSize: 11,
++                                fontWeight: 'bold',
++                                textAlign: 'center'
++                              }}>
++                                {item.percentLifeRemaining < 20 ? 'SEND TO SCRAP' : 'UPGRADE ASSET'}
++                              </Text>
++                            </View>
++                          </View>
++                        </View>
++                      ))}
++                    </ScrollView>
++                  </View>
++                </ScrollView>
++              )}
++              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setIsDepreciationModalVisible(false)}>
++                <Text style={styles.modalCloseText}>Close</Text>
++              </TouchableOpacity>
++            </View>
++          </View>
++        </Modal>
++
+       </SafeAreaView>
+     </ImageBackground>
+   );
+diff --git a/packages/app/test-dash.js b/packages/app/test-dash.js
+index 7d79bbe..9a0977e 100644
+--- a/packages/app/test-dash.js
++++ b/packages/app/test-dash.js
+@@ -16,7 +16,7 @@ const options = {
+ const req = https.request(options, res => {
+   let data = '';
+   console.log('Status Code:', res.statusCode);
+-  
++
+   res.on('data', chunk => {
+     data += chunk;
+   });
+@@ -24,7 +24,7 @@ const req = https.request(options, res => {
+   res.on('end', () => {
+     try {
+       console.log('Response:', JSON.parse(data));
+-    } catch(e) {
++    } catch (e) {
+       console.log('Raw Response:', data);
+     }
+   });
+diff --git a/packages/server/.azure/config b/packages/server/.azure/config
+index 20cb985..4b6dc6c 100644
+--- a/packages/server/.azure/config
++++ b/packages/server/.azure/config
+@@ -3,5 +3,5 @@ group = asquaretechrg
+ sku = F1
+ appserviceplan = ASP-vyomarg-b174
+ location = canadacentral
+-web = asset-api-anbfahfmdjh6bzap
++web = asq-asset-api-anbfahfmdjh6bzap
+ 
+diff --git a/packages/server/.gitignore b/packages/server/.gitignore
+index 54decfe..ff0cac3 100644
+--- a/packages/server/.gitignore
++++ b/packages/server/.gitignore
+@@ -9,7 +9,7 @@
+ !.yarn/plugins
+ !.yarn/releases
+ !.yarn/versions
+-
++./deploy_exact
+ # testing
+ /coverage
+ 
+diff --git a/packages/server/check_depreciation_asset.js b/packages/server/check_depreciation_asset.js
+new file mode 100644
+index 0000000..8c0be81
+--- /dev/null
++++ b/packages/server/check_depreciation_asset.js
+@@ -0,0 +1,50 @@
++const { Pool } = require('pg');
++const fs = require('fs');
++const path = require('path');
++
++function loadEnv() {
++  const envPath = path.resolve(__dirname, '.env');
++  if (fs.existsSync(envPath)) {
++    const envConfig = fs.readFileSync(envPath, 'utf8');
++    envConfig.split('\n').forEach(line => {
++      const parts = line.split('=');
++      if (parts.length >= 2) {
++        const key = parts[0].trim();
++        const value = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, '');
++        process.env[key] = value;
++      }
++    });
++  }
++}
++
++loadEnv();
++
++const pool = new Pool({
++  connectionString: process.env.DATABASE_URL,
++  ssl: { rejectUnauthorized: false },
++});
++
++async function run() {
++  try {
++    const res = await pool.query('SELECT * FROM "Asset_Details" WHERE id = 155');
++    if (res.rows.length > 0) {
++      const row = res.rows[0];
++      console.log("Keys in database row:", Object.keys(row));
++      console.log("Values:");
++      console.log("id:", row.id);
++      console.log("name:", row.name);
++      console.log("price:", row.price);
++      console.log("usefulLife / useful_life:", row.usefulLife, "/", row.useful_life);
++      console.log("salvageValue / salvage_value:", row.salvageValue, "/", row.salvage_value);
++      console.log("purchaseDate / purchase_date:", row.purchaseDate, "/", row.purchase_date);
++    } else {
++      console.log("Asset 155 not found in DB");
++    }
++  } catch (err) {
++    console.error("DB Error:", err);
++  } finally {
++    pool.end();
++  }
++}
++
++run();
+diff --git a/packages/server/middleware.ts b/packages/server/middleware.ts
+index c8ecbac..2390bf7 100644
+--- a/packages/server/middleware.ts
++++ b/packages/server/middleware.ts
+@@ -14,11 +14,11 @@ const ALLOWED_ORIGINS = new Set([
+ 
+ export function middleware(req: NextRequest) {
+   const origin = req.headers.get('origin') || '';
+-  
++
+   // Check if origin is allowed or is localhost
+-  const isAllowed = ALLOWED_ORIGINS.has(origin) || 
+-                   origin.includes('localhost') || 
+-                   origin.includes('127.0.0.1');
++  const isAllowed = ALLOWED_ORIGINS.has(origin) ||
++    origin.includes('localhost') ||
++    origin.includes('127.0.0.1');
+ 
+   // Handle preflight requests
+   if (req.method === 'OPTIONS') {
+diff --git a/packages/server/prisma/schema.prisma b/packages/server/prisma/schema.prisma
+index fbb4d8f..22fdb04 100644
+--- a/packages/server/prisma/schema.prisma
++++ b/packages/server/prisma/schema.prisma
+@@ -151,6 +151,8 @@ model Asset_Details {
+   warranty_expiry  DateTime?           @db.Date
+   purchase_date    DateTime?           @db.Date
+   price            String?
++  useful_life      Int?                @default(5)
++  salvage_value    String?
+   location         String?
+   photoURL         String?
+   barcodeURL       String?
+diff --git a/packages/server/src/pages/api/assets/[id].ts b/packages/server/src/pages/api/assets/[id].ts
+index a28ee9d..3538cfa 100644
+--- a/packages/server/src/pages/api/assets/[id].ts
++++ b/packages/server/src/pages/api/assets/[id].ts
+@@ -23,6 +23,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+ 
+   const assetId = id; // For readability and matching legacy logic
+ 
++  // Auto-migration for useful_life and salvage_value
++  try {
++    await query(`
++      ALTER TABLE "Asset_Details" 
++      ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
++      ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
++    `, []);
++  } catch (err) {
++    console.error('[AUTO-MIGRATION ERROR]', err);
++  }
++
+   // Handle PUT - Update Asset
+   if (req.method === 'PUT') {
+     try {
+@@ -39,6 +50,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+         status,
+         photoURL,
+         barcodeURL,
++        usefulLife,
++        salvageValue,
+         dynamicFields // Expected as array of { fieldId: number, value: string }
+       } = req.body;
+ 
+@@ -123,6 +136,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+         values.push(price || null);
+       }
+ 
++      if (usefulLife !== undefined) {
++        updates.push(`"useful_life" = $${paramIndex++}`);
++        values.push(usefulLife !== null ? parseInt(String(usefulLife), 10) : 5);
++      }
++
++      if (salvageValue !== undefined) {
++        updates.push(`"salvage_value" = $${paramIndex++}`);
++        values.push(salvageValue || null);
++      }
++
+       if (location !== undefined) {
+         updates.push(`location = $${paramIndex++}`);
+         values.push(location || null);
+@@ -221,6 +244,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+         a.warranty_expiry AS "warrantyExpiry",
+         a.purchase_date AS "purchaseDate",
+         a.price,
++        a.useful_life AS "usefulLife",
++        a.salvage_value AS "salvageValue",
+         
+         (
+           SELECT "assigned_date"
+@@ -281,6 +306,33 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+     const isPastDue = expectedReturn ? expectedReturn < today : false;
+     const isActuallyAssigned = asset.dbStatus === "Assigned" && asset.assigned_to !== null;
+ 
++    const initialCost = parseFloat(asset.price) || 0;
++    const salvageValueNum = parseFloat(asset.salvageValue) || 0;
++    const usefulLifeNum = parseInt(asset.usefulLife) || 5;
++
++    let remainingValue = initialCost;
++    let percentLifeRemaining = 100;
++    let percentLifeElapsed = 0;
++    let depreciationMessage = null;
++
++    if (initialCost > 0 && usefulLifeNum > 0 && asset.purchaseDate) {
++      const purchaseDate = new Date(asset.purchaseDate);
++      const today = new Date();
++      const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
++
++      const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
++      const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
++      remainingValue = initialCost - totalDepreciation;
++
++      percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
++      percentLifeElapsed = Math.min(100, percentLifeElapsed);
++      percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
++
++      if (percentLifeRemaining < 60) {
++        depreciationMessage = `Depreciation alert: remaining life is ${percentLifeRemaining.toFixed(1)}%. Please scrap or upgrade this asset.`;
++      }
++    }
++
+     const formatted = {
+       assetId: asset.assetId,
+       assetName: asset.assetName,
+@@ -301,6 +353,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+       projectName: asset.projectName || null,
+       price: asset.price || null,
+       value: asset.price ? parseFloat(asset.price).toLocaleString() : 'N/A',
++      usefulLife: usefulLifeNum,
++      salvageValue: asset.salvageValue || null,
++      remainingValue: parseFloat(remainingValue.toFixed(2)),
++      depreciationMessage,
+       dynamicValues: dynamicValuesRes.rows
+     };
+ 
+diff --git a/packages/server/src/pages/api/assets/create.ts b/packages/server/src/pages/api/assets/create.ts
+index cd789a0..23574b5 100644
+--- a/packages/server/src/pages/api/assets/create.ts
++++ b/packages/server/src/pages/api/assets/create.ts
+@@ -30,6 +30,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+       barcodeURL, barcode,
+       assignedBy, assignedTo, expectedReturnDate,
+       assignmentId, operatorId, senderId, receiverId,
++      usefulLife, salvageValue,
+       dynamicFields // Expected as an array of { fieldId: number, value: string }
+     } = payload;
+ 
+@@ -101,8 +102,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+     const nextId = nextIdRes.rows[0]?.next_id;
+ 
+     const insertAsset = await query(
+-      `INSERT INTO "Asset_Details" (id, name, "categoryId", "controller_key", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to, "tenantId")
+-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
++      `INSERT INTO "Asset_Details" (id, name, "categoryId", "controller_key", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to, "tenantId", "useful_life", "salvage_value")
++      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+       RETURNING id`,
+       [
+         nextId,
+@@ -120,7 +121,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+         barcodeURL || barcode || null,
+         assignedByNum,
+         assignedToNum,
+-        tenantId
++        tenantId,
++        usefulLife !== undefined && usefulLife !== null ? parseInt(String(usefulLife), 10) : 5,
++        salvageValue || null
+       ]
+     );
+ 
+@@ -183,7 +186,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+         assignedBy: assignedByNum,
+         assignedTo: assignedToNum,
+         photoURL: photoURL || null,
+-        barcodeURL: barcodeURL || barcode || null
++        barcodeURL: barcodeURL || barcode || null,
++        usefulLife: usefulLife !== undefined && usefulLife !== null ? parseInt(String(usefulLife), 10) : 5,
++        salvageValue: salvageValue || null
+       }
+     });
+ 
+diff --git a/packages/server/src/pages/api/assets/index.ts b/packages/server/src/pages/api/assets/index.ts
+index 0e7fd79..f3da7eb 100644
+--- a/packages/server/src/pages/api/assets/index.ts
++++ b/packages/server/src/pages/api/assets/index.ts
+@@ -23,6 +23,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+         return res.status(403).json({ message: 'Tenant ID missing. Please log in again.' });
+     }
+ 
++    // Auto-migration for useful_life and salvage_value
++    try {
++        await query(`
++            ALTER TABLE "Asset_Details" 
++            ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
++            ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
++        `, []);
++    } catch (err) {
++        console.error('[AUTO-MIGRATION ERROR]', err);
++    }
++
+     console.log(`[DEBUG] User Payload: ${JSON.stringify(req.user)}`);
+     console.log(`[DEBUG] Fetching assets for tenantId: "${tenantId}"`);
+ 
+@@ -69,6 +80,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+                 a.location,
+                 a."purchase_date" AS "purchaseDate",
+                 a.price,
++                a.useful_life AS "usefulLife",
++                a.salvage_value AS "salvageValue",
+                 a."warranty_expiry" AS "warrantyExpiry",
+                 COALESCE(a."photoURL", aa."photoURL") AS "photoURL",
+                 
+@@ -126,29 +139,62 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+         console.log(`[DEBUG] Query results: MainRows=${result.rows.length}, TotalCount=${total}`);
+         const totalPages = Math.ceil(total / limit);
+ 
+-        const formattedAssets = result.rows.map(asset => ({
+-            id: asset.id.toString(),
+-            assetName: asset.assetName,
+-            barcode: asset.barcode,
+-            controllerKey: asset.controllerKey || null,
+-            serialNumber: asset.serialNumber,
+-            category: asset.category,
+-            status: asset.status,
+-            assignedBy: asset.assignedBy || null,
+-            assignedTo: asset.assignedTo || null,
+-            location: asset.location,
+-            purchaseDate: asset.purchaseDate,
+-            warrantyExpiry: asset.warrantyExpiry,
+-            price: asset.price,
+-            photoURL: asset.photoURL || null,
+-            barcodeURL: asset.barcodeURL || null,
+-            expectedReturnDate: asset.expectedReturnDate || null,
+-            projectName: asset.projectName || null,
+-            assignmentId: asset.assignmentId ? asset.assignmentId.toString() : null,
+-            operatorId: asset.operatorId ? asset.operatorId.toString() : null,
+-            senderId: asset.senderId ? asset.senderId.toString() : null,
+-            receiverId: asset.operatorId ? asset.operatorId.toString() : null
+-        }));
++        const formattedAssets = result.rows.map(asset => {
++            const initialCost = parseFloat(asset.price) || 0;
++            const salvageValueNum = parseFloat(asset.salvageValue) || 0;
++            const usefulLifeNum = parseInt(asset.usefulLife) || 5;
++            
++            let remainingValue = initialCost;
++            let percentLifeRemaining = 100;
++            let percentLifeElapsed = 0;
++            let depreciationMessage = null;
++
++            if (initialCost > 0 && usefulLifeNum > 0 && asset.purchaseDate) {
++                const purchaseDate = new Date(asset.purchaseDate);
++                const today = new Date();
++                const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
++                
++                const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
++                const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
++                remainingValue = initialCost - totalDepreciation;
++                
++                percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
++                percentLifeElapsed = Math.min(100, percentLifeElapsed);
++                percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
++
++                if (percentLifeRemaining < 60) {
++                    depreciationMessage = `Depreciation alert: remaining life is ${percentLifeRemaining.toFixed(1)}%. Please scrap or upgrade this asset.`;
++                }
++            }
++
++            return {
++                id: asset.id.toString(),
++                assetName: asset.assetName,
++                barcode: asset.barcode,
++                controllerKey: asset.controllerKey || null,
++                serialNumber: asset.serialNumber,
++                category: asset.category,
++                status: asset.status,
++                assignedBy: asset.assignedBy || null,
++                assignedTo: asset.assignedTo || null,
++                location: asset.location,
++                purchaseDate: asset.purchaseDate,
++                warrantyExpiry: asset.warrantyExpiry,
++                price: asset.price,
++                photoURL: asset.photoURL || null,
++                barcodeURL: asset.barcodeURL || null,
++                expectedReturnDate: asset.expectedReturnDate || null,
++                projectName: asset.projectName || null,
++                assignmentId: asset.assignmentId ? asset.assignmentId.toString() : null,
++                operatorId: asset.operatorId ? asset.operatorId.toString() : null,
++                senderId: asset.senderId ? asset.senderId.toString() : null,
++                receiverId: asset.operatorId ? asset.operatorId.toString() : null,
++                usefulLife: usefulLifeNum,
++                salvageValue: asset.salvageValue || null,
++                remainingValue: parseFloat(remainingValue.toFixed(2)),
++                depreciationMessage
++            };
++        });
+ 
+         return res.status(200).json({
+             message: 'Assets fetched successfully!',
+diff --git a/packages/server/src/pages/api/dashboard.ts b/packages/server/src/pages/api/dashboard.ts
+index 0ae3eda..7499d60 100644
+--- a/packages/server/src/pages/api/dashboard.ts
++++ b/packages/server/src/pages/api/dashboard.ts
+@@ -20,6 +20,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+   }
+ 
+   try {
++    // Auto-migration for useful_life and salvage_value
++    try {
++      await query(`
++        ALTER TABLE "Asset_Details" 
++        ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
++        ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
++      `, []);
++    } catch (err) {
++      console.error('[AUTO-MIGRATION ERROR]', err);
++    }
++
+     // 1. Fetch Subscription Info via Raw SQL (more reliable than Prisma when client is out of sync)
+     const subSql = `
+       SELECT s.*, p.name as "planName", p."maxUsers", p."maxAssets"
+@@ -64,6 +75,56 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+     `;
+     const locationResult = await query(locationSql, [tenantId]);
+ 
++    // 4. Depreciating Assets count and details
++    const assetsQuery = await query(`
++      SELECT 
++        a.id, 
++        a.name, 
++        a.serial_no AS "serialNo", 
++        a.price, 
++        a.purchase_date AS "purchaseDate", 
++        a.useful_life AS "usefulLife", 
++        a.salvage_value AS "salvageValue"
++      FROM "Asset_Details" a
++      WHERE a."tenantId" = $1
++    `, [tenantId]);
++
++    let depreciatingAssetsCount = 0;
++    const depreciatingAssetsList = [];
++
++    for (const row of assetsQuery.rows) {
++      const initialCost = parseFloat(row.price) || 0;
++      const salvageValueNum = parseFloat(row.salvageValue) || 0;
++      const usefulLifeNum = parseInt(row.usefulLife) || 5;
++
++      if (initialCost > 0 && usefulLifeNum > 0 && row.purchaseDate) {
++        const purchaseDate = new Date(row.purchaseDate);
++        const today = new Date();
++        const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
++
++        const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
++        const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
++        const remainingValue = initialCost - totalDepreciation;
++
++        const percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
++        const percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
++
++        if (percentLifeRemaining < 60) {
++          depreciatingAssetsCount++;
++          depreciatingAssetsList.push({
++            id: row.id.toString(),
++            name: row.name,
++            serialNo: row.serialNo,
++            price: row.price,
++            usefulLife: usefulLifeNum,
++            salvageValue: row.salvageValue || '0',
++            remainingValue: parseFloat(remainingValue.toFixed(2)),
++            percentLifeRemaining: parseFloat(percentLifeRemaining.toFixed(1))
++          });
++        }
++      }
++    }
++
+     // Convert string counts from PostgreSQL to numbers
+     const totalAssetsCount = Number(stats.totalAssets || 0);
+     const totalUsersCount = Number(stats.totalUsers || 0);
+@@ -98,7 +159,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+     return res.status(200).json({
+       ...metrics,
+       fieldLocationStats: locationResult.rows,
+-      subscription: subscriptionUsage
++      subscription: subscriptionUsage,
++      depreciatingAssetsCount,
++      depreciatingAssets: depreciatingAssetsList
+     });
+ 
+   } catch (error) {
+diff --git a/packages/server/src/pages/api/superadmin/stats.ts b/packages/server/src/pages/api/superadmin/stats.ts
+index a1eb09b..f1f28a5 100644
+--- a/packages/server/src/pages/api/superadmin/stats.ts
++++ b/packages/server/src/pages/api/superadmin/stats.ts
+@@ -35,6 +35,58 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+     const totalAssetsRes = await query('SELECT COUNT(*) AS count FROM "Asset_Details"');
+     const totalAssets = parseInt(totalAssetsRes.rows[0]?.count || '0', 10);
+ 
++    // Calculate depreciating assets globally
++    const depreciatingAssetsRes = await query(`
++      SELECT 
++        a.id, 
++        a.name, 
++        a.serial_no AS "serialNo", 
++        a.price, 
++        a.purchase_date AS "purchaseDate", 
++        a.useful_life AS "usefulLife", 
++        a.salvage_value AS "salvageValue",
++        t.name AS "tenantName"
++      FROM "Asset_Details" a
++      JOIN "Tenants" t ON a."tenantId" = t.id
++    `);
++
++    let depreciatingAssetsCount = 0;
++    const depreciatingAssetsList = [];
++
++    for (const row of depreciatingAssetsRes.rows) {
++      const initialCost = parseFloat(row.price) || 0;
++      const salvageValueNum = parseFloat(row.salvageValue) || 0;
++      const usefulLifeNum = parseInt(row.usefulLife) || 5;
++
++      if (initialCost > 0 && usefulLifeNum > 0 && row.purchaseDate) {
++        const purchaseDate = new Date(row.purchaseDate);
++        const today = new Date();
++        const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
++
++        const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
++        const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
++        const remainingValue = initialCost - totalDepreciation;
++
++        const percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
++        const percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
++
++        if (percentLifeRemaining < 60) {
++          depreciatingAssetsCount++;
++          depreciatingAssetsList.push({
++            id: row.id.toString(),
++            name: row.name,
++            serialNo: row.serialNo,
++            price: row.price,
++            usefulLife: usefulLifeNum,
++            salvageValue: row.salvageValue || '0',
++            remainingValue: parseFloat(remainingValue.toFixed(2)),
++            percentLifeRemaining: parseFloat(percentLifeRemaining.toFixed(1)),
++            tenantName: row.tenantName
++          });
++        }
++      }
++    }
++
+     // Calculate monthly cashflow
+     const monthlyRevRes = await query(`
+       SELECT SUM(p.price) AS total
+@@ -50,6 +102,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+       pendingRenewals,
+       totalAssetsOnPlatform: totalAssets,
+       revenueMonthly,
++      depreciatingAssetsCount,
++      depreciatingAssets: depreciatingAssetsList,
+       systemHealth: {
+         dbConnectionStatus: 'Healthy',
+         redisCacheHitRate: '98%',
+diff --git a/powershell.bat b/powershell.bat
+new file mode 100644
+index 0000000..5be2b42
+--- /dev/null
++++ b/powershell.bat
+@@ -0,0 +1,2 @@
++@echo off
++az webapp config appsettings list --name asq-asset-api --resource-group asquaretechrg

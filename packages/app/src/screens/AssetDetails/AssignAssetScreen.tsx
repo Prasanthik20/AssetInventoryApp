@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ImageBackground,
   FlatList,
   TouchableOpacity,
@@ -17,6 +16,7 @@ import {
   useWindowDimensions,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -27,6 +27,7 @@ import axios from 'axios';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { navigateToDashboard } from '../../utils/navigation';
 import assignStyles from './assign.styles';
 import { globalColors } from '../../styles/globalStyles';
 import useAssetMeta from '../../hooks/useAssetMeta';
@@ -120,6 +121,8 @@ const AssignAssetScreen: React.FC = () => {
     };
   }, []);
 
+  const [loggedInEmployeeId, setLoggedInEmployeeId] = useState<string | number>('');
+
   // -------------------- FETCH ASSETS --------------------
   useEffect(() => {
     const fetchData = async () => {
@@ -128,16 +131,19 @@ const AssignAssetScreen: React.FC = () => {
 
         const storedUser = await AsyncStorage.getItem('user');
         const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+        if (parsedUser) {
+          setLoggedInEmployeeId(parsedUser.employeeId || parsedUser.userId || '');
+        }
         const assignerRole = String(
           parsedUser?.roleName || parsedUser?.role?.roleName || '',
         ).toLowerCase();
-        const privilegedRoles = [
-          'admin',
-          'super',
-          'superadmin',
-          'super admin',
-        ];
-        const isPrivilegedAssigner = privilegedRoles.includes(assignerRole);
+        
+        const permissions = Array.isArray(parsedUser?.permissions) ? parsedUser.permissions : [];
+        const isPrivilegedAssigner =
+          permissions.includes('MANAGE_USERS') ||
+          permissions.includes('MANAGE_WORKFLOWS') ||
+          assignerRole.includes('admin') ||
+          assignerRole.includes('super');
         setCanAssignToSupervisor(isPrivilegedAssigner);
 
         // ----- FETCH ASSETS -----
@@ -169,46 +175,60 @@ const AssignAssetScreen: React.FC = () => {
             u.role?.roleName || u.roleName || '',
           ).toLowerCase();
 
+          const uPermissions = Array.isArray(u.role?.permissions) 
+            ? u.role.permissions 
+            : (Array.isArray(u.permissions) ? u.permissions : []);
+
+          const isOperator = uPermissions.includes('INITIATE_RETURN');
+          const isSupervisor = uPermissions.includes('ASSIGN_ASSETS') || uPermissions.includes('CONFIRM_RETURN');
+          const isAdmin = uPermissions.includes('MANAGE_USERS') || uPermissions.includes('MANAGE_WORKFLOWS');
+
           if (isPrivilegedAssigner) {
-            return targetRole === 'operator' || targetRole === 'supervisor';
+            return (isOperator || isSupervisor) && !isAdmin;
           }
 
-          return targetRole === 'operator';
+          return isOperator && !isSupervisor && !isAdmin;
         });
 
         setOperators(assignableUsers);
 
-        if (isEditAssignmentMode && editAsset) {
-          setSelectedAssets([editAsset]);
-          setProjectName(String(editAsset.projectName || ''));
-          setLocation(String(editAsset.location || ''));
-          setAssignedDate(String(editAsset.assignedDate || today));
-          setDueDate(String(editAsset.expectedReturnDate || ''));
+        if (editAsset) {
+          const normalizedEditAsset = {
+            ...editAsset,
+            assetId: Number(editAsset.assetId || editAsset.id),
+          };
+          setSelectedAssets([normalizedEditAsset]);
+          if (isEditAssignmentMode) {
+            setProjectName(String(editAsset.projectName || ''));
+            setLocation(String(editAsset.location || ''));
+            setAssignedDate(String(editAsset.assignedDate || today));
+            setDueDate(String(editAsset.expectedReturnDate || ''));
 
-          try {
-            const assignmentResponse = await axios.get(`${baseURL}/api/assets/assign`, {
-              params: {
-                assignmentId: editAsset.assignmentId,
-                assetId: editAsset.id || editAsset.assetId,
-              },
-            });
+            try {
+              const assignmentResponse = await axios.get(`${baseURL}/api/assets/assign`, {
+                params: {
+                  assignmentId: editAsset.assignmentId,
+                  assetId: editAsset.id || editAsset.assetId,
+                },
+              });
 
-            const assignment = assignmentResponse.data || {};
-            setProjectName(String(assignment.projectName || editAsset.projectName || ''));
-            setLocation(String(assignment.location || editAsset.location || ''));
-            setAssignedDate(String(assignment.assignedDate || editAsset.assignedDate || today));
-            setDueDate(String(assignment.expectedReturnDate || editAsset.expectedReturnDate || ''));
+              const assignment = assignmentResponse.data || {};
+              setProjectName(String(assignment.projectName || editAsset.projectName || ''));
+              setLocation(String(assignment.location || editAsset.location || ''));
+              setAssignedDate(String(assignment.assignedDate || editAsset.assignedDate || today));
+              setDueDate(String(assignment.expectedReturnDate || editAsset.expectedReturnDate || ''));
 
-            if (assignment.operatorEmployeeId) {
-              const matchedOperator = assignableUsers.find(
-                (op: any) => Number(op.employeeId) === Number(assignment.operatorEmployeeId),
-              );
-              if (matchedOperator) {
-                setSelectedOperator(matchedOperator);
+              if (assignment.operatorEmployeeId) {
+                const matchedOperator = assignableUsers.find(
+                  (op: any) => Number(op.employeeId) === Number(assignment.operatorEmployeeId),
+                );
+                if (matchedOperator) {
+                  setSelectedOperator(matchedOperator);
+                }
               }
+            } catch (assignmentError) {
+              console.error('Failed to fetch assignment details:', assignmentError);
             }
-          } catch (assignmentError) {
-            console.error('Failed to fetch assignment details:', assignmentError);
           }
         }
       } catch (err) {
@@ -312,7 +332,9 @@ const AssignAssetScreen: React.FC = () => {
         return;
       }
 
-      const selectedAssetIds = selectedAssets.map(a => toAssetId(a.assetId));
+      const selectedAssetIds = selectedAssets
+        .map(a => toAssetId(a.assetId || a.id))
+        .filter(id => id > 0);
       const assetMedia = selectedAssetIds.map((assetId) => ({
         assetId,
         photoURL: assetPhotoMap[toAssetKey(assetId)] || photo || null,
@@ -334,7 +356,7 @@ const AssignAssetScreen: React.FC = () => {
       await axios.post(`${baseURL}/api/assets/assign`, {
         assetIds: selectedAssetIds,
         operator_employeeId: selectedOperator.employeeId,
-        supervisor_employeeId: supervisor_employeeId,
+        supervisor_employeeId: supervisor_employeeId || loggedInEmployeeId,
         project_name: projectName.trim(),
         destination: location.trim(),
         assigned_date: assignedDate,
@@ -359,21 +381,37 @@ const AssignAssetScreen: React.FC = () => {
   };
 
   const onAssignedChange = (event: any, selectedDate?: Date) => {
-  setShowAssignedPicker(false); // Close picker
-  if (selectedDate) {
-    setAssignedDate(selectedDate.toISOString().split('T')[0]);
-  }
-};
+    setShowAssignedPicker(false); // Close picker
+    if (selectedDate) {
+      setAssignedDate(selectedDate.toISOString().split('T')[0]);
+    }
+  };
 
-const onDueChange = (event: any, selectedDate?: Date) => {
-  setShowDuePicker(false); // Close picker
-  if (selectedDate) {
-    setDueDate(selectedDate.toISOString().split('T')[0]);
-  }
-};
+  const onDueChange = (event: any, selectedDate?: Date) => {
+    setShowDuePicker(false); // Close picker
+    if (selectedDate) {
+      setDueDate(selectedDate.toISOString().split('T')[0]);
+    }
+  };
 
-  const toAssetId = (value: unknown) => Number(value);
-  const toAssetKey = (value: unknown) => String(toAssetId(value));
+  const toAssetId = (value: unknown): number => {
+    if (value && typeof value === 'object') {
+      const raw = (value as any).assetId ?? (value as any).id;
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const toAssetKey = (value: unknown): string => {
+    if (value && typeof value === 'object') {
+      const raw = (value as any).assetId ?? (value as any).id;
+      return String(raw || '');
+    }
+    const id = toAssetId(value);
+    return id ? String(id) : '';
+  };
 
   const assetCategories = categories
     .map((item) => String(item?.category || '').trim())
@@ -408,42 +446,164 @@ const onDueChange = (event: any, selectedDate?: Date) => {
     });
   }, [assets, assetSearchQuery, assetCategoryFilter]);
 
-  const pickImage = async (useCamera: boolean, isBarcode: boolean, targetAssetId?: number | string) => {
+  // const pickImage = async (useCamera: boolean, isBarcode: boolean, targetAssetId?: number | string) => {
+  //   const hasTargetAsset =
+  //     targetAssetId !== undefined &&
+  //     targetAssetId !== null &&
+  //     !Number.isNaN(toAssetId(targetAssetId));
+  //   const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+
+  //   try {
+  //     if (hasTargetAsset && targetKey) {
+  //       if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+  //       else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+  //     } else {
+  //       if (isBarcode) setBarcodeLoading(true);
+  //       else setPhotoLoading(true);
+  //     }
+
+  //     if (useCamera) {
+  //       const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  //       if (status !== 'granted') {
+  //         showSnackbar('Camera permission is required.', 'error');
+  //         return;
+  //       }
+  //     } else {
+  //       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  //       if (status !== 'granted') {
+  //         showSnackbar('Media library permission is required.', 'error');
+  //         return;
+  //       }
+  //     }
+
+  //     const options: ImagePicker.ImagePickerOptions = {
+  //       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  //       allowsEditing: !useCamera ? false : true, // allow multi-select for photos in library
+  //       allowsMultipleSelection: false,
+  //       aspect: isBarcode ? [4, 3] : undefined,
+  //       quality: 0.2,
+  //       base64: false,
+  //     };
+  //     // Disable editing/aspect if we are selecting multiple images from the gallery
+  //     if (options.allowsMultipleSelection) {
+  //       delete options.allowsEditing;
+  //       delete options.aspect;
+  //     }
+
+  //     const result = useCamera
+  //       ? await ImagePicker.launchCameraAsync(options)
+  //       : await ImagePicker.launchImageLibraryAsync(options);
+
+  //     if (!result.canceled && result.assets[0]) {
+  //       const photos: string[] = [];
+  //       for (const asset of result.assets) {
+  //         let base64 = asset.base64;
+  //         if (!base64 && asset.uri) {
+  //           try {
+  //             base64 = await FileSystem.readAsStringAsync(asset.uri, {
+  //               encoding: 'base64' as any,
+  //             });
+  //           } catch (err) {
+  //             console.warn("Error reading file manually:", err);
+  //           }
+  //         }
+  //         if (base64) {
+  //           photos.push(`data:image/jpeg;base64,${base64}`);
+  //         }
+  //       }
+
+  //       if (photos.length > 0) {
+  //         const primaryPhoto = photos[0];
+  //         if (isBarcode) {
+  //           if (hasTargetAsset && targetKey) {
+  //             setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
+  //             showSnackbar('Barcode saved for selected asset.', 'success');
+  //           } else {
+  //             setBarcodeURL(primaryPhoto);
+  //             showSnackbar('Barcode image will be attached to the assignment.', 'success');
+  //           }
+  //         } else {
+  //           if (hasTargetAsset && targetKey) {
+  //             setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
+  //             setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
+  //             showSnackbar('Photo saved for selected asset.', 'success');
+  //           } else {
+  //             setPhoto(primaryPhoto);
+  //             setPhotoBatch(photos);
+  //             showSnackbar('Photo will be attached to the assignment.', 'success');
+  //           }
+  //         }
+  //       } else {
+  //         showSnackbar('Failed to process image.', 'error');
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error('Picker error:', error);
+  //     showSnackbar('Failed to open camera or image library.', 'error');
+  //   } finally {
+  //     if (hasTargetAsset && targetKey) {
+  //       if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+  //       else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+  //     } else {
+  //       if (isBarcode) setBarcodeLoading(false);
+  //       else setPhotoLoading(false);
+  //     }
+  //   }
+  // };
+
+  const pickImage = async (
+    useCamera: boolean,
+    isBarcode: boolean,
+    targetAssetId?: number | string
+  ) => {
     const hasTargetAsset =
       targetAssetId !== undefined &&
       targetAssetId !== null &&
       !Number.isNaN(toAssetId(targetAssetId));
-    const targetKey = hasTargetAsset ? toAssetKey(targetAssetId) : null;
+
+    const targetKey = hasTargetAsset
+      ? toAssetKey(targetAssetId)
+      : null;
 
     try {
+      // Loading State
       if (hasTargetAsset && targetKey) {
-        if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
-        else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: true }));
+        if (isBarcode) {
+          setAssetBarcodeLoadingMap((prev) => ({
+            ...prev,
+            [targetKey]: true,
+          }));
+        } else {
+          setAssetPhotoLoadingMap((prev) => ({
+            ...prev,
+            [targetKey]: true,
+          }));
+        }
       } else {
         if (isBarcode) setBarcodeLoading(true);
         else setPhotoLoading(true);
       }
 
+      // Permissions
       if (useCamera) {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-          showSnackbar('Camera permission is required.', 'error');
-          return;
-        }
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          showSnackbar('Media library permission is required.', 'error');
+        const permission =
+          await ImagePicker.requestCameraPermissionsAsync();
+
+        if (!permission.granted) {
+          showSnackbar(
+            "Camera permission is required.",
+            "error"
+          );
           return;
         }
       }
+      // Note: No permission needed for gallery — Android Photo Picker is sandboxed.
 
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: useCamera ? Platform.OS === 'ios' : !isBarcode, // allow multi-select for photos in library
-        allowsMultipleSelection: !useCamera && !isBarcode,
-        aspect: isBarcode ? [4, 3] : undefined,
-        quality: 0.2,
+        allowsEditing: useCamera,
+        allowsMultipleSelection: false,
+        quality: 0.5,
         base64: true,
       };
 
@@ -451,56 +611,148 @@ const onDueChange = (event: any, selectedDate?: Date) => {
         ? await ImagePicker.launchCameraAsync(options)
         : await ImagePicker.launchImageLibraryAsync(options);
 
-      if (!result.canceled && result.assets[0]) {
-        const photos: string[] = [];
-        for (const asset of result.assets) {
-          let base64 = asset.base64;
-          if (!base64 && asset.uri) {
-            try {
-              base64 = await FileSystem.readAsStringAsync(asset.uri, {
-                encoding: 'base64' as any,
-              });
-            } catch (err) {
-              console.warn("Error reading file manually:", err);
-            }
-          }
-          if (base64) {
-            photos.push(`data:image/jpeg;base64,${base64}`);
+      console.log(
+        "Image Picker Result:",
+        JSON.stringify(result, null, 2)
+      );
+
+      if (result.canceled) {
+        return;
+      }
+
+      if (!result.assets || result.assets.length === 0) {
+        showSnackbar(
+          "No image selected.",
+          "error"
+        );
+        return;
+      }
+
+      const photos: string[] = [];
+
+      for (const asset of result.assets) {
+        console.log("Selected Asset:", asset);
+
+        let base64Data = asset.base64;
+
+        // Fallback for Android release builds
+        if (!base64Data && asset.uri) {
+          try {
+            const response = await fetch(asset.uri);
+            const blob = await response.blob();
+
+            base64Data = await new Promise<string>(
+              (resolve, reject) => {
+                const reader = new FileReader();
+
+                reader.onloadend = () => {
+                  const result = reader.result as string;
+
+                  const extracted =
+                    result.split(",")[1];
+
+                  resolve(extracted);
+                };
+
+                reader.onerror = reject;
+
+                reader.readAsDataURL(blob);
+              }
+            );
+          } catch (err) {
+            console.error(
+              "Fallback Base64 conversion failed:",
+              err
+            );
           }
         }
 
-        if (photos.length > 0) {
-          const primaryPhoto = photos[0];
-          if (isBarcode) {
-            if (hasTargetAsset && targetKey) {
-              setAssetBarcodeMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
-              showSnackbar('Barcode saved for selected asset.', 'success');
-            } else {
-              setBarcodeURL(primaryPhoto);
-              showSnackbar('Barcode image will be attached to the assignment.', 'success');
-            }
-          } else {
-            if (hasTargetAsset && targetKey) {
-              setAssetPhotoMap((prev) => ({ ...prev, [targetKey]: primaryPhoto }));
-              setAssetPhotoBatchMap((prev) => ({ ...prev, [targetKey]: photos }));
-              showSnackbar('Photo saved for selected asset.', 'success');
-            } else {
-              setPhoto(primaryPhoto);
-              setPhotoBatch(photos);
-              showSnackbar('Photo will be attached to the assignment.', 'success');
-            }
-          }
-        } else {
-          showSnackbar('Failed to process image.', 'error');
+        if (base64Data) {
+          photos.push(
+            `data:image/jpeg;base64,${base64Data}`
+          );
         }
       }
-    } catch (error) {
-      console.error('Picker error:', error);
-      showSnackbar('Failed to open camera or image library.', 'error');
+
+      if (photos.length === 0) {
+        showSnackbar(
+          "Failed to process image.",
+          "error"
+        );
+        return;
+      }
+
+      const primaryPhoto = photos[0];
+
+      if (isBarcode) {
+        if (hasTargetAsset && targetKey) {
+          setAssetBarcodeMap((prev) => ({
+            ...prev,
+            [targetKey]: primaryPhoto,
+          }));
+
+          showSnackbar(
+            "Barcode saved for selected asset.",
+            "success"
+          );
+        } else {
+          setBarcodeURL(primaryPhoto);
+
+          showSnackbar(
+            "Barcode image attached successfully.",
+            "success"
+          );
+        }
+      } else {
+        if (hasTargetAsset && targetKey) {
+          setAssetPhotoMap((prev) => ({
+            ...prev,
+            [targetKey]: primaryPhoto,
+          }));
+
+          setAssetPhotoBatchMap((prev) => ({
+            ...prev,
+            [targetKey]: photos,
+          }));
+
+          showSnackbar(
+            "Photo saved for selected asset.",
+            "success"
+          );
+        } else {
+          setPhoto(primaryPhoto);
+          setPhotoBatch(photos);
+
+          showSnackbar(
+            "Photo attached successfully.",
+            "success"
+          );
+        }
+      }
+    } catch (error: any) {
+      console.error(
+        "Image Picker Error:",
+        error
+      );
+
+      showSnackbar(
+        error?.message ||
+        "Failed to open camera or image library.",
+        "error"
+      );
     } finally {
       if (hasTargetAsset && targetKey) {
-        if (isBarcode) setAssetBarcodeLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
-        else setAssetPhotoLoadingMap((prev) => ({ ...prev, [targetKey]: false }));
+        if (isBarcode) {
+          setAssetBarcodeLoadingMap((prev) => ({
+            ...prev,
+            [targetKey]: false,
+          }));
+        } else {
+          setAssetPhotoLoadingMap((prev) => ({
+            ...prev,
+            [targetKey]: false,
+          }));
+        }
       } else {
         if (isBarcode) setBarcodeLoading(false);
         else setPhotoLoading(false);
@@ -569,31 +821,31 @@ const onDueChange = (event: any, selectedDate?: Date) => {
     });
   };
   const renderAssetItem = ({ item }: { item: Asset }) => {
-  const isSelected = selectedAssets.some((a) => a.assetId === item.assetId);
+    const isSelected = selectedAssets.some((a) => a.assetId === item.assetId);
 
-  return (
-    <TouchableOpacity
-      style={[
-        styles.assetRow,
-        isSelected && { backgroundColor: 'rgba(52, 211, 153, 0.16)', borderColor: '#34D399', borderWidth: 1 },
-      ]}
-      onPress={() => toggleAssetSelection(item)}
-    >
-      <Ionicons
-        name={isSelected ? "checkbox" : "square-outline"}
-        size={24}
-        color="#34D399"
-      />
-      <View style={{ marginLeft: 10 }}>
-        <Text style={{ fontWeight: '600', color: '#E6F3FF' }}>{item.assetName}</Text>
-        {/* Show Serial Number or Barcode so they aren't identical */}
-        <Text style={{ fontSize: 12, color: '#A9C6E4' }}>
-          S/N: {item.serialNumber || 'N/A'} | ID: {item.assetId}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-};
+    return (
+      <TouchableOpacity
+        style={[
+          styles.assetRow,
+          isSelected && { backgroundColor: 'rgba(52, 211, 153, 0.16)', borderColor: '#34D399', borderWidth: 1 },
+        ]}
+        onPress={() => toggleAssetSelection(item)}
+      >
+        <Ionicons
+          name={isSelected ? "checkbox" : "square-outline"}
+          size={24}
+          color="#34D399"
+        />
+        <View style={{ marginLeft: 10 }}>
+          <Text style={{ fontWeight: '600', color: '#E6F3FF' }}>{item.assetName}</Text>
+          {/* Show Serial Number or Barcode so they aren't identical */}
+          <Text style={{ fontSize: 12, color: '#A9C6E4' }}>
+            S/N: {item.serialNumber || 'N/A'} | ID: {item.assetId}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
   if (loading) {
     return (
       <View style={styles.centeredView}>
@@ -602,6 +854,14 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       </View>
     );
   }
+
+  const handleGoBack = async () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      await navigateToDashboard(navigation);
+    }
+  };
 
   // -------------------- MAIN UI --------------------
   return (
@@ -615,7 +875,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
         <View style={[styles.container, isMobileLayout && { margin: 0, borderRadius: 0, backgroundColor: 'rgba(7, 24, 42, 0.92)' }]}>
           {/* HEADER */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#E6F3FF" />
             </TouchableOpacity>
 
@@ -625,20 +885,20 @@ const onDueChange = (event: any, selectedDate?: Date) => {
           </View>
 
           {/* FORM */}
-          <ScrollView 
-          contentContainerStyle={[
-            styles.formScrollContainer,
-            isMobileLayout && { paddingHorizontal: 15 } // Tighter padding for phones
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
+          <ScrollView
+            contentContainerStyle={[
+              styles.formScrollContainer,
+              isMobileLayout && { paddingHorizontal: 15 } // Tighter padding for phones
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
             {/* TOGGLE COLUMN FOR MOBILE: 
              'row' for Web, 'column' for Mobile 
           */}
-          <View style={[
-            styles.formBody, 
-            { flexDirection: isMobileLayout ? 'column' : 'row', gap: isMobileLayout ? 0 : 25 }
-          ]}>
+            <View style={[
+              styles.formBody,
+              { flexDirection: isMobileLayout ? 'column' : 'row', gap: isMobileLayout ? 0 : 25 }
+            ]}>
 
               {/* LEFT COLUMN */}
               <View style={styles.formColumn}>
@@ -671,8 +931,11 @@ const onDueChange = (event: any, selectedDate?: Date) => {
                     if (!isEditAssignmentMode) setOperatorModal(true);
                   }}
                 >
-                  <Text style={styles.pickerText}>{selectedOperator ? `${selectedOperator.fullName}
-                   (${selectedOperator.employeeId})` : (canAssignToSupervisor ? 'Select Employee' : 'Select Operator')}</Text>
+                  <Text style={styles.pickerText}>
+                    {selectedOperator
+                      ? `${selectedOperator.fullName} (${selectedOperator.employeeId})`
+                      : (canAssignToSupervisor ? 'Select Employee' : 'Select Operator')}
+                  </Text>
                   {!isEditAssignmentMode && (
                     <Ionicons name="chevron-down" size={20} color="#A9C6E4" />
                   )}
@@ -714,7 +977,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               </View>
 
               {/* RIGHT COLUMN */}
-              <View style={[styles.formColumn, isMobileLayout && { marginTop: 10 }]}> 
+              <View style={[styles.formColumn, isMobileLayout && { marginTop: 10 }]}>
 
                 {/* ASSIGNED DATE */}
                 <Text style={styles.label}>Assigned Date</Text>
@@ -932,10 +1195,10 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
           {/* FOOTER */}
           <View style={[
-          styles.footer, 
-          isMobileLayout && { justifyContent: 'center', paddingBottom: 30 }
-        ]}>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
+            styles.footer,
+            isMobileLayout && { justifyContent: 'center', paddingBottom: 30 }
+          ]}>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleGoBack}>
               <Text style={[styles.buttonText, { color: '#A9C6E4' }]}>Cancel</Text>
             </TouchableOpacity>
 
@@ -951,7 +1214,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
       {/* ------------------- ASSET MODAL ------------------- */}
       <Modal visible={assetModal} transparent animationType="slide">
         <Pressable style={styles.modalOverlay} onPress={() => setAssetModal(false)}>
-          <Pressable style={styles.modalContent} onPress={() => {}}>
+          <Pressable style={styles.modalContent} onPress={() => { }}>
             <Text style={styles.modalTitle}>Select Assets</Text>
 
             <AssetFiltersBar
@@ -966,25 +1229,26 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               }
               categoryOptions={assetCategories.filter((category) => category !== 'All Categories')}
               categoryAllLabel="All Categories"
-              containerStyle={{ marginBottom: 12 }}
+              containerStyle={{ marginTop: 10, marginBottom: 12 }}
               searchContainerStyle={{
                 backgroundColor: 'rgba(18, 45, 73, 0.86)',
-                borderColor: 'rgba(159, 207, 255, 0.22)',
-                minHeight: 42,
+                borderColor: 'rgba(255, 255, 255, 1)',
+                height: 54,
               }}
               searchInputStyle={{
                 color: '#E6F3FF',
               }}
               pickerWrapperStyle={{
                 marginBottom: 0,
-                minHeight: 42,
+                height: 54,
                 backgroundColor: 'rgba(18, 45, 73, 0.86)',
                 borderColor: 'rgba(159, 207, 255, 0.22)',
               }}
               pickerStyle={{
                 fontSize: 14,
                 color: '#E6F3FF',
-                backgroundColor: 'rgba(18, 45, 73, 0.86)',
+                backgroundColor: 'transparent',
+                height: Platform.OS === 'android' ? 50 : '100%',
               }}
               pickerItemColor="#0F172A"
             />
@@ -993,6 +1257,7 @@ const onDueChange = (event: any, selectedDate?: Date) => {
               data={filteredAssets}
               keyExtractor={(item, index) => `asset-${item.assetId}-${index}`}
               renderItem={renderAssetItem}
+              style={{ flex: 1, marginTop: 10 }}
               ListEmptyComponent={
                 <Text style={styles.helperText}>No assets found for this search.</Text>
               }
@@ -1010,34 +1275,41 @@ const onDueChange = (event: any, selectedDate?: Date) => {
 
       {/* ------------------- OPERATOR MODAL ------------------- */}
       <Modal visible={operatorModal} transparent animationType="slide">
-        <TouchableOpacity
+        <Pressable
           style={styles.modalOverlay}
-          activeOpacity={1}
           onPress={() => setOperatorModal(false)}
         >
-          <View style={styles.modalContent}>
+          <Pressable style={styles.modalContent} onPress={() => { }}>
             <Text style={styles.modalTitle}>
               {canAssignToSupervisor ? 'Select Employee' : 'Select Operator'}
             </Text>
 
-            {operators.map((op) => (
-              <TouchableOpacity
-                key={op.employeeId}
-                style={styles.assetRow}
-                onPress={() => {
-                  setSelectedOperator(op); // store full object
-                  setOperatorModal(false);
-                }}
-              >
-                <Ionicons name="person-circle-outline" size={24} color="#22D3EE" />
-                <Text style={{ marginLeft: 10, fontSize: 16, color: '#E6F3FF' }}>
-                  {op.fullName} ({op.employeeId})
+            <FlatList
+              data={operators}
+              keyExtractor={(item, index) => `operator-${item.employeeId}-${index}`}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.assetRow}
+                  onPress={() => {
+                    setSelectedOperator(item); // store full object
+                    setOperatorModal(false);
+                  }}
+                >
+                  <Ionicons name="person-circle-outline" size={24} color="#22D3EE" />
+                  <Text style={{ marginLeft: 10, fontSize: 16, color: '#E6F3FF' }}>
+                    {item.fullName} ({item.employeeId})
+                  </Text>
+                </TouchableOpacity>
+              )}
+              style={{ flex: 1, marginTop: 10 }}
+              ListEmptyComponent={
+                <Text style={styles.helperText}>
+                  {canAssignToSupervisor ? 'No employees found.' : 'No operators found.'}
                 </Text>
-              </TouchableOpacity>
-
-            ))}
-          </View>
-        </TouchableOpacity>
+              }
+            />
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {snackbar.visible && (

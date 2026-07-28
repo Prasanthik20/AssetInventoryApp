@@ -8,7 +8,6 @@ import {
   Platform,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -20,18 +19,20 @@ import axios from 'axios';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { baseURL, RootStackParamList } from '../../navigation/types';
+import { reportStyles } from './ReportsScreenStyle';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reports'>;
 
 type ReportRow = {
-  assignmentId: number;
+  assignmentId: number | null;
   assetId: number;
   assetName: string;
   serialNo: string | null;
-  operatorEmployeeId: number;
-  operatorName: string;
-  supervisorEmployeeId: number;
-  supervisorName: string;
+  assetStatus?: string;
+  operatorEmployeeId: number | null;
+  operatorName: string | null;
+  supervisorEmployeeId: number | null;
+  supervisorName: string | null;
   location: string | null;
   projectName: string | null;
   notes: string | null;
@@ -46,6 +47,8 @@ type Summary = {
   activeAssignments: number;
   returnedAssignments: number;
   overdueAssignments: number;
+  unassignedAssets?: number;
+  maintenanceAssets?: number;
   pendingApprovalConfirmations?: number;
   totalAssets?: number;
   officeAssets?: number;
@@ -59,7 +62,7 @@ type ReceiptProofPayload = {
   proofPhotos?: string[];
 };
 
-type StatusFilter = 'all' | 'active' | 'returned' | 'overdue';
+type StatusFilter = 'all' | 'assigned' | 'unassigned' | 'returned' | 'overdue' | 'maintenance';
 
 const formatDate = (value?: string | null) => {
   if (!value) return '-';
@@ -82,7 +85,9 @@ const statusBadgeColor = (status: string) => {
   const normalized = normalizeStatus(status);
   if (normalized === 'overdue') return '#F97316';
   if (normalized === 'returned') return '#22C55E';
-  if (normalized === 'active') return '#38BDF8';
+  if (normalized === 'assigned') return '#38BDF8';
+  if (normalized === 'unassigned') return '#94A3B8';
+  if (normalized === 'maintenance') return '#FBBF24';
   return '#A5B4FC';
 };
 
@@ -90,7 +95,9 @@ const statusBadgeBackground = (status: string) => {
   const normalized = normalizeStatus(status);
   if (normalized === 'overdue') return 'rgba(249, 115, 22, 0.16)';
   if (normalized === 'returned') return 'rgba(16, 185, 129, 0.16)';
-  if (normalized === 'active') return 'rgba(14, 165, 233, 0.16)';
+  if (normalized === 'assigned') return 'rgba(14, 165, 233, 0.16)';
+  if (normalized === 'unassigned') return 'rgba(148, 163, 184, 0.16)';
+  if (normalized === 'maintenance') return 'rgba(251, 191, 36, 0.16)';
   return 'rgba(129, 140, 248, 0.16)';
 };
 
@@ -217,6 +224,55 @@ const createReportHtml = (title: string, rows: ReportRow[], summary: Summary) =>
   </html>`;
 };
 
+const parseNotes = (notesStr: string | null | undefined) => {
+  if (!notesStr) return null;
+  
+  let jsonStr = notesStr;
+  let prefix = '';
+  
+  // Handle cases where notes start with a tag like [RECEIPT_PROOF] before the JSON payload
+  const firstBrace = notesStr.indexOf('{');
+  const lastBrace = notesStr.lastIndexOf('}');
+  
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    const beforeBrace = notesStr.substring(0, firstBrace).trim();
+    if (beforeBrace.startsWith('[') && beforeBrace.endsWith(']')) {
+      jsonStr = notesStr.substring(firstBrace, lastBrace + 1);
+      prefix = beforeBrace + ' ';
+    } else if (beforeBrace === '') {
+      jsonStr = notesStr.substring(firstBrace, lastBrace + 1);
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (typeof parsed === 'object' && parsed !== null) {
+      let photos: string[] = [];
+      if (Array.isArray(parsed.proofPhotos)) {
+        photos.push(...parsed.proofPhotos.filter(Boolean));
+      } else if (typeof parsed.proofPhotos === 'string' && parsed.proofPhotos) {
+        photos.push(parsed.proofPhotos);
+      }
+      
+      if (Array.isArray(parsed.image)) {
+        photos.push(...parsed.image.filter(Boolean));
+      } else if (typeof parsed.image === 'string' && parsed.image) {
+        photos.push(parsed.image);
+      }
+
+      const extractedMessage = parsed.message || parsed.notes || '';
+      const finalMessage = extractedMessage ? extractedMessage : prefix.trim();
+
+      return {
+        message: finalMessage,
+        proofCount: parsed.proofCount ?? photos.length,
+        photos,
+      };
+    }
+  } catch {}
+  return { message: notesStr, proofCount: 0, photos: [] };
+};
+
 const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
   const { employeeId, roleName } = route.params;
   const { width, height } = useWindowDimensions();
@@ -236,6 +292,7 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [selectedRow, setSelectedRow] = useState<ReportRow | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const styles = reportStyles(isCompactLayout);
   const [selectedProof, setSelectedProof] = useState<{
     assetName: string;
     message: string;
@@ -303,33 +360,18 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
     return 'Reports';
   }, [roleName]);
 
-  const isAdminRole = useMemo(() => String(roleName || '').toLowerCase().includes('admin'), [roleName]);
+  // Removed unused isAdminRole
 
-  const summaryCards = useMemo(() => {
-    if (isAdminRole) {
-      return [
-        { label: 'Total Assets', value: summary.totalAssets ?? 0 },
-        { label: 'Total Allocated', value: summary.totalAssignments ?? 0 },
-        { label: 'In Office', value: summary.officeAssets ?? 0 },
-        { label: 'Overdue', value: summary.overdueAssignments ?? 0 },
-        { label: 'Maintenance', value: summary.underMaintenanceAssets ?? 0 },
-        {
-          label: 'Pending Approval Confirmation',
-          value: summary.pendingApprovalConfirmations ?? 0,
-        },
-      ];
-    }
-
-    return [
-      { label: 'Total Allocated', value: summary.totalAssignments ?? 0 },
-      { label: 'Overdue', value: summary.overdueAssignments ?? 0 },
-      { label: 'Returned', value: summary.returnedAssignments ?? 0 },
-      {
-        label: 'Pending Approval Confirmation',
-        value: summary.pendingApprovalConfirmations ?? 0,
-      },
-    ];
-  }, [isAdminRole, summary]);
+  const summaryCards = useMemo(() => [
+    { label: 'Total Assets', value: summary.totalAssets ?? 0 },
+    { label: 'Total Assignments', value: summary.totalAssignments ?? 0 },
+    { label: 'Active', value: summary.activeAssignments ?? 0 },
+    { label: 'Unassigned', value: summary.unassignedAssets ?? summary.officeAssets ?? 0 },
+    { label: 'Overdue', value: summary.overdueAssignments ?? 0 },
+    { label: 'Returned', value: summary.returnedAssignments ?? 0 },
+    { label: 'Maintenance', value: summary.maintenanceAssets ?? summary.underMaintenanceAssets ?? 0 },
+    { label: 'Pending Approval', value: summary.pendingApprovalConfirmations ?? 0 },
+  ], [summary]);
 
   const handleBackPress = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -371,9 +413,9 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
         item.assetName,
         item.serialNo,
         item.operatorName,
-        String(item.operatorEmployeeId),
+        item.operatorEmployeeId != null ? String(item.operatorEmployeeId) : '',
         item.supervisorName,
-        String(item.supervisorEmployeeId),
+        item.supervisorEmployeeId != null ? String(item.supervisorEmployeeId) : '',
         item.projectName,
         item.location,
         item.status,
@@ -412,23 +454,28 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
       'Notes',
     ];
 
-    const body = filteredHistory.map((item) => [
-      item.assignmentId,
-      item.assetId,
-      item.assetName,
-      item.serialNo || '',
-      item.operatorName,
-      item.operatorEmployeeId,
-      item.supervisorName,
-      item.supervisorEmployeeId,
-      formatDate(item.assignedDate),
-      formatDate(item.expectedReturnDate),
-      formatDate(item.returnedDate),
-      item.projectName || '',
-      item.location || '',
-      item.status,
-      item.notes || '',
-    ]);
+    const body = filteredHistory.map((item) => {
+      const parsed = parseNotes(item.notes);
+      const cleanNotes = parsed ? parsed.message : (item.notes || '');
+
+      return [
+        item.assignmentId,
+        item.assetId,
+        item.assetName,
+        item.serialNo || '',
+        item.operatorName,
+        item.operatorEmployeeId,
+        item.supervisorName,
+        item.supervisorEmployeeId,
+        formatDate(item.assignedDate),
+        formatDate(item.expectedReturnDate),
+        formatDate(item.returnedDate),
+        item.projectName || '',
+        item.location || '',
+        item.status,
+        cleanNotes,
+      ];
+    });
 
     const csvContent = [header, ...body].map((row) => row.map(csvEscape).join(',')).join('\n');
     const filename = `asset-report-${Date.now()}.csv`;
@@ -513,9 +560,21 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [filteredHistory, summary, title]);
 
-  const selectedReceiptProof = useMemo(() => {
-    return selectedRow ? parseReceiptProofNote(selectedRow.notes) : null;
-  }, [selectedRow]);
+  // Memo: complete assignment history for the selected asset, sorted chronologically.
+  // Only rows that have an actual assignment (assignmentId != null) are shown in the timeline.
+  const assetHistory = useMemo(() => {
+    if (!selectedRow) return [];
+    return history
+      .filter((item) => item.assetId === selectedRow.assetId && item.assignmentId != null)
+      .sort((a, b) => {
+        const da = new Date(a.assignedDate ?? '').getTime();
+        const db = new Date(b.assignedDate ?? '').getTime();
+        return da - db;
+      });
+  }, [history, selectedRow]);
+
+  // Timeline UI will be rendered inside the detail modal after the notes section.
+
 
   return (
     <ImageBackground
@@ -548,6 +607,7 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
                     label={card.label}
                     value={card.value}
                     compact={isCompactLayout}
+                    s={styles}
                   />
                 ))}
               </View>
@@ -571,16 +631,25 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
                     />
                   </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusTabs}>
-                    {(['all', 'active', 'returned', 'overdue'] as StatusFilter[]).map((status) => {
-                      const selected = statusFilter === status;
+                    {(
+                      [
+                        { key: 'all', label: 'ALL' },
+                        { key: 'assigned', label: 'ASSIGNED' },
+                        { key: 'unassigned', label: 'UNASSIGNED' },
+                        { key: 'returned', label: 'RETURNED' },
+                        { key: 'overdue', label: 'OVERDUE' },
+                        { key: 'maintenance', label: 'MAINTENANCE' },
+                      ] as { key: StatusFilter; label: string }[]
+                    ).map(({ key, label }) => {
+                      const selected = statusFilter === key;
                       return (
                         <TouchableOpacity
-                          key={status}
+                          key={key}
                           style={[styles.statusTab, selected ? styles.statusTabActive : null]}
-                          onPress={() => setStatusFilter(status)}
+                          onPress={() => setStatusFilter(key)}
                         >
                           <Text style={[styles.statusTabText, selected ? styles.statusTabTextActive : null]}>
-                            {status.toUpperCase()}
+                            {label}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -610,97 +679,101 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
                 </View>
               </View>
 
-            {filteredHistory.length === 0 ? (
-              <Text style={styles.emptyText}>No history found for current filter.</Text>
-            ) : isCompactLayout ? (
-              <View style={styles.mobileListContainer}>
-                {filteredHistory.map((item) => (
-                  <View key={item.assignmentId} style={styles.mobileListCard}>
-                    <View style={styles.mobileListHeaderRow}>
-                      <Text style={styles.mobileAssetName} numberOfLines={1}>{item.assetName}</Text>
-                      <View
-                        style={[
-                          styles.statusPill,
-                          {
-                            borderColor: statusBadgeColor(item.status),
-                            backgroundColor: statusBadgeBackground(item.status),
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.statusPillText, { color: statusBadgeColor(item.status) }]}> 
-                          {String(item.status || '-').toUpperCase()}
-                        </Text>
+              {filteredHistory.length === 0 ? (
+                <Text style={styles.emptyText}>No history found for current filter.</Text>
+              ) : isCompactLayout ? (
+                <View style={styles.mobileListContainer}>
+                  {filteredHistory.map((item) => (
+                    <View key={`${item.assetId}-${item.assignmentId ?? 'none'}`} style={styles.mobileListCard}>
+                      <View style={styles.mobileListHeaderRow}>
+                        <Text style={styles.mobileAssetName} numberOfLines={1}>{item.assetName}</Text>
+                        <View
+                          style={[
+                            styles.statusPill,
+                            {
+                              borderColor: statusBadgeColor(item.status),
+                              backgroundColor: statusBadgeBackground(item.status),
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.statusPillText, { color: statusBadgeColor(item.status) }]}>
+                            {String(item.status || '-').toUpperCase()}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                    <Text style={styles.mobileListMeta}>Serial: {item.serialNo || 'N/A'}</Text>
-                    <Text style={styles.mobileListMeta}>Assigned To: {item.operatorName} ({item.operatorEmployeeId})</Text>
-                    <Text style={styles.mobileListMeta}>Assigned By: {item.supervisorName} ({item.supervisorEmployeeId})</Text>
-                    <Text style={styles.mobileListMeta}>Assigned: {formatDate(item.assignedDate)}</Text>
-                    <Text style={styles.mobileListMeta}>Expected Return: {formatDate(item.expectedReturnDate)}</Text>
-                    <Text style={styles.mobileListMeta}>Returned: {formatDate(item.returnedDate)}</Text>
+                      <Text style={styles.mobileListMeta}>Serial: {item.serialNo || 'N/A'}</Text>
+                      <Text style={styles.mobileListMeta}>Assigned To: {item.operatorName || 'Not assigned'}{item.operatorEmployeeId != null ? ` (${item.operatorEmployeeId})` : ''}</Text>
+                      <Text style={styles.mobileListMeta}>Assigned By: {item.supervisorName || 'N/A'}{item.supervisorEmployeeId != null ? ` (${item.supervisorEmployeeId})` : ''}</Text>
+                      <Text style={styles.mobileListMeta}>Assigned: {formatDate(item.assignedDate)}</Text>
+                      <Text style={styles.mobileListMeta}>Expected Return: {formatDate(item.expectedReturnDate)}</Text>
+                      <Text style={styles.mobileListMeta}>Returned: {formatDate(item.returnedDate)}</Text>
 
-                    <TouchableOpacity style={[styles.viewButton, styles.mobileViewButton]} onPress={() => openDetailModal(item)}>
-                      <Text style={styles.viewButtonText}>View Details</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.tableContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                  <View style={styles.tableInner}>
-                    <View style={styles.tableHeaderRow}>
-                      <Text style={[styles.tableHeaderCell, styles.colAsset]}>Asset</Text>
-                      <Text style={[styles.tableHeaderCell, styles.colSerial]}>Serial</Text>
-                      <Text style={[styles.tableHeaderCell, styles.colAssignedTo]}>Assigned To</Text>
-                      <Text style={[styles.tableHeaderCell, styles.colAssignedBy]}>Assigned By</Text>
-                      <Text style={[styles.tableHeaderCell, styles.colDate]}>Assigned</Text>
-                      <Text style={[styles.tableHeaderCell, styles.colDate]}>Expected Return</Text>
-                      <Text style={[styles.tableHeaderCell, styles.colDate]}>Returned</Text>
-                      <Text style={[styles.tableHeaderCell, styles.colStatus]}>Status</Text>
-                      <Text style={[styles.tableHeaderCell, styles.colAction]}>Actions</Text>
+                      <TouchableOpacity style={[styles.viewButton, styles.mobileViewButton]} onPress={() => openDetailModal(item)}>
+                        <Text style={styles.viewButtonText}>View Details</Text>
+                      </TouchableOpacity>
                     </View>
-                    <ScrollView style={styles.tableBodyScroll} nestedScrollEnabled>
-                      {filteredHistory.map((item, index) => (
-                        <View key={item.assignmentId} style={[styles.tableRow, index % 2 === 0 ? styles.tableRowEven : null]}>
-                          <Text style={[styles.tableCell, styles.colAsset]} numberOfLines={2}>{item.assetName}</Text>
-                          <Text style={[styles.tableCell, styles.colSerial]} numberOfLines={1}>{item.serialNo || 'N/A'}</Text>
-                          <Text style={[styles.tableCell, styles.colAssignedTo]} numberOfLines={2}>
-                            {item.operatorName} ({item.operatorEmployeeId})
-                          </Text>
-                          <Text style={[styles.tableCell, styles.colAssignedBy]} numberOfLines={2}>
-                            {item.supervisorName} ({item.supervisorEmployeeId})
-                          </Text>
-                          <Text style={[styles.tableCell, styles.colDate]}>{formatDate(item.assignedDate)}</Text>
-                          <Text style={[styles.tableCell, styles.colDate]}>{formatDate(item.expectedReturnDate)}</Text>
-                          <Text style={[styles.tableCell, styles.colDate]}>{formatDate(item.returnedDate)}</Text>
-                          <View style={[styles.colStatus, styles.statusPillWrap]}>
-                            <View
-                              style={[
-                                styles.statusPill,
-                                {
-                                  borderColor: statusBadgeColor(item.status),
-                                  backgroundColor: statusBadgeBackground(item.status),
-                                },
-                              ]}
-                            >
-                              <Text style={[styles.statusPillText, { color: statusBadgeColor(item.status) }]}> 
-                                {String(item.status || '-').toUpperCase()}
-                              </Text>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.tableContainer}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                    <View style={styles.tableInner}>
+                      <View style={styles.tableHeaderRow}>
+                        <Text style={[styles.tableHeaderCell, styles.colAsset]}>Asset</Text>
+                        <Text style={[styles.tableHeaderCell, styles.colSerial]}>Serial</Text>
+                        <Text style={[styles.tableHeaderCell, styles.colAssignedTo]}>Assigned To</Text>
+                        <Text style={[styles.tableHeaderCell, styles.colAssignedBy]}>Assigned By</Text>
+                        <Text style={[styles.tableHeaderCell, styles.colDate]}>Assigned</Text>
+                        <Text style={[styles.tableHeaderCell, styles.colDate]}>Expected Return</Text>
+                        <Text style={[styles.tableHeaderCell, styles.colDate]}>Returned</Text>
+                        <Text style={[styles.tableHeaderCell, styles.colStatus]}>Status</Text>
+                        <Text style={[styles.tableHeaderCell, styles.colAction]}>Actions</Text>
+                      </View>
+                      <ScrollView style={styles.tableBodyScroll} nestedScrollEnabled>
+                        {filteredHistory.map((item, index) => (
+                          <View key={`${item.assetId}-${item.assignmentId ?? 'none'}`} style={[styles.tableRow, index % 2 === 0 ? styles.tableRowEven : null]}>
+                            <Text style={[styles.tableCell, styles.colAsset]} numberOfLines={2}>{item.assetName}</Text>
+                            <Text style={[styles.tableCell, styles.colSerial]} numberOfLines={1}>{item.serialNo || 'N/A'}</Text>
+                            <Text style={[styles.tableCell, styles.colAssignedTo]} numberOfLines={2}>
+                              {item.operatorName
+                                ? `${item.operatorName}${item.operatorEmployeeId != null ? ` (${item.operatorEmployeeId})` : ''}`
+                                : 'Not assigned'}
+                            </Text>
+                            <Text style={[styles.tableCell, styles.colAssignedBy]} numberOfLines={2}>
+                              {item.supervisorName
+                                ? `${item.supervisorName}${item.supervisorEmployeeId != null ? ` (${item.supervisorEmployeeId})` : ''}`
+                                : 'N/A'}
+                            </Text>
+                            <Text style={[styles.tableCell, styles.colDate]}>{formatDate(item.assignedDate)}</Text>
+                            <Text style={[styles.tableCell, styles.colDate]}>{formatDate(item.expectedReturnDate)}</Text>
+                            <Text style={[styles.tableCell, styles.colDate]}>{formatDate(item.returnedDate)}</Text>
+                            <View style={[styles.colStatus, styles.statusPillWrap]}>
+                              <View
+                                style={[
+                                  styles.statusPill,
+                                  {
+                                    borderColor: statusBadgeColor(item.status),
+                                    backgroundColor: statusBadgeBackground(item.status),
+                                  },
+                                ]}
+                              >
+                                <Text style={[styles.statusPillText, { color: statusBadgeColor(item.status) }]}>
+                                  {String(item.status || '-').toUpperCase()}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={[styles.tableCell, styles.colAction, styles.actionCell]}>
+                              <TouchableOpacity style={styles.viewButton} onPress={() => openDetailModal(item)}>
+                                <Text style={styles.viewButtonText}>View</Text>
+                              </TouchableOpacity>
                             </View>
                           </View>
-                          <View style={[styles.tableCell, styles.colAction, styles.actionCell]}>
-                            <TouchableOpacity style={styles.viewButton} onPress={() => openDetailModal(item)}>
-                              <Text style={styles.viewButtonText}>View</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      ))}
-                    </ScrollView>
-                  </View>
-                </ScrollView>
-              </View>
-            )}
+                        ))}
+                      </ScrollView>
+                    </View>
+                  </ScrollView>
+                </View>
+              )}
 
             </View>
           </ScrollView>
@@ -718,15 +791,15 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
                 styles.modalCard,
                 isCompactLayout
                   ? {
-                      width: '100%',
-                      maxHeight: Math.max(420, height * 0.88),
-                      borderRadius: 12,
-                    }
+                    width: '100%',
+                    maxHeight: Math.max(420, height * 0.88),
+                    borderRadius: 12,
+                  }
                   : {
-                      width: Math.min(980, Math.max(760, width * 0.85)),
-                      maxHeight: Math.max(540, height * 0.88),
-                      borderRadius: 14,
-                    },
+                    width: Math.min(980, Math.max(760, width * 0.85)),
+                    maxHeight: Math.max(540, height * 0.88),
+                    borderRadius: 14,
+                  },
               ]}
             >
               <TouchableOpacity style={styles.detailModalCloseIcon} onPress={closeDetailModal}>
@@ -750,31 +823,41 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
 
                 <View style={styles.detailGrid}>
                   <View style={styles.detailGridColumn}>
-                    <InfoBlock label="Assignment ID" value={String(selectedRow?.assignmentId || '-')} />
-                    <InfoBlock label="Asset ID" value={String(selectedRow?.assetId || '-')} />
-                    <InfoBlock label="Serial Number" value={selectedRow?.serialNo || 'N/A'} />
-                    <InfoBlock label="Project" value={selectedRow?.projectName || 'N/A'} />
+                    <InfoBlock label="Assignment ID" value={selectedRow?.assignmentId != null ? String(selectedRow.assignmentId) : 'Unassigned'} s={styles} />
+                    <InfoBlock label="Asset ID" value={String(selectedRow?.assetId || '-')} s={styles} />
+                    <InfoBlock label="Serial Number" value={selectedRow?.serialNo || 'N/A'} s={styles} />
+                    <InfoBlock label="Project" value={selectedRow?.projectName || 'N/A'} s={styles} />
                   </View>
 
                   <View style={styles.detailGridColumn}>
-                    <PersonBlock
-                      label="Assigned To"
-                      name={selectedRow?.operatorName || '-'}
-                      extra={`(${selectedRow?.operatorEmployeeId || '-'})`}
-                    />
-                    <PersonBlock
-                      label="Assigned By"
-                      name={selectedRow?.supervisorName || '-'}
-                      extra={`(${selectedRow?.supervisorEmployeeId || '-'})`}
-                    />
-                    <InfoBlock label="Location" value={selectedRow?.location || 'N/A'} />
+                    {selectedRow?.operatorName ? (
+                      <PersonBlock
+                        label="Assigned To"
+                        name={selectedRow.operatorName}
+                        extra={selectedRow.operatorEmployeeId != null ? `(${selectedRow.operatorEmployeeId})` : ''}
+                        s={styles}
+                      />
+                    ) : (
+                      <InfoBlock label="Assigned To" value="Not assigned" s={styles} />
+                    )}
+                    {selectedRow?.supervisorName ? (
+                      <PersonBlock
+                        label="Assigned By"
+                        name={selectedRow.supervisorName}
+                        extra={selectedRow.supervisorEmployeeId != null ? `(${selectedRow.supervisorEmployeeId})` : ''}
+                        s={styles}
+                      />
+                    ) : (
+                      <InfoBlock label="Assigned By" value="N/A" s={styles} />
+                    )}
+                    <InfoBlock label="Location" value={selectedRow?.location || 'N/A'} s={styles} />
                   </View>
                 </View>
 
                 <View style={styles.detailDateRow}>
-                  <DateInfoBlock label="Assigned Date" value={formatDate(selectedRow?.assignedDate)} />
-                  <DateInfoBlock label="Expected Return Date" value={formatDate(selectedRow?.expectedReturnDate)} />
-                  <DateInfoBlock label="Returned Date" value={formatDate(selectedRow?.returnedDate)} />
+                  <DateInfoBlock label="Assigned Date" value={formatDate(selectedRow?.assignedDate)} s={styles} />
+                  <DateInfoBlock label="Expected Return Date" value={formatDate(selectedRow?.expectedReturnDate)} s={styles} />
+                  <DateInfoBlock label="Returned Date" value={formatDate(selectedRow?.returnedDate)} s={styles} />
                   <View style={styles.dateInfoBlock}>
                     <Text style={styles.dateInfoLabel}>Status</Text>
                     <View style={styles.detailStatusBadge}>
@@ -783,35 +866,64 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
                   </View>
                 </View>
 
-                <View style={styles.notesStrip}>
-                  <Text style={styles.notesLabel}>Notes</Text>
-                  <Text style={styles.notesValue}>{selectedRow?.notes || 'N/A'}</Text>
-                </View>
+                {/* Timeline of assignments */}
+                {assetHistory.length > 0 && (
+                  <View style={styles.timelineContainer}>
+                    {assetHistory.map((h, idx) => (
+                      <View key={h.assignmentId} style={styles.timelineItem}>
+                        <View style={styles.timelineDot} />
+                        {idx < assetHistory.length - 1 && <View style={styles.timelineLine} />}
+                        <View style={styles.timelineContent}>
+                          <Text style={styles.timelineLabel}>Assigned To: {h.operatorName} ({h.operatorEmployeeId})</Text>
+                          <Text style={styles.timelineDate}>{formatDate(h.assignedDate)}</Text>
+                          <Text style={styles.timelineLabel}>Status: {h.status}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
-                {selectedReceiptProof?.isReceiptProof ? (
-                  <TouchableOpacity
-                    style={styles.openProofButton}
-                    onPress={() =>
-                      openProofModal(
-                        selectedRow?.assetName || '-',
-                        selectedReceiptProof.message,
-                        selectedReceiptProof.photos,
-                      )
-                    }
-                  >
-                    <Ionicons name="images-outline" size={16} color="#D6E3F3" />
-                    <Text style={styles.openProofButtonText}>
-                      View Proof Photos ({selectedReceiptProof.proofCount || selectedReceiptProof.photos.length || 0})
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
+                {/* Notes */}
+                {(() => {
+                  const parsed = parseNotes(selectedRow?.notes);
+                  return (
+                    <View style={styles.notesStrip}>
+                      <Text style={styles.notesLabel}>Notes</Text>
+                      <Text style={styles.notesValue}>
+                        {parsed?.message || selectedRow?.notes || 'N/A'}
+                      </Text>
+                      {!!parsed?.proofCount && parsed.proofCount > 0 && (
+                        <Text style={[styles.notesValue, { marginTop: 4, fontStyle: 'italic', color: '#64748b' }]}>
+                          Proof Photos: {parsed.proofCount} attached
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })()}
               </ScrollView>
-
-              <View style={styles.detailModalFooter}>
-                <TouchableOpacity style={styles.footerGhostButton} onPress={closeDetailModal}>
-                  <Text style={styles.footerGhostButtonText}>Close</Text>
-                </TouchableOpacity>
-              </View>
+              {(() => {
+                const parsed = parseNotes(selectedRow?.notes);
+                const photos = parsed?.photos || [];
+                if (photos.length > 0) {
+                  return (
+                    <TouchableOpacity
+                      style={styles.openProofButton}
+                      onPress={() =>
+                        openProofModal(
+                          selectedRow?.assetName || '-',
+                          parsed?.message || '',
+                          photos
+                        )
+                      }>
+                      <Ionicons name="images-outline" size={16} color="#D6E3F3" />
+                      <Text style={styles.openProofButtonText}>
+                        View Proof Photos ({photos.length})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }
+                return null;
+              })()}
             </View>
           </View>
         </Modal>
@@ -828,15 +940,15 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
                 styles.modalCard,
                 isCompactLayout
                   ? {
-                      width: '100%',
-                      maxHeight: Math.max(420, height * 0.88),
-                      borderRadius: 12,
-                    }
+                    width: '100%',
+                    maxHeight: Math.max(420, height * 0.88),
+                    borderRadius: 12,
+                  }
                   : {
-                      width: Math.min(980, Math.max(720, width * 0.84)),
-                      maxHeight: Math.max(520, height * 0.86),
-                      borderRadius: 14,
-                    },
+                    width: Math.min(980, Math.max(720, width * 0.84)),
+                    maxHeight: Math.max(520, height * 0.86),
+                    borderRadius: 14,
+                  },
               ]}
             >
               <View style={styles.modalAccentRail} />
@@ -846,6 +958,7 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
                 title="Asset Receipt Confirmation"
                 subtitle={selectedProof?.assetName || '-'}
                 onClose={closeProofModal}
+                s={styles}
               />
               <Text style={styles.modalMessage}>Message: {selectedProof?.message || 'Received'}</Text>
 
@@ -866,7 +979,7 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
                           isCompactLayout
                             ? styles.proofPhotoMobile
                             : styles.proofPhotoDesktop,
-                        ]}
+                        ] as any}
                         resizeMode="cover"
                       />
                     ))}
@@ -885,34 +998,48 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 };
 
+type ReportStyles = ReturnType<typeof reportStyles>;
+
 const SummaryCard = ({
   label,
   value,
   compact,
+  s,
 }: {
   label: string;
   value: number;
   compact?: boolean;
+  s: ReportStyles;
 }) => (
-  <View style={[styles.summaryCard, compact ? styles.summaryCardMobile : null]}>
-    <Text style={styles.summaryValue}>{value}</Text>
-    <Text style={styles.summaryLabel}>{label}</Text>
+  <View style={[s.summaryCard, compact ? s.summaryCardMobile : null]}>
+    <Text style={s.summaryValue}>{value}</Text>
+    <Text style={s.summaryLabel}>{label}</Text>
   </View>
 );
 
-const DetailLine = ({ label, value, multiline }: { label: string; value: string; multiline?: boolean }) => (
-  <View style={styles.detailLine}>
-    <Text style={styles.detailLabel}>{label}</Text>
-    <Text style={[styles.detailValue, multiline ? styles.detailValueMultiline : null]} numberOfLines={multiline ? 5 : 2}>
+const DetailLine = ({
+  label,
+  value,
+  multiline,
+  s,
+}: {
+  label: string;
+  value: string;
+  multiline?: boolean;
+  s: ReportStyles;
+}) => (
+  <View style={s.detailLine}>
+    <Text style={s.detailLabel}>{label}</Text>
+    <Text style={[s.detailValue, multiline ? s.detailValueMultiline : null]} numberOfLines={multiline ? 5 : 2}>
       {value}
     </Text>
   </View>
 );
 
-const InfoBlock = ({ label, value }: { label: string; value: string }) => (
-  <View style={styles.infoBlock}>
-    <Text style={styles.infoBlockLabel}>{label}</Text>
-    <Text style={styles.infoBlockValue}>{value}</Text>
+const InfoBlock = ({ label, value, s }: { label: string; value: string; s: ReportStyles }) => (
+  <View style={s.infoBlock}>
+    <Text style={s.infoBlockLabel}>{label}</Text>
+    <Text style={s.infoBlockValue}>{value}</Text>
   </View>
 );
 
@@ -920,28 +1047,30 @@ const PersonBlock = ({
   label,
   name,
   extra,
+  s,
 }: {
   label: string;
   name: string;
   extra: string;
+  s: ReportStyles;
 }) => (
-  <View style={styles.infoBlock}>
-    <Text style={styles.infoBlockLabel}>{label}</Text>
-    <View style={styles.personRow}>
-      <View style={styles.personAvatar}>
-        <Text style={styles.personAvatarText}>{getInitials(name)}</Text>
+  <View style={s.infoBlock}>
+    <Text style={s.infoBlockLabel}>{label}</Text>
+    <View style={s.personRow}>
+      <View style={s.personAvatar}>
+        <Text style={s.personAvatarText}>{getInitials(name)}</Text>
       </View>
-      <Text style={styles.infoBlockValue} numberOfLines={1}>{`${name} ${extra}`}</Text>
+      <Text style={s.infoBlockValue} numberOfLines={1}>{`${name} ${extra}`}</Text>
     </View>
   </View>
 );
 
-const DateInfoBlock = ({ label, value }: { label: string; value: string }) => (
-  <View style={styles.dateInfoBlock}>
-    <Text style={styles.dateInfoLabel}>{label}</Text>
-    <View style={styles.dateValueRow}>
+const DateInfoBlock = ({ label, value, s }: { label: string; value: string; s: ReportStyles }) => (
+  <View style={s.dateInfoBlock}>
+    <Text style={s.dateInfoLabel}>{label}</Text>
+    <View style={s.dateValueRow}>
       <Ionicons name="calendar-outline" size={14} color="#9AB6D6" />
-      <Text style={styles.dateInfoValue}>{value}</Text>
+      <Text style={s.dateInfoValue}>{value}</Text>
     </View>
   </View>
 );
@@ -951,720 +1080,28 @@ const ModalHeader = ({
   subtitle,
   onClose,
   icon,
+  s,
 }: {
   title: string;
   subtitle: string;
   onClose: () => void;
   icon: keyof typeof Ionicons.glyphMap;
+  s: ReportStyles;
 }) => (
-  <View style={styles.modalHeader}>
-    <View style={styles.modalTitleWrap}>
-      <View style={styles.modalIconWrap}>
+  <View style={s.modalHeader}>
+    <View style={s.modalTitleWrap}>
+      <View style={s.modalIconWrap}>
         <Ionicons name={icon} size={16} color="#0F766E" />
       </View>
-      <View style={styles.modalHeadingTextWrap}>
-        <Text style={styles.modalTitle}>{title}</Text>
-        <Text style={styles.modalSubtitle}>{subtitle}</Text>
+      <View style={s.modalHeadingTextWrap}>
+        <Text style={s.modalTitle}>{title}</Text>
+        <Text style={s.modalSubtitle}>{subtitle}</Text>
       </View>
     </View>
-    <TouchableOpacity style={styles.modalIconButton} onPress={onClose}>
+    <TouchableOpacity style={s.modalIconButton} onPress={onClose}>
       <Ionicons name="close" size={18} color="#0F172A" />
     </TouchableOpacity>
   </View>
 );
-
-const styles = StyleSheet.create({
-  background: { flex: 1 },
-  safeArea: { flex: 1, backgroundColor: 'rgba(7, 24, 42, 0.86)' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(159, 207, 255, 0.18)',
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(18, 38, 60, 0.7)',
-    borderWidth: 1,
-    borderColor: 'rgba(147, 197, 253, 0.2)',
-  },
-  title: { color: '#E6F3FF', fontSize: 18, fontWeight: '700' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 44 },
-  dashboardShell: { width: '100%' },
-  dashboardShellWide: { alignSelf: 'center', maxWidth: 1500 },
-  filterBarMobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    padding: 10,
-  },
-  filterLeftPaneMobile: {
-    width: '100%',
-  },
-  toolbarActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  toolbarActionsMobile: {
-    width: '100%',
-    marginTop: 8,
-  },
-  exportButton: {
-    backgroundColor: 'rgba(30, 64, 101, 0.9)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(147, 197, 253, 0.26)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  exportButtonMobile: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 9,
-  },
-  pdfButton: {
-    backgroundColor: 'rgba(46, 56, 97, 0.92)',
-    borderColor: 'rgba(165, 180, 252, 0.28)',
-  },
-  exportButtonText: {
-    color: '#DCEBFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  filterBar: {
-    marginBottom: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(138, 163, 192, 0.22)',
-    backgroundColor: 'rgba(16, 31, 51, 0.74)',
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    shadowColor: '#020617',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 6,
-  },
-  filterLeftPane: {
-    flex: 1,
-  },
-  searchBox: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: 'rgba(125, 160, 197, 0.28)',
-    borderRadius: 10,
-    backgroundColor: 'rgba(10, 25, 42, 0.84)',
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  searchInput: {
-    color: '#D4E7FF',
-    fontSize: 13,
-    flex: 1,
-    paddingVertical: 0,
-  },
-  statusTabs: {
-    paddingTop: 10,
-    paddingBottom: 0,
-    gap: 8,
-  },
-  statusTab: {
-    borderWidth: 1,
-    borderColor: 'rgba(124, 146, 173, 0.34)',
-    backgroundColor: 'rgba(17, 36, 57, 0.75)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  statusTabActive: {
-    borderColor: 'rgba(56, 189, 248, 0.55)',
-    backgroundColor: 'rgba(16, 68, 94, 0.9)',
-  },
-  statusTabText: {
-    color: '#A4BAD3',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  statusTabTextActive: {
-    color: '#D7F4FF',
-  },
-  summaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  summaryCard: {
-    width: '23.5%',
-    backgroundColor: 'rgba(16, 34, 55, 0.82)',
-    borderColor: 'rgba(140, 163, 191, 0.26)',
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-    shadowColor: '#020617',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 18,
-    elevation: 4,
-  },
-  summaryCardMobile: {
-    width: '48%',
-  },
-  summaryValue: { color: '#E6F3FF', fontSize: 26, fontWeight: '700' },
-  summaryLabel: { color: '#8FB0D3', fontSize: 12, marginTop: 4, letterSpacing: 0.3 },
-  sectionTitle: { color: '#E6F3FF', fontSize: 18, fontWeight: '700', marginBottom: 10 },
-  tableContainer: {
-    borderWidth: 1,
-    borderColor: 'rgba(138, 163, 192, 0.26)',
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(12, 27, 45, 0.86)',
-    shadowColor: '#020617',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 22,
-    elevation: 8,
-  },
-  mobileListContainer: {
-    gap: 10,
-  },
-  mobileListCard: {
-    borderWidth: 1,
-    borderColor: 'rgba(138, 163, 192, 0.26)',
-    borderRadius: 12,
-    backgroundColor: 'rgba(12, 27, 45, 0.86)',
-    padding: 12,
-  },
-  mobileListHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 8,
-  },
-  mobileAssetName: {
-    color: '#E6F3FF',
-    fontSize: 14,
-    fontWeight: '700',
-    flex: 1,
-  },
-  mobileListMeta: {
-    color: '#BFD4EA',
-    fontSize: 12,
-    marginBottom: 3,
-  },
-  tableInner: {
-    minWidth: 1400,
-  },
-  tableHeaderRow: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(22, 42, 66, 0.98)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(129, 156, 187, 0.3)',
-  },
-  tableHeaderCell: {
-    color: '#B6CDEA',
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(103, 130, 160, 0.2)',
-  },
-  tableBodyScroll: {
-    maxHeight: 420,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(98, 123, 153, 0.2)',
-    minHeight: 56,
-    alignItems: 'center',
-  },
-  tableRowEven: {
-    backgroundColor: 'rgba(18, 36, 58, 0.52)',
-  },
-  tableCell: {
-    color: '#D7E6F8',
-    fontSize: 13,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(88, 115, 146, 0.18)',
-  },
-  colAsset: { width: 210 },
-  colSerial: { width: 150 },
-  colAssignedTo: { width: 220 },
-  colAssignedBy: { width: 220 },
-  colDate: { width: 140 },
-  colStatus: { width: 140 },
-  colAction: { width: 120 },
-  statusPillWrap: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(88, 115, 146, 0.18)',
-  },
-  statusPill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  statusPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  actionCell: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRightWidth: 0,
-  },
-  viewButton: {
-    backgroundColor: 'rgba(15, 77, 108, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(125, 211, 252, 0.4)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  mobileViewButton: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  viewButtonText: {
-    color: '#D9F0FF',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  metaText: { color: '#D7E7F7', fontSize: 13, marginBottom: 2 },
-  emptyText: { color: '#A9C6E4', fontSize: 13, marginTop: 6 },
-  receiptProofContainer: {
-    marginBottom: 4,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(8, 55, 78, 0.45)',
-    borderWidth: 1,
-    borderColor: 'rgba(34, 211, 238, 0.25)',
-  },
-  receiptProofTitle: {
-    color: '#22D3EE',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  proofButton: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: 'rgba(15, 118, 110, 0.85)',
-  },
-  proofButtonText: {
-    color: '#E6F3FF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(3, 14, 30, 0.68)',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  modalCard: {
-    backgroundColor: 'rgba(30, 51, 78, 0.82)',
-    borderColor: 'rgba(182, 214, 248, 0.35)',
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 0,
-    overflow: 'hidden',
-    shadowColor: '#000B1F',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 30,
-    elevation: 16,
-  },
-  modalAccentRail: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: 'rgba(141, 190, 255, 0.35)',
-  },
-  modalHandle: {
-    width: 54,
-    height: 4,
-    borderRadius: 999,
-    alignSelf: 'center',
-    marginBottom: 10,
-    backgroundColor: 'rgba(198, 224, 255, 0.45)',
-  },
-  detailModalCloseIcon: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    zIndex: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(43, 66, 95, 0.8)',
-    borderWidth: 1,
-    borderColor: 'rgba(173, 203, 238, 0.38)',
-  },
-  detailModalBody: {
-    paddingBottom: 12,
-  },
-  detailHeroRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  detailHeroIconWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(171, 207, 246, 0.45)',
-    backgroundColor: 'rgba(37, 67, 102, 0.76)',
-  },
-  detailHeroAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    marginLeft: -6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(201, 222, 248, 0.9)',
-    backgroundColor: '#3A4C67',
-  },
-  detailHeroAvatarText: {
-    color: '#EAF4FF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  detailModalTitle: {
-    color: '#F2F7FF',
-    fontSize: 42,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 12,
-    lineHeight: 42,
-  },
-  detailModalSubtitle: {
-    color: '#A8BED8',
-    fontSize: 20,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 16,
-  },
-  detailGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 14,
-    marginBottom: 8,
-  },
-  detailGridColumn: {
-    flex: 1,
-    gap: 8,
-  },
-  infoBlock: {
-    paddingVertical: 2,
-  },
-  infoBlockLabel: {
-    color: '#AFC4DD',
-    fontSize: 14,
-    marginBottom: 1,
-  },
-  infoBlockValue: {
-    color: '#F2F7FF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  personRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  personAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#4E607B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(194, 216, 243, 0.65)',
-  },
-  personAvatarText: {
-    color: '#E8F1FC',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  detailDateRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 10,
-  },
-  dateInfoBlock: {
-    flex: 1,
-  },
-  dateInfoLabel: {
-    color: '#AFC4DD',
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  dateValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dateInfoValue: {
-    color: '#F2F7FF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  detailStatusBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#1E9FAE',
-    paddingHorizontal: 12,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  detailStatusText: {
-    color: '#DFFAFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  notesStrip: {
-    marginTop: 2,
-    marginBottom: 10,
-  },
-  notesLabel: {
-    color: '#AFC4DD',
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  notesValue: {
-    color: '#F2F7FF',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  openProofButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(183, 214, 248, 0.42)',
-    backgroundColor: 'rgba(46, 77, 114, 0.7)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    marginBottom: 10,
-  },
-  openProofButtonText: {
-    color: '#DCEBFC',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  detailModalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(173, 203, 238, 0.28)',
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(38, 59, 87, 0.75)',
-  },
-  footerGhostButton: {
-    borderWidth: 1,
-    borderColor: 'rgba(173, 203, 238, 0.45)',
-    backgroundColor: 'rgba(54, 77, 106, 0.62)',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  footerGhostButtonText: {
-    color: '#D9E9FC',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  footerPrimaryButton: {
-    borderWidth: 1,
-    borderColor: 'rgba(130, 166, 255, 0.65)',
-    backgroundColor: 'rgba(56, 96, 186, 0.88)',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  footerPrimaryButtonText: {
-    color: '#EEF5FF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 12,
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(15, 23, 42, 0.08)',
-  },
-  modalTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 10,
-  },
-  modalIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(20, 184, 166, 0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(20, 184, 166, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  modalHeadingTextWrap: {
-    flex: 1,
-  },
-  modalIconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.16)',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalTitle: {
-    color: '#0F172A',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  modalSubtitle: {
-    color: '#0F766E',
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  modalMessage: {
-    color: '#334155',
-    fontSize: 13,
-    marginBottom: 6,
-    paddingHorizontal: 2,
-  },
-  detailsContainer: {
-    paddingVertical: 4,
-  },
-  detailLine: {
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.08)',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  detailLabel: {
-    color: '#64748B',
-    fontSize: 10,
-    marginBottom: 3,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  detailValue: {
-    color: '#0F172A',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  detailValueMultiline: {
-    lineHeight: 18,
-  },
-  photoRow: {
-    paddingVertical: 6,
-  },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-  },
-  proofPhoto: {
-    borderRadius: 12,
-    marginRight: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(15, 23, 42, 0.1)',
-    backgroundColor: '#E2E8F0',
-  },
-  proofPhotoMobile: {
-    width: '100%',
-    height: 220,
-    marginRight: 0,
-  },
-  proofPhotoDesktop: {
-    width: 180,
-    height: 180,
-  },
-  modalCloseButton: {
-    marginTop: 8,
-    alignSelf: 'stretch',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(15, 118, 110, 0.45)',
-    backgroundColor: '#0F766E',
-    alignItems: 'center',
-  },
-  modalCloseButtonText: {
-    color: '#F8FAFC',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-});
 
 export default ReportsScreen;

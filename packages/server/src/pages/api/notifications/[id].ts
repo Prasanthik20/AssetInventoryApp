@@ -18,13 +18,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { id: receiverEmployeeId, role } = req.query;
+    // Next.js dynamic routes override query parameters of the same name.
+    // If the frontend calls `/api/notifications/admin?id=14`, req.query.id is 'admin'.
+    // We must extract the actual `id` parameter from req.url.
+    const urlObj = new URL(req.url || '', `http://localhost`);
+    const queryId = urlObj.searchParams.get('id');
+    const pathSegment = req.query.id as string;
 
-    if (!receiverEmployeeId || typeof receiverEmployeeId !== "string") {
+    const isRoleInPath = ['admin', 'supervisor', 'operator', 'tenant admin', 'tenantadmin'].includes(pathSegment?.toLowerCase());
+    const role = (req.query.role as string) || (isRoleInPath ? pathSegment.toLowerCase() : null);
+    const receiverEmployeeId = queryId || (!isRoleInPath ? pathSegment : null);
+
+    if (!receiverEmployeeId) {
       return res.status(400).json({ message: "Valid numeric receiver ID is required." });
     }
+
+    const employeeIdInt = parseInt(receiverEmployeeId, 10);
+    if (isNaN(employeeIdInt)) {
+      return res.status(400).json({ message: "Valid numeric receiver ID is required." });
+    }
+
     let sqlQuery = "";
     let extraCondition = "";
+    let queryParams: any[] = [];
 
     // OPERATOR MODE → only show notifications without reply (pending)
     if (role === "operator") {
@@ -33,36 +49,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // SUPERVISOR MODE → show all notifications
     // no extra condition
-    if(role == "admin") {
+console.log(role)
+    if (role === "admin" || role === "tenant admin" || role === "tenantadmin") {
+      // Admin global feed: show all notifications
       sqlQuery = `
-        SELECT * FROM "Notifications" ORDER BY created_at DESC`;
+        SELECT
+          n.id AS "notificationId",
+          n."assignmentId",
+          n.reason,
+          n.reply,
+          n.status AS "notificationStatus",
+          n.created_at AS "createdAt",
+
+          a.id AS "assetId",
+          a.name AS "assetName",
+
+          s."employeeId" AS "senderEmployeeId",
+          s."fullName" AS "senderName"
+        FROM "Notifications" n
+        LEFT JOIN "Asset_Details" a ON n."assetId" = a.id
+        LEFT JOIN "Users" s ON n."senderId" = s."employeeId"
+        ORDER BY n.created_at DESC;
+      `;
+      queryParams = [];
+    } else {
+      sqlQuery = `
+        SELECT
+          n.id AS "notificationId",
+          n."assignmentId",
+          n.reason,
+          n.reply,
+          n.status AS "notificationStatus",
+          n.created_at AS "createdAt",
+
+          a.id AS "assetId",
+          a.name AS "assetName",
+
+          s."employeeId" AS "senderEmployeeId",
+          s."fullName" AS "senderName"
+        FROM "Notifications" n
+        LEFT JOIN "Asset_Details" a ON n."assetId" = a.id
+        LEFT JOIN "Users" s ON n."senderId" = s."employeeId"
+        WHERE n."receiverId" = $1
+        ${extraCondition}
+        ORDER BY n.created_at DESC;
+      `;
+      queryParams = [employeeIdInt];
     }
 
-     sqlQuery = `
-      SELECT
-        n.id AS "notificationId",
-        n."assignmentId",
-        n.reason,
-        n.reply,
-        n.status AS "notificationStatus",
-        n.created_at AS "createdAt",
-
-        a.id AS "assetId",
-        a.name AS "assetName",
-
-        s."employeeId" AS "senderEmployeeId",
-        s."fullName" AS "senderName"
-      FROM "Notifications" n
-      LEFT JOIN "Asset_Details" a ON n."assetId" = a.id
-      LEFT JOIN "Users" s ON n."senderId" = s."employeeId"
-      WHERE n."receiverId" = $1
-      ${extraCondition}
-      ORDER BY n.created_at DESC;
-    `;
-
-    const result = await query(sqlQuery, [parseInt(receiverEmployeeId)]);
-
+    const result = await query(sqlQuery, queryParams);
+console.log(result)
     const formattedNotifications = result.rows.map(row => ({
+      id: row.notificationId, // mapping id to make sure it matches frontend `item.id` usage
       notificationId: row.notificationId,
       assignmentId: row.assignmentId,
       reason: row.reason,

@@ -8,6 +8,15 @@ export default async function loginCoreHandler(
   req: NextApiRequest,
   res: NextApiResponse
 ): Promise<void> {
+  // Set CORS headers
+  const origin = req.headers.origin as string;
+  setCorsHeaders(res, origin);
+
+  // Handle preflight OPTIONS requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
 
   // ❌ Block non-POST requests
   if (req.method !== 'POST') {
@@ -34,6 +43,7 @@ export default async function loginCoreHandler(
         u."photoURL",
         u."tenantId" AS "tenantId",
         u."status",
+        u."roleId",
         r."roleName"
       FROM 
         "Users" u
@@ -65,8 +75,32 @@ export default async function loginCoreHandler(
       return;
     }
 
+    // Fetch user permissions dynamically
+    const permissionsResult = await query(
+      `SELECT p.code 
+       FROM "Role_Permissions" rp
+       INNER JOIN "Permissions" p ON rp."permissionId" = p.id
+       WHERE rp."roleId" = $1`,
+      [user.roleId]
+    );
+    const permissions = permissionsResult.rows.map((row: any) => row.code);
+
+    let subscriptionExpired = false;
+    let subscriptionStatus = 'active';
+
     // 🕒 Check subscription status for non-Super Admins
     if (user.roleName !== 'Super Admin' && user.tenantId) {
+      const tenantSql = 'SELECT status FROM "Tenants" WHERE id = $1 LIMIT 1';
+      const tenantRes = await query(tenantSql, [user.tenantId]);
+      const tenantStatus = tenantRes.rows[0]?.status;
+
+      if (tenantStatus === 'suspended') {
+        res.status(403).json({ 
+          message: 'Your organization account has been suspended. Please contact the Super Admin.' 
+        });
+        return;
+      }
+
       const subSql = `
         SELECT status, "endDate" 
         FROM "Subscriptions" 
@@ -78,14 +112,8 @@ export default async function loginCoreHandler(
       const sub = subResult.rows[0];
 
       if (sub) {
-        const isExpired = sub.status === 'expired' || (sub.endDate && new Date(sub.endDate) < new Date());
-        if (isExpired) {
-          res.status(403).json({ 
-            message: 'Organization subscription expired. Please contact your administrator for renewal.',
-            subscriptionExpired: true
-          });
-          return;
-        }
+        subscriptionExpired = sub.status === 'expired' || (sub.endDate && new Date(sub.endDate) < new Date());
+        subscriptionStatus = sub.status;
       }
     }
 
@@ -102,7 +130,12 @@ export default async function loginCoreHandler(
     res.status(200).json({
       message: 'Login successful!',
       token,
-      user,
+      user: {
+        ...user,
+        permissions,
+        subscriptionExpired,
+        subscriptionStatus
+      },
     });
   } catch (error) {
     console.error('Login API Error:', error);

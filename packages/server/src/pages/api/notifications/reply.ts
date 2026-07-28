@@ -43,9 +43,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ message: "Original notification not found" });
     }
 
-    const { assetId, assignmentId, reason } = original.rows[0];
+    let { assetId, assignmentId, reason, tenantId } = original.rows[0];
+
+    let resolvedTenantId = tenantId || null;
+    if (!resolvedTenantId && senderId) {
+      const userTenantRes = await query(
+        `SELECT "tenantId" FROM "Users" WHERE "employeeId" = $1 LIMIT 1`,
+        [Number(senderId)]
+      );
+      resolvedTenantId = userTenantRes.rows[0]?.tenantId || null;
+    }
 
     let storedReplyMessage = replyMessage;
+
+    const returnedDateQuery = await query(
+      `SELECT "returned_date" FROM "Asset_Assignments" WHERE id = $1 LIMIT 1`,
+      [Number(assignmentId)]
+    );
+    const returnedDate = returnedDateQuery.rows[0]?.returned_date || new Date().toISOString();
 
     if (normalizedProofPhotos.length > 0 && assignmentId) {
       const proofPayload = {
@@ -53,6 +68,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         message: replyMessage,
         proofCount: normalizedProofPhotos.length,
         proofPhotos: normalizedProofPhotos,
+        tenantId: tenantId,
+        returnedDate: returnedDate
       };
 
       storedReplyMessage = JSON.stringify(proofPayload);
@@ -76,14 +93,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           normalizedProofPhotos[1] ?? null,
         ],
       );
+    } else {
+      const payload = {
+        kind: 'reply_notification',
+        message: replyMessage,
+        tenantId: tenantId,
+        returnedDate: returnedDate
+      };
+      storedReplyMessage = JSON.stringify(payload);
     }
 
     // Insert reply notification
     const insertQuery = await query(
     `INSERT INTO "Notifications" 
-    ("senderId", "receiverId", "assetId", "assignmentId", "reason", "reply", "status") 
-    VALUES ($1, $2, $3, $4, $5, $6, 'received') RETURNING *`,
-    [Number(senderId), Number(receiverId), assetId, assignmentId, reason, storedReplyMessage]
+    ("senderId", "receiverId", "assetId", "assignmentId", "reason", "reply", "status", "tenantId") 
+    VALUES ($1, $2, $3, $4, $5, $6, 'received', $7) RETURNING *`,
+    [Number(senderId), Number(receiverId), assetId, assignmentId, reason, storedReplyMessage, resolvedTenantId]
   );
 
     // Mark both sides as received so sender and receiver see the same state

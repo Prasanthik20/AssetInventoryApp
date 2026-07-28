@@ -18,6 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Asset, baseURL, RootStackParamList } from '../../navigation/types';
 import axios from 'axios';
+import { navigateToDashboard } from '../../utils/navigation';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { globalColors, globalStyleTokens } from '../../styles/globalStyles';
 
 interface User {
@@ -42,6 +44,7 @@ const CompanyUsersScreen: React.FC = () => {
     const [filter, setFilter] = React.useState('All');
     const [searchQuery, setSearchQuery] = React.useState('');
     const [errorText, setErrorText] = React.useState('');
+    const [isSubscriptionExpired, setIsSubscriptionExpired] = React.useState(false);
 
     const roleBadgeMap: Record<string, string> = {
         supervisor: '#0F766E',
@@ -134,6 +137,13 @@ const CompanyUsersScreen: React.FC = () => {
 
     React.useEffect(() => {
         fetchUsers();
+        const checkSubscription = async () => {
+            const expired = await AsyncStorage.getItem('isSubscriptionExpired');
+            if (expired) {
+                setIsSubscriptionExpired(JSON.parse(expired));
+            }
+        };
+        checkSubscription();
     }, []);
 
     // Filter & Search
@@ -200,6 +210,14 @@ const CompanyUsersScreen: React.FC = () => {
         </TouchableOpacity> // ✅ CORRECT: Closing tag now correctly wraps the entire card
     );
 
+    const handleGoBack = async () => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            await navigateToDashboard(navigation);
+        }
+    };
+
     return (
         <ImageBackground
             source={require("../../assets/Company-bg.webp")}
@@ -211,14 +229,16 @@ const CompanyUsersScreen: React.FC = () => {
                 <View style={styles.container}>
                     {/* Header */}
                     <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
                             <Ionicons name="arrow-back-outline" size={24} color="#fff" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Total Users</Text>
-                        <TouchableOpacity style={styles.addUserButton} onPress={() => navigation.navigate('AddCompanyUser')}>
-                            <Ionicons name="add" size={24} color="#fff" />
-                            <Text style={styles.addUserText}>Add User</Text>
-                        </TouchableOpacity>
+                        {!isSubscriptionExpired && (
+                            <TouchableOpacity style={styles.addUserButton} onPress={() => navigation.navigate('AddCompanyUser')}>
+                                <Ionicons name="add" size={24} color="#fff" />
+                                <Text style={styles.addUserText}>Add User</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {/* Search & Filter */}

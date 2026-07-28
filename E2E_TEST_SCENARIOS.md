@@ -173,5 +173,93 @@ cd android
 # Fix permissions if needed
 ls -l ./gradlew && chmod +x ./gradlew && ls -l ./gradlew
 
-# Build release APK
-./gradlew assembleRelease
+# Build release APK (Mac/Linux: NODE_ENV=production ./gradlew assembleRelease --no-daemon --max-workers=2)
+# (Windows PowerShell: $env:NODE_ENV="production"; ./gradlew assembleRelease --no-daemon --max-workers=2)
+./gradlew assembleRelease --no-daemon --max-workers=2
+
+# Build release .AAB (Mac/Linux: NODE_ENV=production ./gradlew bundleRelease --no-daemon --max-workers=2)
+# (Windows PowerShell: $env:NODE_ENV="production"; ./gradlew bundleRelease --no-daemon --max-workers=2)
+./gradlew bundleRelease --no-daemon --max-workers=2
+
+$ keytool -genkey -v -keystore my-release-key.keystore -alias my-key-alias -keyalg RSA -keysize 2048 -validity 10000
+
+keytool -export -rfc -keystore my-release-key.A -alias my-key-alias -file real_upload_certificate.pem
+
+Enter keystore password: @Square1993
+
+Keystore password is too short - must be at least 6 characters
+Enter keystore password: @Square1993
+
+Re-enter new password: @Square1993
+
+Enter the distinguished name. Provide a single dot (.) to leave a sub-component empty or press ENTER to use the default value in braces.
+What is your first and last name?
+  [Unknown]:  asquare technologies
+What is the name of your organizational unit?
+  [Unknown]:  it services
+What is the name of your organization?
+  [Unknown]:  A Square Technologies
+What is the name of your City or Locality?
+  [Unknown]:  Vijayawada
+What is the name of your State or Province?
+  [Unknown]:  Andhra Pradesh
+What is the two-letter country code for this unit?
+  [Unknown]:  +91
+Is CN=asquare technologies, OU=it services, O=A Square Technologies, L=Vijayawada, ST=Andhra Pradesh, C="+91" correct?
+  [no]:  yes
+
+Generating 2048-bit RSA key pair and self-signed certificate (SHA384withRSA) with a validity of 10,000 days
+        for: CN=asquare technologies, OU=it services, O=A Square Technologies, L=Vijayawada, ST=Andhra Pradesh, C="+91"
+[Storing my-release-key.keystore]
+
+local.properties
+sdk.dir=C\:\\Users\\sntha\\AppData\\Local\\Android\\Sdk
+
+# gradle.properties
+# Release Signing Configurations (Google Play Store)
+MYAPP_RELEASE_STORE_FILE=../my-release-key.keystore
+MYAPP_RELEASE_KEY_ALIAS=my-key-alias
+MYAPP_RELEASE_STORE_PASSWORD=@Square1993
+MYAPP_RELEASE_KEY_PASSWORD=@Square1993
+
+
+
+AndroidManifest.java
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <uses-permission android:name="android.permission.CAMERA"/>
+  <uses-permission android:name="android.permission.READ_CONTACTS"/>
+  <uses-permission android:name="android.permission.WRITE_CONTACTS"/>
+  <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+  <uses-permission android:name="android.permission.VIBRATE"/>
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.VIEW"/>
+      <category android:name="android.intent.category.BROWSABLE"/>
+      <data android:scheme="https"/>
+    </intent>
+  </queries>
+  <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false">
+    <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
+    <activity android:name=".MainActivity" android:label="@string/app_name" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+      <intent-filter data-generated="true">
+        <action android:name="android.intent.action.android.media.action.IMAGE_CAPTURE"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
+
+
+
+
+
+add depreciation value to all assets... if about to end life ot <60% of life set a message regarding the depreciation of the asset and time to take action either send to scarp or updgrade the asset. provide proper screens add these details

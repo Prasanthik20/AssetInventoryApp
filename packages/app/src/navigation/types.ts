@@ -31,6 +31,10 @@ export type Asset = {
   receiverId?: string | number;
   operatorId?: string | number;
   dynamicValues?: any[];
+  usefulLife?: number;
+  salvageValue?: string;
+  depreciationMessage?: string | null;
+  remainingValue?: number;
 };
 
 export type AssetAssignment = {
@@ -61,10 +65,23 @@ export type RootStackParamList = {
   AddCompanyUser: undefined;
   CustomCategoryBuilder: undefined;
 
+  ManagerDashboard: {
+    supervisorName?: string;
+    managerName?: string;
+    roleName: string;
+    employeeId: string;
+  };
   SupervisorDashboard: {
     supervisorName: string;
     roleName: string;
     employeeId: string;
+  };
+  EmployeeDashboard: {
+    operatorName?: string;
+    userName?: string;
+    roleName: string;
+    employeeId: string;
+    refresh?: boolean;
   };
   OperatorDashboard: {
     operatorName: string;
@@ -109,14 +126,13 @@ export type RootStackParamList = {
     employeeId: string;
     roleName: string;
   };
+  Billing: undefined;
+  ManageRoles: undefined;
+  ConfigureWorkflows: undefined;
 };
 
 const PROD_API_URL = 'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net';
-const WEB_DEV_API_URL =
-  process.env.REACT_APP_API_URL ||
-  process.env.EXPO_PUBLIC_API_URL ||
-  PROD_API_URL;
-const DEV_API_URL = Platform.OS === 'web' ? WEB_DEV_API_URL : 'http://localhost:3000';
+const DEV_API_URL = 'http://localhost:3000';
 
 // Keep all app screens on the same backend in development.
-export const baseURL = 'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net' //DEV_API_URL; //http://localhost:3000'; //PROD_API_URL
+export const baseURL = __DEV__ ? DEV_API_URL : PROD_API_URL; 

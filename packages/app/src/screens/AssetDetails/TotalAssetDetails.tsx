@@ -1,9 +1,8 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     ImageBackground,
     FlatList,
     TouchableOpacity,
@@ -12,14 +11,17 @@ import {
     useWindowDimensions,
 } from "react-native";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { Asset, baseURL, RootStackParamList } from "../../navigation/types";
 import OverdueNotificationModal from "../CommonScreen/OverdueNotificationModal";
 import axios from "axios";
 import { useAssetFilter } from "src/hooks/useAssetFilter";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { navigateToDashboard } from '../../utils/navigation';
 import { globalColors, globalStyleTokens } from "../../styles/globalStyles";
+import ScreenWrapper from 'src/components/common/ScreenWrapper';
+import AssetCard from 'src/components/common/AssetCard';
 import useAssetMeta from '../../hooks/useAssetMeta';
 import AssetFiltersBar from 'src/components/common/AssetFiltersBar';
 import AppSnackbar from 'src/components/common/AppSnackbar';
@@ -105,6 +107,7 @@ const TotalAssetsDetails: React.FC = () => {
     const route = useRoute<RouteProp<RootStackParamList, 'TotalAssetDetails'>>();
     const { width } = useWindowDimensions();
     const isDesktopWeb = Platform.OS === 'web' && width >= 900;
+    const isNarrowWeb = Platform.OS !== 'web' || width < 420;
     const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
 
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -131,20 +134,20 @@ const TotalAssetsDetails: React.FC = () => {
         .filter(Boolean);
 
     const {
-    searchText,
-    setSearchText,
-    selectedName,
-    setSelectedName,
-    selectedLocation,
-    setSelectedLocation,
-    selectedStatus,
-    setSelectedStatus,
-    filteredAssets,
-    uniqueNames,
-    uniqueLocations,
-    uniqueStatuses,
-    clearFilters,
-} = useAssetFilter(assets);
+        searchText,
+        setSearchText,
+        selectedName,
+        setSelectedName,
+        selectedLocation,
+        setSelectedLocation,
+        selectedStatus,
+        setSelectedStatus,
+        filteredAssets,
+        uniqueNames,
+        uniqueLocations,
+        uniqueStatuses,
+        clearFilters,
+    } = useAssetFilter(assets);
 
     useEffect(() => {
         const statusFromRoute = route.params?.statusFilter;
@@ -166,9 +169,11 @@ const TotalAssetsDetails: React.FC = () => {
         loadUser();
     }, []);
 
-    useEffect(() => {
-        fetchAssets(1, false);
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            fetchAssets(1, false);
+        }, [])
+    );
 
     /* 🔹 Fetch assets with pagination */
     const fetchAssets = async (pageNum = 1, append = false) => {
@@ -251,7 +256,7 @@ const TotalAssetsDetails: React.FC = () => {
             console.log("SENDING CORRECTED PAYLOAD:", payload);
 
             const response = await axios.post(
-                `${baseURL}/api/notifications/supervisor`,
+                `${baseURL}/api/notifications/manager`,
                 payload
             );
 
@@ -272,213 +277,77 @@ const TotalAssetsDetails: React.FC = () => {
         return String(asset.category || '').toLowerCase().includes(selectedName.toLowerCase());
     });
     // --- RENDER FUNCTION IS NOW SEPARATE AND CLEAN ---
-    const renderAsset = ({ item, index }: { item: Asset, index: number }) => {
-
-        const isOverdue = item.status?.toLowerCase() === 'overdue';
-        const isAssignedAsset = ['assigned', 'overdue'].includes(
-            String(item.status || '').toLowerCase(),
-        );
-        if (isMobileLayout) {
-            return (
-                <View style={styles.mobileCard}>
-                    {/* Header Row */}
-                    <View style={styles.cardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-                            <View style={styles.indexBadge}>
-                                <Text style={styles.indexText}>{index + 1}</Text>
-                            </View>
-                            <Text style={styles.assetName} numberOfLines={1}>{item.assetName}</Text>
-                        </View>
-                        <StatusBadge
-                            status={item.status || null}
-                            assignedTo={item.assignedTo}
-                            location={item.location} 
-                        />
-                    </View>
-
-                    {/* Metadata Section (Info Grid) */}
-                    <View style={styles.cardInfoGrid}>
-                        {/* Serial Number & Location */}
-                        <View style={styles.infoRow}>
-                            <View style={styles.infoCol}>
-                                <Text style={styles.infoLabel}>Serial Number</Text>
-                                <Text style={styles.infoValue} numberOfLines={1}>{item.serialNumber || '—'}</Text>
-                            </View>
-                            <View style={styles.infoCol}>
-                                <Text style={styles.infoLabel}>Location</Text>
-                                <Text style={styles.infoValue} numberOfLines={1}>{item.location || '—'}</Text>
-                            </View>
-                        </View>
-
-                        {/* Assignment Details */}
-                        <View style={[styles.infoRow, { marginTop: 10 }]}>
-                            <View style={styles.infoCol}>
-                                <Text style={styles.infoLabel}>Expected Return</Text>
-                                <Text style={styles.infoValue}>{formatDate(item.expectedReturnDate)}</Text>
-                            </View>
-                            <View style={styles.infoCol}>
-                                <Text style={styles.infoLabel}>Assigned Date</Text>
-                                <Text style={styles.infoValue}>{formatDate(item.assignedDate)}</Text>
-                            </View>
-                        </View>
-
-                        {item.assignedBy ? (
-                            <View style={[styles.infoRow, { marginTop: 10 }]}>
-                                <View style={styles.infoCol}>
-                                    <Text style={styles.infoLabel}>Assigned By</Text>
-                                    <Text style={styles.infoValue} numberOfLines={1}>{item.assignedBy}</Text>
-                                </View>
-                            </View>
-                        ) : null}
-                    </View>
-
-                    {/* Actions Row */}
-                    <View style={styles.cardActionsRow}>
-                        {!isAssignedAsset && (
-                            <TouchableOpacity
-                                style={[styles.assignAssetButton, { flex: 1 }]}
-                                onPress={() =>
-                                    navigation.navigate('AssignAsset', {
-                                        supervisor_employeeId: String(supervisorId),
-                                        supervisorName: supervisorName,
-                                    })
-                                }
-                            >
-                                <MaterialCommunityIcons name="plus-circle" size={16} color="#fff" />
-                                <Text style={styles.actionButtonText}>Assign</Text>
-                            </TouchableOpacity>
-                        )}
-                        {isOverdue && (
-                            <TouchableOpacity style={[styles.notifyButton, { flex: 1 }]} onPress={() => handleOpenModal(item)}>
-                                <Ionicons name="notifications" size={16} color="#fff" />
-                                <Text style={styles.actionButtonText}>Notify</Text>
-                            </TouchableOpacity>
-                        )}
-                        {isAssignedAsset && (
-                            <TouchableOpacity
-                                style={[styles.editAssignedButton, { flex: 1 }]}
-                                onPress={() =>
-                                    navigation.navigate('AssignAsset', {
-                                        supervisor_employeeId: String(supervisorId || ''),
-                                        supervisorName: supervisorName,
-                                        editAsset: item,
-                                    })
-                                }
-                            >
-                                <Feather name="edit-2" size={16} color="#fff" />
-                                <Text style={styles.actionButtonText}>Edit</Text>
-                            </TouchableOpacity>
-                        )}
-                        <TouchableOpacity 
-                            style={[styles.knowMoreButton, { flex: 1 }]} 
-                            onPress={() => navigation.navigate('AssetFullDetails', { asset: item })}
-                        >
-                            <Ionicons name="information-circle-outline" size={18} color="#fff" />
-                            <Text style={styles.actionButtonText}>Details</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            );
-        }
-
-        // WEB LAYOUT - Columns now align with Header Cells
+    const renderAsset = ({ item, index }: { item: Asset; index: number }) => {
+        const handlePress = () => {
+            navigation.navigate('AssetFullDetails', { asset: item });
+        };
+        const handleAssignPress = (assetToAssign: Asset) => {
+            navigation.navigate('AssignAsset', {
+                supervisor_employeeId: String(supervisorId || ''),
+                supervisorName: supervisorName,
+                editAsset: {
+                    ...assetToAssign,
+                    assetId: Number(assetToAssign.assetId || assetToAssign.id),
+                },
+            });
+        };
+        const handleNotifyPress = (assetToNotify: Asset) => {
+            setSelectedAsset(assetToNotify);
+            setModalVisible(true);
+        };
         return (
-            <View style={styles.assetRow}>
-                <View style={[styles.cellSNo, { width: 50, alignItems: 'center' }]}>
-                    <View style={styles.indexBadge}>
-                        <Text style={styles.indexText}>{index + 1}</Text>
-                    </View>
-                </View>
-
-                <View style={[styles.cellAssetName, { flex: 2 }]}>
-                    <Text style={styles.assetName}>{item.assetName}</Text>
-                </View>
-
-                <View style={[styles.cellBarcode, { flex: 2, alignItems: 'center' }]}>
-                    <MaterialCommunityIcons name="barcode" size={40} color="#A9C6E4" />
-                    <Text style={styles.mobileBarcodeText}>S/N: {item.serialNumber}</Text>
-                </View>
-
-                <View style={[styles.cellStatus, { flex: 2, alignItems: 'center' }]}>
-                    <StatusBadge
-                        status={item.status || null}
-                        assignedTo={item.assignedTo}
-                        location={item.location} 
-                    />
-                </View>
-
-                <View style={[styles.cellDate, { flex: 1.2, alignItems: 'center' }]}> 
-                    <Text style={styles.dateCellText}>{formatDate(item.expectedReturnDate)}</Text>
-                </View>
-
-                <View style={[styles.cellDate, { flex: 1.2, alignItems: 'center' }]}> 
-                    <Text style={styles.dateCellText}>{formatDate(item.assignedDate)}</Text>
-                </View>
-
-                <View style={[styles.cellDate, { flex: 1.2, alignItems: 'center' }]}> 
-                    <Text style={styles.dateCellText}>{item.assignedBy || '—'}</Text>
-                </View>
-
-                <View style={[styles.cellAction, styles.webActionButtons]}> 
-                    {!isAssignedAsset && (
-                        <TouchableOpacity
-                            style={styles.assignAssetButton}
-                            onPress={() =>
-                                navigation.navigate('AssignAsset', {
-                                    supervisor_employeeId: String(supervisorId),
-                                    supervisorName: supervisorName,
-                                })
-                            }
-                        >
-                            <MaterialCommunityIcons name="plus-circle" size={16} color="#fff" />
-                            <Text style={styles.actionButtonText}>Assign</Text>
-                        </TouchableOpacity>
-                    )}
-                    {isOverdue && (
-                        <TouchableOpacity style={styles.notifyButton} onPress={() => handleOpenModal(item)}>
-                            <Ionicons name="notifications" size={16} color="#fff" />
-                            <Text style={styles.actionButtonText}>Notify</Text>
-                        </TouchableOpacity>
-                    )}
-                    <TouchableOpacity 
-                        style={styles.knowMoreButton} 
-                        onPress={() => navigation.navigate('AssetFullDetails', { asset: item })}
-                    >
-                        <Ionicons name="information-circle-outline" size={18} color="#fff" />
-                        <Text style={styles.actionButtonText}>Know More</Text>
-                    </TouchableOpacity>
-                    {isAssignedAsset && (
-                        <TouchableOpacity
-                            style={styles.editAssignedButton}
-                            onPress={() =>
-                                navigation.navigate('AssignAsset', {
-                                    supervisor_employeeId: String(supervisorId || ''),
-                                    supervisorName: supervisorName,
-                                    editAsset: item,
-                                })
-                            }
-                        >
-                            <Feather name="edit-2" size={16} color="#fff" />
-                            <Text style={styles.actionButtonText}>Edit Assigned</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
+            <AssetCard 
+                asset={item} 
+                isMobileLayout={isMobileLayout} 
+                onPress={handlePress} 
+                onAssignPress={handleAssignPress}
+                onNotifyPress={handleNotifyPress}
+                index={index} 
+            />
         );
+    };
+
+    const handleGoBack = async () => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            await navigateToDashboard(navigation);
+        }
     };
 
     return (
         <ImageBackground source={require("../../assets/Company-bg.webp")} style={styles.backgroundImage}>
-            <SafeAreaView style={styles.safeArea}>
+            <ScreenWrapper contentContainerStyle={{ flex: 1 }}>
                 <View style={styles.container}>
                     <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
                             <Ionicons name="arrow-back" size={24} color="#E0E0E0" />
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>All Assets</Text>
-                        <Text style={{ color: '#A9C6E4', marginLeft: 'auto', fontSize: 13 }}>{totalCount} total</Text>
+                        <TouchableOpacity
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#0F766E',
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 8,
+                                marginLeft: 'auto',
+                                marginRight: 12,
+                            }}
+                            onPress={() =>
+                                navigation.navigate('AssignAsset', {
+                                    supervisor_employeeId: String(supervisorId || ''),
+                                    supervisorName: supervisorName,
+                                })
+                            }
+                        >
+                            <Ionicons name="swap-horizontal-outline" size={16} color="#fff" style={{ marginRight: 4 }} />
+                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Assign Asset</Text>
+                        </TouchableOpacity>
+                        <Text style={{ color: '#A9C6E4', fontSize: 13 }}>{totalCount} total</Text>
                     </View>
-                    
+
                     {/* BODY MUST BE flex: 1 */}
                     <View style={styles.body}>
                         <AssetFiltersBar
@@ -486,49 +355,39 @@ const TotalAssetsDetails: React.FC = () => {
                             searchValue={searchText}
                             onSearchChange={setSearchText}
                             searchPlaceholder="Search by name, barcode..."
-                            showCategory
+                            showCategory={true}
                             categoryValue={selectedName}
                             onCategoryChange={setSelectedName}
                             categoryOptions={assetCategories}
-                            showLocation
+                            showLocation={true}
                             locationValue={selectedLocation}
                             onLocationChange={setSelectedLocation}
                             locationOptions={uniqueLocations}
-                            showStatus
+                            showStatus={true}
                             statusValue={selectedStatus}
                             onStatusChange={setSelectedStatus}
                             statusOptions={uniqueStatuses}
-                            containerStyle={isMobileLayout ? styles.topActionRowMobile : styles.topActionRow}
-                            searchContainerStyle={styles.searchContainer}
+                            containerStyle={isNarrowWeb ? styles.topActionRowMobile : styles.topActionRow}
+                            searchContainerStyle={isNarrowWeb ? styles.searchContainerMobile : styles.searchContainer}
                             searchInputStyle={styles.searchInput}
-                            filtersContainerStyle={isMobileLayout ? styles.mobileFilterContainer : styles.filterGroup}
+                            filtersContainerStyle={isNarrowWeb ? styles.mobileFilterContainer : styles.filterGroup}
                             pickerWrapperStyle={styles.pickerWrapper}
                             pickerStyle={styles.pickerInternal}
                         />
 
-                        {!isMobileLayout && (
-                            <View style={styles.tableHeader}>
-                                <Text style={[styles.headerCell, { width: 50, textAlign: 'center' }]}>S.No</Text>
-                                <Text style={[styles.headerCell, { flex: 2 }]}>Asset Name</Text>
-                                <Text style={[styles.headerCell, { flex: 2, textAlign: 'center' }]}>Barcode</Text>
-                                <Text style={[styles.headerCell, { flex: 2, textAlign: 'center' }]}>Status</Text>
-                                <Text style={[styles.headerCell, { flex: 1.2, textAlign: 'center' }]}>Expected Due Date</Text>
-                                <Text style={[styles.headerCell, { flex: 1.2, textAlign: 'center' }]}>Assigned Date</Text>
-                                <Text style={[styles.headerCell, { flex: 1.2, textAlign: 'center' }]}>Assigned By</Text>
-                                <Text style={[styles.headerCell, { flex: 1.5, textAlign: 'center' }]}>Action</Text>
-                            </View>
-                        )}
-
-                        <FlatList
-                            data={finalDisplayAssets}
-                            keyExtractor={(item) => (item.id || item.assetId).toString()}
-                            renderItem={renderAsset}
-                            contentContainerStyle={{ paddingBottom: 20 }}
-                            style={{ flex: 1 }}
-                            onEndReached={handleLoadMore}
-                            onEndReachedThreshold={0.3}
-                            ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#A9C6E4" style={{ marginVertical: 16 }} /> : null}
-                        />
+                        <View style={{ flex: 1 }}>
+                            <FlatList<Asset>
+                                data={finalDisplayAssets}
+                                keyExtractor={(item) => (item.id || item.assetId).toString()}
+                                renderItem={renderAsset}
+                                numColumns={1}
+                                style={{ flex: 1 }}
+                                contentContainerStyle={{ paddingTop: isNarrowWeb ? 50 : 80, paddingBottom: Platform.OS === 'web' ? 0 : 20 }}
+                                onEndReached={handleLoadMore}
+                                onEndReachedThreshold={0.3}
+                                ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#A9C6E4" style={{ marginVertical: 16 }} /> : null}
+                            />
+                        </View>
                     </View>
                 </View>
                 {selectedAsset && (
@@ -537,6 +396,8 @@ const TotalAssetsDetails: React.FC = () => {
                         onClose={handleCloseModal}
                         onSubmit={handleSubmitNotification}
                         assetName={selectedAsset.assetName}
+                        title="Ask Employee for Overdue Reason"
+                        isManager={true}
                     />
                 )}
                 <AppSnackbar
@@ -546,7 +407,7 @@ const TotalAssetsDetails: React.FC = () => {
                     onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
                     bottom={isMobileLayout ? 16 : 20}
                 />
-            </SafeAreaView>
+            </ScreenWrapper>
         </ImageBackground>
     );
 };
@@ -577,15 +438,15 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#E6F3FF',
         ...Platform.select({
-        web: {
-            outlineStyle: 'none',
-            cursor: 'pointer',
-        } as any,
-    }),
+            web: {
+                outlineStyle: 'none',
+                cursor: 'pointer',
+            } as any,
+        }),
     },
-    backButton: { marginRight: 20, marginTop: 25 },
-    headerTitle: { color: '#E6F3FF', fontSize: 20, fontWeight: 'bold', marginTop: 25 },
-    body: { flex :1 ,paddingHorizontal: 15, padding: 20 },
+    backButton: { marginRight: 20 },
+    headerTitle: { color: '#E6F3FF', fontSize: 20, fontWeight: 'bold' },
+    body: { flex: 1, paddingHorizontal: 15 },
     searchIcon: { marginRight: 10 },
     tableHeader: {
         display: 'flex',
@@ -599,42 +460,60 @@ const styles = StyleSheet.create({
         borderBottomWidth: 2,
         borderBottomColor: 'rgba(159, 207, 255, 0.22)',
     },
-    
-        filterRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 15,
-},
 
-topActionRow: {
+    filterRow: {
+        flexDirection: "row",
+        gap: 10,
+        marginBottom: 15,
+    },
+
+    topActionRow: {
         flexDirection: 'row',
         gap: 12,
         marginBottom: 20,
         width: '100%',
         alignItems: 'stretch',
+        zIndex: 10,
+        elevation: 10,
     },
     topActionRowMobile: {
+        flexDirection: 'column',
         gap: 12,
-        marginBottom: 20,
+        marginBottom: 10,
+        paddingBottom: 0,
         width: '100%',
+        flexShrink: 0,
+        zIndex: 10,
+        elevation: 10,
     },
     searchContainer: {
         flex: 1.5,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(18, 45, 73, 0.86)',
+        backgroundColor: 'rgba(24, 58, 93, 0.95)',
         borderRadius: 8,
         paddingHorizontal: 12,
-        height: 48, // Fixed height for all top elements
-        borderWidth: 1,
-        borderColor: 'rgba(159, 207, 255, 0.22)',
+        height: 54,
+        borderWidth: 1.5,
+        borderColor: 'rgba(159, 207, 255, 0.65)',
+    },
+    searchContainerMobile: {
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(24, 58, 93, 0.95)',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        height: 54,
+        borderWidth: 1.5,
+        borderColor: 'rgba(159, 207, 255, 0.65)',
     },
     mobileFilterContainer: {
-      flexDirection: 'column',
+        flexDirection: 'column',
         gap: 8,
     },
     mobileFilterSubRow: {
-       flexDirection: 'row',
+        flexDirection: 'row',
         gap: 8,
     },
     desktopFilterSubRow: {
@@ -649,17 +528,17 @@ topActionRow: {
     },
     pickerWrapper: {
         flex: 1,
-        backgroundColor: 'rgba(18, 45, 73, 0.92)',
+        backgroundColor: 'rgba(24, 58, 93, 0.95)',
         borderRadius: 10,
-        borderWidth: 1,
-        borderColor: 'rgba(159, 207, 255, 0.28)',
-        minHeight: 46,
+        borderWidth: 1.5,
+        borderColor: 'rgba(159, 207, 255, 0.65)',
+        height: 54,
         justifyContent: 'center',
-        overflow: 'hidden',
+        overflow: Platform.OS === 'android' ? 'visible' : 'hidden',
     },
     pickerInternal: {
         width: '100%',
-        height: '100%',
+        height: Platform.OS === 'android' ? 50 : '100%',
         backgroundColor: 'transparent',
         borderWidth: 0,
         fontSize: 14,
@@ -667,11 +546,11 @@ topActionRow: {
         paddingHorizontal: 10,
         cursor: 'pointer',
         ...Platform.select({
-        web: {
-            outlineStyle: 'none',
-            cursor: 'pointer',
-        } as any,
-    }),
+            web: {
+                outlineStyle: 'none',
+                cursor: 'pointer',
+            } as any,
+        }),
     },
     headerCell: {
         fontSize: 14,
@@ -692,15 +571,19 @@ topActionRow: {
         borderWidth: 1,
         borderColor: 'rgba(159, 207, 255, 0.22)',
     },
-    cellSNo: { width: 50, 
-    alignItems: 'center', 
-    justifyContent: 'center' },
+    cellSNo: {
+        width: 50,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
     cellAssetName: { flex: 2, marginRight: 0 },
     assetName: { fontSize: 15, fontWeight: 'bold', color: '#E6F3FF' },
     assetSubtext: { fontSize: 12, color: '#A9C6E4', marginTop: 2 },
-    cellBarcode: {  flex: 2, 
+    cellBarcode: {
+        flex: 2,
         alignItems: 'center',
-        justifyContent: 'center', },
+        justifyContent: 'center',
+    },
     cellStatus: { flex: 2 },
     cellDate: {
         flex: 1.2,
@@ -921,7 +804,6 @@ topActionRow: {
         fontWeight: 'bold',
         marginLeft: 5,
     },
-
 });
 
 export default TotalAssetsDetails;

@@ -12,3 +12,7 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+
+# Suppress warnings for missing Expo Kotlin services classes in R8/Proguard
+-dontwarn expo.modules.kotlin.services.Service
+-dontwarn expo.modules.kotlin.services.ServicesRegistry

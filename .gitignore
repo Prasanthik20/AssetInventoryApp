@@ -41,7 +41,11 @@ local.properties
 **/packages/app/android/
 **/packages/app/ios/
 **/packages/server/node_modules/
-
+.gemini/
+**/.gemini/
+.android/
+.ios/
+*\deploy_exact
 
 !scripts/deploy_final
 # node.js

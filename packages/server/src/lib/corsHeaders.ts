@@ -10,7 +10,9 @@ export function setCorsHeaders(res: NextApiResponse, origin?: string): void {
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
     'https://assetmgmt.asquaretech.in',
-    'https://assetmgmt.asquaretech.in/'
+    'https://assetmgmt.asquaretech.in/',
+    'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net',
+    'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net/'
   ];
 
   // Normalize origin

@@ -2,6 +2,7 @@ import type { NextApiResponse } from "next";
 import query from "@/lib/db";
 import { setCorsHeaders } from "@/lib/corsHeaders";
 import { withAuth, AuthenticatedRequest } from "@/lib/apiHandler";
+import { withSubscriptionLimit } from "@/lib/subscription";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   const origin = req.headers.origin as string;
@@ -19,6 +20,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 
   try {
+    // Auto-migration for useful_life and salvage_value
+    try {
+      await query(`
+        ALTER TABLE "Asset_Details" 
+        ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
+        ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+      `, []);
+    } catch (err) {
+      console.error('[AUTO-MIGRATION ERROR]', err);
+    }
+
     // 1. Fetch Subscription Info via Raw SQL (more reliable than Prisma when client is out of sync)
     const subSql = `
       SELECT s.*, p.name as "planName", p."maxUsers", p."maxAssets"
@@ -63,6 +75,56 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     `;
     const locationResult = await query(locationSql, [tenantId]);
 
+    // 4. Depreciating Assets count and details
+    const assetsQuery = await query(`
+      SELECT 
+        a.id, 
+        a.name, 
+        a.serial_no AS "serialNo", 
+        a.price, 
+        a.purchase_date AS "purchaseDate", 
+        a.useful_life AS "usefulLife", 
+        a.salvage_value AS "salvageValue"
+      FROM "Asset_Details" a
+      WHERE a."tenantId" = $1
+    `, [tenantId]);
+
+    let depreciatingAssetsCount = 0;
+    const depreciatingAssetsList = [];
+
+    for (const row of assetsQuery.rows) {
+      const initialCost = parseFloat(row.price) || 0;
+      const salvageValueNum = parseFloat(row.salvageValue) || 0;
+      const usefulLifeNum = parseInt(row.usefulLife) || 5;
+
+      if (initialCost > 0 && usefulLifeNum > 0 && row.purchaseDate) {
+        const purchaseDate = new Date(row.purchaseDate);
+        const today = new Date();
+        const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+
+        const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
+        const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
+        const remainingValue = initialCost - totalDepreciation;
+
+        const percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
+        const percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
+
+        if (percentLifeRemaining < 60) {
+          depreciatingAssetsCount++;
+          depreciatingAssetsList.push({
+            id: row.id.toString(),
+            name: row.name,
+            serialNo: row.serialNo,
+            price: row.price,
+            usefulLife: usefulLifeNum,
+            salvageValue: row.salvageValue || '0',
+            remainingValue: parseFloat(remainingValue.toFixed(2)),
+            percentLifeRemaining: parseFloat(percentLifeRemaining.toFixed(1))
+          });
+        }
+      }
+    }
+
     // Convert string counts from PostgreSQL to numbers
     const totalAssetsCount = Number(stats.totalAssets || 0);
     const totalUsersCount = Number(stats.totalUsers || 0);
@@ -85,6 +147,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
        const assetUsagePct = subscription.maxAssets > 0 ? (totalAssetsCount / subscription.maxAssets) * 100 : 0;
        subscriptionUsage = {
         plan: subscription.planName,
+        planName: subscription.planName,
         status: subscription.status,
         endDate: subscription.endDate,
         maxUsers: subscription.maxUsers,
@@ -97,7 +160,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return res.status(200).json({
       ...metrics,
       fieldLocationStats: locationResult.rows,
-      subscription: subscriptionUsage
+      subscription: subscriptionUsage,
+      depreciatingAssetsCount,
+      depreciatingAssets: depreciatingAssetsList
     });
 
   } catch (error) {
@@ -106,4 +171,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 }
 
-export default withAuth(handler);
+export default withSubscriptionLimit(handler);

@@ -34,6 +34,11 @@ o	Go to Azure Portal -> WebApp -> Overview – Stop the App wati for some time a
 o	After this run same command in kudu still same error, ignore  Kudu and check the api url with endpoints
 
 
+# On Windows (PowerShell):
+cd packages/server
+.\deploy.ps1
+
+# On Linux/macOS (Bash):
 cd packages/server && \
 npm run build && \
 rm -rf deploy_exact && \
@@ -47,9 +52,10 @@ cp -r public/. deploy_exact/public/ && \
 cd deploy_exact && \
 zip -r ../deploy.zip . && \
 cd .. && \
-az webapp deploy --name asset-api --resource-group asquaretechrg --src-path deploy.zip --type zip
+az webapp deploy --name asq-asset-api --resource-group asquaretechrg --src-path deploy.zip --type zip
 
 
 debug:
-az webapp log tail --name asset-api --resource-group asquaretechrg
+az webapp log tail --name asq-asset-api --resource-group asquaretechrg
 ls -F packages/server/deploy_final/
+

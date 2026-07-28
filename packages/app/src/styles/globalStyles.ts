@@ -39,6 +39,10 @@ export const globalColors = {
     backgroundPanel: 'rgba(60, 60, 80, 0.7)',
     backgroundPanelSolid: 'rgba(60, 60, 80, 0.85)',
   },
+  // New UI tokens for redesign
+  surfaceCard: 'rgba(255,255,255,0.08)',
+  borderSoftCard: 'rgba(255,255,255,0.2)',
+  accentPrimary: colors.primary,
 } as const;
 
 export const globalTypography = {

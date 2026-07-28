@@ -161,17 +161,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [resolvedAssetId, parsedNotificationId, hasAssignmentId ? parsedAssignmentId : null],
     );
 
-    const adminsResult = await query(
+    let adminsResult = await query(
       `SELECT DISTINCT u."employeeId"
        FROM "Users" u
-       INNER JOIN "Roles" r ON u."roleId" = r."roleId"
-       WHERE LOWER(r."roleName") IN ('admin', 'super admin', 'superadmin')`,
+       INNER JOIN "Role_Permissions" rp ON u."roleId" = rp."roleId"
+       INNER JOIN "Permissions" p ON rp."permissionId" = p.id
+       WHERE p.code IN ('MANAGE_USERS', 'MANAGE_WORKFLOWS')`,
       [],
     );
+
+    if (adminsResult.rows.length === 0) {
+      adminsResult = await query(
+        `SELECT DISTINCT u."employeeId"
+         FROM "Users" u
+         INNER JOIN "Roles" r ON u."roleId" = r."roleId"
+         WHERE LOWER(r."roleName") IN ('admin', 'super admin', 'superadmin', 'tenant admin', 'tenantadmin')`,
+        [],
+      );
+    }
 
     const adminIds = adminsResult.rows
       .map((row: { employeeId: unknown }) => toValidEmployeeId(row.employeeId))
       .filter((id: number | null): id is number => id !== null);
+
+    const confirmerResult = await query(
+      `SELECT "tenantId" FROM "Users" WHERE "employeeId" = $1 LIMIT 1`,
+      [parsedConfirmedBy]
+    );
+    const tenantId = confirmerResult.rows[0]?.tenantId || null;
 
     const recipients = new Set<number>([
       ...adminIds,
@@ -180,17 +197,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ]);
 
     for (const receiverId of recipients) {
+      const replyPayload = {
+        kind: 'return_notification',
+        message: `Asset ${resolvedAssetId} is now unassigned after return confirmation.`,
+        tenantId: tenantId,
+        returnedDate: new Date().toISOString()
+      };
+
       await query(
         `INSERT INTO "Notifications"
-        ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at")
-        VALUES ($1, $2, $3, $4, $5, $6, 'received', NOW())`,
+        ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
+        VALUES ($1, $2, $3, $4, $5, $6, 'received', NOW(), $7)`,
         [
           resolvedAssetId,
           hasAssignmentId ? parsedAssignmentId : null,
           parsedConfirmedBy,
           receiverId,
           `Return confirmed for asset ${resolvedAssetId}.`,
-          `Asset ${resolvedAssetId} is now unassigned after return confirmation.`,
+          JSON.stringify(replyPayload),
+          tenantId,
         ],
       );
     }

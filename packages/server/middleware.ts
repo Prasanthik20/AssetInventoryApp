@@ -9,15 +9,16 @@ const ALLOWED_ORIGINS = new Set([
   'http://127.0.0.1:3000',
   'http://127.0.0.1:8081',
   'http://127.0.0.1:8082',
+  'https://asq-asset-api-ckdtfzgqdggjcedv.southindia-01.azurewebsites.net',
 ]);
 
 export function middleware(req: NextRequest) {
   const origin = req.headers.get('origin') || '';
-  
+
   // Check if origin is allowed or is localhost
-  const isAllowed = ALLOWED_ORIGINS.has(origin) || 
-                   origin.includes('localhost') || 
-                   origin.includes('127.0.0.1');
+  const isAllowed = ALLOWED_ORIGINS.has(origin) ||
+    origin.includes('localhost') ||
+    origin.includes('127.0.0.1');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
