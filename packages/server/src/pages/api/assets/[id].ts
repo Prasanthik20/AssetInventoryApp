@@ -263,10 +263,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         ORDER BY id DESC
         LIMIT 1
       ) aa ON TRUE
-      LEFT JOIN "Users" u ON (u."employeeId" = a.assigned_by OR u."userId" = a.assigned_by) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
-      LEFT JOIN "Users" u_aa ON (u_aa."employeeId" = aa."supervisor_employeeId" OR u_aa."userId" = aa."supervisor_employeeId") AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
-      LEFT JOIN "Users" assignee ON (assignee."employeeId" = a.assigned_to OR assignee."userId" = a.assigned_to) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
-      LEFT JOIN "Users" assignee_aa ON (assignee_aa."employeeId" = aa."operator_employeeId" OR assignee_aa."userId" = aa."operator_employeeId") AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" u ON CAST(u."employeeId" AS text) = CAST(a.assigned_by AS text) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" u_aa ON CAST(u_aa."employeeId" AS text) = CAST(aa."supervisor_employeeId" AS text) AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" assignee ON CAST(assignee."employeeId" AS text) = CAST(a.assigned_to AS text) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" assignee_aa ON CAST(assignee_aa."employeeId" AS text) = CAST(aa."operator_employeeId" AS text) AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
       WHERE a.id = $1 AND (a."tenantId" = $2 OR $2 IS NULL);
     `;
 

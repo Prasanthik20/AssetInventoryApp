@@ -194,17 +194,18 @@ const SupervisorDashboard: React.FC<Props> = ({
   ];
 
   const fetchDashboardData = async () => {
-    if (!user?.employeeId) return;
+    const targetId = user?.employeeId || user?.id || user?.userId;
+    if (!targetId) return;
     try {
       setLoading(true);
 
       const [metricsRes, repliesRes, assetsRes, supervisorAssetsRes] = await Promise.all([
         axios.get(`${baseURL}/api/dashboard/metrics`),
         axios.get(
-          `${baseURL}/api/notifications/manager?id=${user?.employeeId}`,
+          `${baseURL}/api/notifications/manager?id=${targetId}`,
         ),
         axios.get(`${baseURL}/api/assets`),
-        axios.get(`${baseURL}/api/managed-assets?id=${user?.employeeId}`),
+        axios.get(`${baseURL}/api/managed-assets?id=${targetId}`),
       ]);
       const rawData = Array.isArray(repliesRes.data)
         ? repliesRes.data
@@ -452,6 +453,20 @@ const SupervisorDashboard: React.FC<Props> = ({
           userName={user?.fullName || 'Manager'}
           userRole="Manager / Lead"
           onLogout={handleLogout}
+          activities={operatorReplies.map((n) => ({
+            id: n.notificationId,
+            title: n.reason || `${n.assetName} notification`,
+            subtitle: n.reply || undefined,
+            rawItem: {
+              id: n.notificationId,
+              reason: n.reason,
+              reply: n.reply,
+              status: n.status,
+              senderName: n.operatorName,
+            },
+          }))}
+          onHideNotification={hideNotification}
+          onExtendDate={(notifId, days) => handleExtendDate(notifId, days)}
         />
 
         <ScrollView

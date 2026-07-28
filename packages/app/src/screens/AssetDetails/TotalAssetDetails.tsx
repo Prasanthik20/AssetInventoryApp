@@ -291,12 +291,17 @@ const TotalAssetsDetails: React.FC = () => {
                 },
             });
         };
+        const handleNotifyPress = (assetToNotify: Asset) => {
+            setSelectedAsset(assetToNotify);
+            setModalVisible(true);
+        };
         return (
             <AssetCard 
                 asset={item} 
                 isMobileLayout={isMobileLayout} 
                 onPress={handlePress} 
                 onAssignPress={handleAssignPress}
+                onNotifyPress={handleNotifyPress}
                 index={index} 
             />
         );
@@ -391,6 +396,8 @@ const TotalAssetsDetails: React.FC = () => {
                         onClose={handleCloseModal}
                         onSubmit={handleSubmitNotification}
                         assetName={selectedAsset.assetName}
+                        title="Ask Employee for Overdue Reason"
+                        isManager={true}
                     />
                 )}
                 <AppSnackbar

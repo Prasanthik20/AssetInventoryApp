@@ -18,11 +18,13 @@ export default async function handler(
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const userId = Number(req.query.id || req.query.userId || req.query.operatorId);
+  const userIdRaw = req.query.id || req.query.userId || req.query.operatorId;
 
-  if (!userId) {
+  if (!userIdRaw) {
     return res.status(400).json({ message: "User ID missing or invalid" });
   }
+
+  const userIdStr = String(userIdRaw).trim();
 
   try {
     const sql = `
@@ -44,15 +46,22 @@ export default async function handler(
 
       FROM "Notifications" n
       LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
-      LEFT JOIN "Users" s ON s."employeeId" = n."senderId"
-      LEFT JOIN "Users" r ON r."employeeId" = n."receiverId"
+      LEFT JOIN "Users" s ON CAST(s."employeeId" AS text) = CAST(n."senderId" AS text) AND (s."tenantId" = n."tenantId" OR n."tenantId" IS NULL)
+      LEFT JOIN "Users" r ON CAST(r."employeeId" AS text) = CAST(n."receiverId" AS text) AND (r."tenantId" = n."tenantId" OR n."tenantId" IS NULL)
 
-      WHERE n."receiverId" = $1
-        AND n.status IN ('unread', 'resolved', 'received')
+      WHERE (
+        CAST(n."receiverId" AS text) = $1
+      )
+      AND (
+        n."tenantId" = (SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = $1 LIMIT 1)
+        OR n."tenantId" IS NULL
+        OR (SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = $1 LIMIT 1) IS NULL
+      )
+        AND n.status IN ('unread', 'resolved', 'received', 'replied')
       ORDER BY n.created_at DESC;
     `;
 
-    const { rows } = await query(sql, [userId]);
+    const { rows } = await query(sql, [userIdStr]);
 
     const notifications = rows.map((n) => ({
       id: n.notificationId,

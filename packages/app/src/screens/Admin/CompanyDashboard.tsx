@@ -256,16 +256,30 @@ const CompanyDashboard: React.FC<Props> = ({
   };
 
   const fetchGlobalNotifications = async () => {
-    if (!user?.employeeId) return;
+    const targetId = user?.employeeId || user?.id || user?.userId;
+    if (!targetId) return;
     try {
       const response = await axios.get(`${baseURL}/api/notifications/admin`, {
-        params: { id: user.employeeId }
+        params: { id: targetId }
       });
-      console.log('Employee ID:', user?.employeeId);
-
       setNotifications(response.data.notifications || []);
     } catch (error) {
       console.error('Axios notification error:', error);
+    }
+  };
+
+  const handleExtendDate = async (notificationId: number, days: number = 5) => {
+    try {
+      await axios.post(`${baseURL}/api/assets/extend-return-date`, {
+        notificationId: Number(notificationId),
+        daysToExtend: days,
+      });
+
+      setNotifications((prev) => prev.filter((n) => Number(n.id) !== Number(notificationId)));
+      fetchDashboardData();
+      fetchGlobalNotifications();
+    } catch (err: any) {
+      console.error('Extend Return Date Error:', err?.response?.data || err);
     }
   };
 
@@ -394,6 +408,17 @@ const CompanyDashboard: React.FC<Props> = ({
           userName={user?.fullName || 'Admin'}
           userRole="Tenant Admin"
           onLogout={handleLogout}
+          activities={notifications.map((n) => ({
+            id: n.id,
+            title: n.reason || 'Notification',
+            subtitle: n.reply || undefined,
+            time: n.created_at ? new Date(n.created_at).toLocaleTimeString() : undefined,
+            rawItem: n,
+          }))}
+          onConfirmReturn={handleConfirmReturn}
+          onWorkflowAction={handleWorkflowAction}
+          onHideNotification={hideNotification}
+          onExtendDate={handleExtendDate}
         />
         <View style={styles.container}>
           <ScrollView
@@ -576,7 +601,7 @@ const CompanyDashboard: React.FC<Props> = ({
               </View>
 
               {/* 4. Global Activity Feed */}
-              <ActivityFeedWidget
+              {/* <ActivityFeedWidget
                 activities={notifications.map((n) => ({
                   id: n.id,
                   title: n.reason || 'Notification',
@@ -587,7 +612,7 @@ const CompanyDashboard: React.FC<Props> = ({
                 onConfirmReturn={handleConfirmReturn}
                 onWorkflowAction={handleWorkflowAction}
                 onHideNotification={hideNotification}
-              />
+              /> */}
             </View>
           </ScrollView>
         </View>

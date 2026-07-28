@@ -21,7 +21,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     const { tenantId, role } = req.user;
-    
+
     if (!tenantId && role !== 'Super Admin') {
         console.error('[ERROR] tenantId missing in token for non-Super Admin user.');
         return res.status(403).json({ message: 'Tenant ID missing. Please log in again.' });
@@ -45,7 +45,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
     const offset = (page - 1) * limit;
     const includeMedia = req.query.includeMedia === 'true';
-    
+
     let search = (req.query.search as string) || '';
     if (search === 'undefined' || search === 'null') search = '';
     const isSearch = search.trim().length > 0;
@@ -104,6 +104,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 
                 aa.id AS "assignmentId",
                 aa."projectName" AS "projectName",
+                aa.assigned_date AS "assignedDate",
                 aa.expected_return_date AS "expectedReturnDate",
                 COALESCE(aa."operator_employeeId", a.assigned_to) AS "operatorId",
                 COALESCE(aa."supervisor_employeeId", a.assigned_by) AS "senderId"
@@ -122,11 +123,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 LIMIT 1
             ) aa ON TRUE
 
-            LEFT JOIN "Users" u ON (u."employeeId" = a.assigned_by OR u."userId" = a.assigned_by) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
-            LEFT JOIN "Users" assignee ON (assignee."employeeId" = a.assigned_to OR assignee."userId" = a.assigned_to) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" u ON CAST(u."employeeId" AS text) = CAST(a.assigned_by AS text) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" assignee ON CAST(assignee."employeeId" AS text) = CAST(a.assigned_to AS text) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
             
-            LEFT JOIN "Users" u_aa ON (u_aa."employeeId" = aa."supervisor_employeeId" OR u_aa."userId" = aa."supervisor_employeeId") AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
-            LEFT JOIN "Users" assignee_aa ON (assignee_aa."employeeId" = aa."operator_employeeId" OR assignee_aa."userId" = aa."operator_employeeId") AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" u_aa ON CAST(u_aa."employeeId" AS text) = CAST(aa."supervisor_employeeId" AS text) AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" assignee_aa ON CAST(assignee_aa."employeeId" AS text) = CAST(aa."operator_employeeId" AS text) AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
 
             WHERE (a."tenantId" = $1 OR $1 IS NULL)
             ${isSearch ? `AND (a.name ILIKE $2 OR a."asset_Id" ILIKE $2 OR a."serial_no" ILIKE $2)` : ''}
@@ -169,7 +170,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             const initialCost = parseFloat(asset.price) || 0;
             const salvageValueNum = parseFloat(asset.salvageValue) || 0;
             const usefulLifeNum = parseInt(asset.usefulLife) || 5;
-            
+
             let remainingValue = initialCost;
             let percentLifeRemaining = 100;
             let percentLifeElapsed = 0;
@@ -179,11 +180,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 const purchaseDate = new Date(asset.purchaseDate);
                 const today = new Date();
                 const ageYears = Math.max(0, (today.getTime() - purchaseDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-                
+
                 const depreciationPerYear = (initialCost - salvageValueNum) / usefulLifeNum;
                 const totalDepreciation = Math.max(0, Math.min(depreciationPerYear * ageYears, initialCost - salvageValueNum));
                 remainingValue = initialCost - totalDepreciation;
-                
+
                 percentLifeElapsed = (ageYears / usefulLifeNum) * 100;
                 percentLifeElapsed = Math.min(100, percentLifeElapsed);
                 percentLifeRemaining = Math.max(0, 100 - percentLifeElapsed);
@@ -210,6 +211,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 photoURL: sanitizeMedia(asset.photoURL),
                 barcodeURL: sanitizeMedia(asset.barcodeURL),
                 expectedReturnDate: asset.expectedReturnDate || null,
+                assignedDate: asset.assignedDate || null,
                 projectName: asset.projectName || null,
                 assignmentId: asset.assignmentId ? asset.assignmentId.toString() : null,
                 operatorId: asset.operatorId ? asset.operatorId.toString() : null,

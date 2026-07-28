@@ -10,6 +10,7 @@ interface AssetCardProps {
   isMobileLayout: boolean;
   onPress?: () => void;
   onAssignPress?: (asset: Asset) => void;
+  onNotifyPress?: (asset: Asset) => void;
   index?: number;
 }
 
@@ -28,10 +29,11 @@ const formatDate = (dateStr?: string | null): string => {
  * Glass‑morphism styled card presenting an asset summary.
  * Re‑uses the status color logic from the existing screens.
  */
-const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, onAssignPress, index }) => {
+const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, onAssignPress, onNotifyPress, index }) => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'AssetFullDetails'>>();
   const handlePress = onPress ?? (() => navigation.navigate('AssetFullDetails', { asset }));
   const isUnassigned = !asset.assignedTo || asset.status?.toLowerCase() === 'unassigned';
+  const isOverdue = asset.status?.toLowerCase() === 'overdue';
 
   const getStatusStyle = () => {
     let backgroundColor = 'rgba(148, 163, 184, 0.18)';
@@ -84,7 +86,7 @@ const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, o
             </View>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Expected Due Date</Text>
+            <Text style={styles.label}>Expected Return Date</Text>
             <Text style={styles.value}>{formatDate(asset.expectedReturnDate)}</Text>
           </View>
           <View style={styles.row}>
@@ -110,6 +112,11 @@ const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, o
             {onAssignPress && isUnassigned && (
               <TouchableOpacity onPress={() => onAssignPress(asset)} style={[styles.actionButton, styles.assignButton]}>
                 <Text style={styles.actionText}>Assign Asset</Text>
+              </TouchableOpacity>
+            )}
+            {onNotifyPress && isOverdue && (
+              <TouchableOpacity onPress={() => onNotifyPress(asset)} style={[styles.actionButton, styles.notifyButton]}>
+                <Text style={styles.actionText}>Notify Employee</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={handlePress} style={styles.actionButton}>
@@ -174,6 +181,11 @@ const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, o
               {onAssignPress && isUnassigned && (
                 <TouchableOpacity onPress={() => onAssignPress(asset)} style={[styles.actionButton, styles.assignButton]}>
                   <Text style={styles.actionText}>Assign Asset</Text>
+                </TouchableOpacity>
+              )}
+              {onNotifyPress && isOverdue && (
+                <TouchableOpacity onPress={() => onNotifyPress(asset)} style={[styles.actionButton, styles.notifyButton]}>
+                  <Text style={styles.actionText}>Notify Employee</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity onPress={handlePress} style={styles.actionButton}>
@@ -250,6 +262,7 @@ const styles = StyleSheet.create({
   actionRow: { marginTop: 10, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
   actionButton: { backgroundColor: globalColors.brandPrimary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   assignButton: { backgroundColor: '#0F766E' },
+  notifyButton: { backgroundColor: '#DC2626' },
   actionText: { color: globalColors.surfaceGlassLight, fontSize: 12, fontWeight: '600' },
 });
 

@@ -39,6 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         COALESCE(aa."photoURL", ad."photoURL") AS "photoURL",
         COALESCE(aa."barcodeURL", ad."barcodeURL") AS "barcodeURL",
         COALESCE(aa.location, ad.location) AS "assetLocation",
+        aa.assigned_date AS "assignedDate",
         aa.expected_return_date AS "expectedReturnDate",
         aa.returned_date AS "returnedDate",
         aa."supervisor_employeeId" AS "assignedBy",
@@ -46,7 +47,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ad.assigned_to AS "currentlyAssignedTo"
       FROM "Asset_Assignments" aa
       INNER JOIN "Asset_Details" ad ON ad.id = aa."assetId"
-      WHERE aa."operator_employeeId" = $1
+      WHERE (CAST(aa."operator_employeeId" AS text) = CAST($1 AS text) OR CAST(ad.assigned_to AS text) = CAST($1 AS text))
+        AND (
+          ad."tenantId" = (SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = CAST($1 AS text) LIMIT 1)
+          OR ad."tenantId" IS NULL
+        )
       ORDER BY aa.assigned_date DESC NULLS LAST, aa.id DESC;
     `;
 
@@ -87,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         serialNo: asset.serialNo,
         location: asset.assetLocation,
         photoURL: asset.photoURL,
+        assignedDate: asset.assignedDate,
         expectedReturnDate: asset.expectedReturnDate,
         returnedDate: asset.returnedDate,
         assignedBy: asset.assignedBy,

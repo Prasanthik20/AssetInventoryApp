@@ -177,14 +177,15 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
     // 🔹 Fetch operator assets
     // ----------------------------
     const fetchOperatorData = async () => {
-        if (!user?.employeeId) return;
+        const targetId = user?.employeeId || user?.id || user?.userId;
+        if (!targetId) return;
         try {
             const [assetsRes, notificationsRes] = await Promise.all([
                 axios.get(
-                    `${baseURL}/api/my-assets?id=${user.employeeId}`,
+                    `${baseURL}/api/my-assets?id=${targetId}`,
                 ),
                 axios.get(
-                    `${baseURL}/api/notifications/user?id=${user.employeeId}`,
+                    `${baseURL}/api/notifications/user?id=${targetId}`,
                 ),
             ]);
             //const data = await res.json();
@@ -518,6 +519,13 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                     userName={user?.fullName || 'Employee'}
                     userRole="Employee / User"
                     onLogout={handleLogout}
+                    activities={notifications.map((n: any) => ({
+                      id: n.id,
+                      title: n.reason || 'Notification',
+                      subtitle: n.reply || undefined,
+                      time: n.created_at ? new Date(n.created_at).toLocaleTimeString() : undefined,
+                      rawItem: n,
+                    }))}
                 />
 
                 <ScrollView
@@ -1148,9 +1156,11 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                     onClose={handleCloseModal}
                     onSubmit={modalConfig.onSubmit}
                     assetName={modalConfig.assetName}
-                    title={modalConfig.title}
+                    title={modalConfig.title || "Provide Overdue Reason & Request Extension"}
                     requireProofImages={modalConfig.requireProofImages}
                     minProofImages={4}
+                    isManager={false}
+                    showExtensionOptions={true}
                 />
             </SafeAreaView>
             <AppSnackbar
