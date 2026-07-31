@@ -1,7 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiResponse } from 'next';
 import query from '@/lib/db';
 import { setCorsHeaders } from '@/lib/corsHeaders';
-
 import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 
 export default withAuth(async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -23,23 +22,22 @@ export default withAuth(async function handler(req: AuthenticatedRequest, res: N
       const sqlQuery = `
         SELECT id, "categoryId", category, "parentCategoryId", "isCustom", "isSystemCategory"
         FROM "Category"
-        WHERE "tenantId" = $1 OR "tenantId" IS NULL OR "isSystemCategory" = true
+        WHERE "tenantId" = $1 OR "tenantId" IS NULL OR "isSystemCategory" = 1
         ORDER BY id ASC;
       `;
       const result = await query(sqlQuery, [tenantId]);
       
-      // Convert BigInts to string for JSON serialization
       const categories = result.rows.map(row => ({
         ...row,
-        id: row.id.toString(),
-        categoryId: row.categoryId.toString(),
-        parentCategoryId: row.parentCategoryId ? row.parentCategoryId.toString() : null
+        id: row.id ? String(row.id) : '',
+        categoryId: row.categoryId ? String(row.categoryId) : '',
+        parentCategoryId: row.parentCategoryId ? String(row.parentCategoryId) : null
       }));
 
       return res.status(200).json({ categories });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Category API GET Error:", error);
-      return res.status(500).json({ error: "Failed to fetch categories" });
+      return res.status(500).json({ error: "Failed to fetch categories", details: String(error) });
     }
   }
 
@@ -49,30 +47,33 @@ export default withAuth(async function handler(req: AuthenticatedRequest, res: N
       if (!categoryName) return res.status(400).json({ message: 'Category name is required' });
 
       // Generate a new categoryId
-      const maxCatRes = await query('SELECT MAX("categoryId") as max_id FROM "Category"');
-      const nextCategoryId = maxCatRes.rows[0].max_id ? BigInt(maxCatRes.rows[0].max_id) + BigInt(1) : BigInt(1);
+      const maxCatRes = await query('SELECT MAX("categoryId") as max_cid, MAX("id") as max_id FROM "Category"');
+      const maxCidVal = maxCatRes.rows[0]?.max_cid;
+      const maxIdVal = maxCatRes.rows[0]?.max_id;
+      const nextCategoryId = maxCidVal ? BigInt(maxCidVal) + BigInt(1) : BigInt(1);
+      const nextId = maxIdVal ? BigInt(maxIdVal) + BigInt(1) : BigInt(1);
       const serialNo = `CAT-${nextCategoryId}-${Date.now()}`;
 
       const insertSql = `
-        INSERT INTO "Category" ("categoryId", "tenantId", "category", "serial_no", "parentCategoryId", "isCustom", "isSystemCategory")
-        VALUES ($1, $2, $3, $4, $5, true, false)
-        RETURNING *;
+        INSERT INTO "Category" ("id", "categoryId", "tenantId", "category", "serial_no", "parentCategoryId", "isCustom", "isSystemCategory")
+        OUTPUT INSERTED.*
+        VALUES ($1, $2, $3, $4, $5, $6, 1, 0);
       `;
-      const result = await query(insertSql, [nextCategoryId, tenantId, categoryName, serialNo, parentCategoryId || null]);
+      const result = await query(insertSql, [nextId, nextCategoryId, tenantId, categoryName, serialNo, parentCategoryId || null]);
 
       const newCat = result.rows[0];
       return res.status(201).json({
         message: 'Category created successfully',
         category: {
           ...newCat,
-          id: newCat.id.toString(),
-          categoryId: newCat.categoryId.toString(),
-          parentCategoryId: newCat.parentCategoryId ? newCat.parentCategoryId.toString() : null
+          id: newCat?.id ? String(newCat.id) : '',
+          categoryId: newCat?.categoryId ? String(newCat.categoryId) : '',
+          parentCategoryId: newCat?.parentCategoryId ? String(newCat.parentCategoryId) : null
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Category API POST Error:", error);
-      return res.status(500).json({ error: "Failed to create category" });
+      return res.status(500).json({ error: "Failed to create category", details: String(error) });
     }
   }
 

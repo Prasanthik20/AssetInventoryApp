@@ -137,7 +137,7 @@ const AssignAssetScreen: React.FC = () => {
         const assignerRole = String(
           parsedUser?.roleName || parsedUser?.role?.roleName || '',
         ).toLowerCase();
-        
+
         const permissions = Array.isArray(parsedUser?.permissions) ? parsedUser.permissions : [];
         const isPrivilegedAssigner =
           permissions.includes('MANAGE_USERS') ||
@@ -170,27 +170,8 @@ const AssignAssetScreen: React.FC = () => {
 
         const rawUsers = response.data.users || response.data.data || response.data || [];
 
-        const assignableUsers = rawUsers.filter((u: any) => {
-          const targetRole = String(
-            u.role?.roleName || u.roleName || '',
-          ).toLowerCase();
-
-          const uPermissions = Array.isArray(u.role?.permissions) 
-            ? u.role.permissions 
-            : (Array.isArray(u.permissions) ? u.permissions : []);
-
-          const isOperator = uPermissions.includes('INITIATE_RETURN');
-          const isSupervisor = uPermissions.includes('ASSIGN_ASSETS') || uPermissions.includes('CONFIRM_RETURN');
-          const isAdmin = uPermissions.includes('MANAGE_USERS') || uPermissions.includes('MANAGE_WORKFLOWS');
-
-          if (isPrivilegedAssigner) {
-            return (isOperator || isSupervisor) && !isAdmin;
-          }
-
-          return isOperator && !isSupervisor && !isAdmin;
-        });
-
-        setOperators(assignableUsers);
+        // Show all employees in the dropdown
+        setOperators(rawUsers);
 
         if (editAsset) {
           const normalizedEditAsset = {
@@ -219,7 +200,7 @@ const AssignAssetScreen: React.FC = () => {
               setDueDate(String(assignment.expectedReturnDate || editAsset.expectedReturnDate || ''));
 
               if (assignment.operatorEmployeeId) {
-                const matchedOperator = assignableUsers.find(
+                const matchedOperator = rawUsers.find(
                   (op: any) => Number(op.employeeId) === Number(assignment.operatorEmployeeId),
                 );
                 if (matchedOperator) {
@@ -761,35 +742,11 @@ const AssignAssetScreen: React.FC = () => {
   };
 
   const handleUploadBarcode = (targetAssetId?: number | string) => {
-    if (Platform.OS === 'web') {
-      pickImage(false, true, targetAssetId);
-    } else {
-      Alert.alert(
-        "Upload Barcode",
-        "Choose an option",
-        [
-          { text: "Take Photo", onPress: () => pickImage(true, true, targetAssetId) },
-          { text: "Choose from Gallery", onPress: () => pickImage(false, true, targetAssetId) },
-          { text: "Cancel", style: "cancel" }
-        ]
-      );
-    }
+    pickImage(false, true, targetAssetId);
   };
 
   const handleUploadPhoto = (targetAssetId?: number | string) => {
-    if (Platform.OS === 'web') {
-      pickImage(false, false, targetAssetId);
-    } else {
-      Alert.alert(
-        "Upload Photo",
-        "Choose an option",
-        [
-          { text: "Take Photo", onPress: () => pickImage(true, false, targetAssetId) },
-          { text: "Choose from Gallery", onPress: () => pickImage(false, false, targetAssetId) },
-          { text: "Cancel", style: "cancel" }
-        ]
-      );
-    }
+    pickImage(false, false, targetAssetId);
   };
 
   // -------------------- ASSET ITEM --------------------
@@ -848,10 +805,17 @@ const AssignAssetScreen: React.FC = () => {
   };
   if (loading) {
     return (
-      <View style={styles.centeredView}>
-        <ActivityIndicator size="large" color={globalColors.surfacePrimary} />
-        <Text style={{ color: globalColors.surfacePrimary, marginTop: 10 }}>Loading Assets...</Text>
-      </View>
+      <ImageBackground
+        source={require('../../assets/Company-bg.webp')}
+        style={[styles.backgroundImage, { flex: 1 }]}
+        resizeMode="cover"
+        blurRadius={10}
+      >
+        <View style={[styles.centeredView, { backgroundColor: 'rgba(7, 24, 42, 0.78)' }]}>
+          <ActivityIndicator size="large" color="#34D399" />
+          <Text style={{ color: '#E6F3FF', marginTop: 15, fontSize: 16, fontWeight: '600' }}>Loading Assets...</Text>
+        </View>
+      </ImageBackground>
     );
   }
 
@@ -923,7 +887,7 @@ const AssignAssetScreen: React.FC = () => {
 
                 {/* OPERATOR DROPDOWN */}
                 <Text style={styles.label}>
-                  {canAssignToSupervisor ? 'Assign to Employee' : 'Assign to Operator'}
+                  {canAssignToSupervisor ? 'Assign to Employee' : 'Assign to Employee'}
                 </Text>
                 <TouchableOpacity
                   style={styles.pickerInput}
@@ -934,7 +898,7 @@ const AssignAssetScreen: React.FC = () => {
                   <Text style={styles.pickerText}>
                     {selectedOperator
                       ? `${selectedOperator.fullName} (${selectedOperator.employeeId})`
-                      : (canAssignToSupervisor ? 'Select Employee' : 'Select Operator')}
+                      : (canAssignToSupervisor ? 'Select Employee' : 'Select Employee')}
                   </Text>
                   {!isEditAssignmentMode && (
                     <Ionicons name="chevron-down" size={20} color="#A9C6E4" />
@@ -1281,7 +1245,7 @@ const AssignAssetScreen: React.FC = () => {
         >
           <Pressable style={styles.modalContent} onPress={() => { }}>
             <Text style={styles.modalTitle}>
-              {canAssignToSupervisor ? 'Select Employee' : 'Select Operator'}
+              {canAssignToSupervisor ? 'Select Employee' : 'Select Employee'}
             </Text>
 
             <FlatList

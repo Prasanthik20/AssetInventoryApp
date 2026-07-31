@@ -146,6 +146,7 @@ const SupervisorDashboard: React.FC<Props> = ({
     unassignedAssets: 0,
   });
   const [supervisorAssignedAssets, setSupervisorAssignedAssets] = useState<any[]>([]);
+  const [myAssignedAssets, setMyAssignedAssets] = useState<any[]>([]);
   const [operatorReplies, setOperatorReplies] = useState<OperatorReply[]>([]);
   const [loading, setLoading] = useState(true); // Added loading state
   const [extendDays, setExtendDays] = useState(3);
@@ -198,15 +199,19 @@ const SupervisorDashboard: React.FC<Props> = ({
     if (!targetId) return;
     try {
       setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      const authHeader = { Authorization: `Bearer ${token}` };
 
-      const [metricsRes, repliesRes, assetsRes, supervisorAssetsRes] = await Promise.all([
+      const [metricsRes, repliesRes, assetsRes, supervisorAssetsRes, myAssetsRes] = await Promise.all([
         axios.get(`${baseURL}/api/dashboard/metrics`),
         axios.get(
           `${baseURL}/api/notifications/manager?id=${targetId}`,
         ),
-        axios.get(`${baseURL}/api/assets`),
+        axios.get(`${baseURL}/api/assets?limit=1000`, { headers: authHeader }),
         axios.get(`${baseURL}/api/managed-assets?id=${targetId}`),
+        axios.get(`${baseURL}/api/my-assets?id=${targetId}`),
       ]);
+      setMyAssignedAssets(myAssetsRes.data?.assets || []);
       const rawData = Array.isArray(repliesRes.data)
         ? repliesRes.data
         : repliesRes.data.notifications || [];
@@ -327,9 +332,9 @@ const SupervisorDashboard: React.FC<Props> = ({
         prev.map(item =>
           item.notificationId === selectedItem.notificationId
             ? {
-                ...item,
-                reply: JSON.stringify({ message: reason, proofPhotos: proofImages }),
-              }
+              ...item,
+              reply: JSON.stringify({ message: reason, proofPhotos: proofImages }),
+            }
             : item,
         ),
       );
@@ -375,13 +380,15 @@ const SupervisorDashboard: React.FC<Props> = ({
   const handleWorkflowAction = async (item: OperatorReply, action: 'approve' | 'reject') => {
     try {
       const parsed = JSON.parse(item.reply || '{}');
-      const requestId = Number(parsed.requestId);
+      const notifId = Number(item.notificationId || (item as any).id);
+      const requestId = Number(parsed.requestId) || notifId;
       const token = await AsyncStorage.getItem('token');
 
       const response = await axios.post(
         `${baseURL}/api/approvals/action`,
         {
           requestId,
+          notificationId: notifId,
           action,
           notes: action === 'approve' ? 'Approved via Supervisor Dashboard' : 'Rejected via Supervisor Dashboard'
         },
@@ -451,7 +458,7 @@ const SupervisorDashboard: React.FC<Props> = ({
         <DashboardHeader
           companyName={user?.supervisorName || user?.fullName || 'Manager Portal'}
           userName={user?.fullName || 'Manager'}
-          userRole="Manager / Lead"
+          userRole={user?.roleName || user?.role || 'Ops Manager'}
           onLogout={handleLogout}
           activities={operatorReplies.map((n) => ({
             id: n.notificationId,
@@ -527,65 +534,69 @@ const SupervisorDashboard: React.FC<Props> = ({
             </View>
           </View>
 
-            {/* --- Side-by-side content --- */}
-            {/* Loading OR Content */}
-            {loading ? (
-              <ActivityIndicator
-                size="large"
-                color="#22D3EE"
-                style={{ marginTop: 20 }}
-              />
-            ) : isMobileLayout ? (
-              <View style={styles.mobileStack}>
-                <View style={styles.mobileBlockTop}>
-                  <QuickActionsSection
-                    styles={styles}
-                    isMobileLayout={isMobileLayout}
-                    navigation={navigation}
-                    employeeId={user?.employeeId}
-                    roleName={user?.roleName}
-                    supervisorName={user?.supervisorName}
-                    supervisorAssignedAssets={supervisorAssignedAssets}
-                    isSubscriptionExpired={isSubscriptionExpired}
-                    user={user}
-                  />
-                </View>
-                <View style={styles.mobileBlockBottom}>
-                  <ActivitySection
-                    styles={styles}
-                    isMobileLayout={isMobileLayout}
-                    operatorReplies={operatorReplies}
-                    openExtendModal={openExtendModal}
-                    openReceiptModal={openReceiptModal}
-                    onConfirmReturn={handleConfirmReturn}
-                    onWorkflowAction={handleWorkflowAction}
-                    hideNotification={hideNotification}
-                  />
-                </View>
+          {/* --- Side-by-side content --- */}
+          {/* Loading OR Content */}
+          {loading ? (
+            <ActivityIndicator
+              size="large"
+              color="#22D3EE"
+              style={{ marginTop: 20 }}
+            />
+          ) : isMobileLayout ? (
+            <View style={styles.mobileStack}>
+              <View style={styles.mobileBlockTop}>
+                <QuickActionsSection
+                  styles={styles}
+                  isMobileLayout={isMobileLayout}
+                  navigation={navigation}
+                  employeeId={user?.employeeId}
+                  roleName={user?.roleName}
+                  supervisorName={user?.supervisorName}
+                  supervisorAssignedAssets={supervisorAssignedAssets}
+                  isSubscriptionExpired={isSubscriptionExpired}
+                  user={user}
+                />
               </View>
-            ) : (
-              <View style={styles.mainContent}>
+              <View style={styles.mobileBlockBottom}>
                 <ActivitySection
                   styles={styles}
-                  isMobileLayout={isDesktopWeb}
+                  isMobileLayout={isMobileLayout}
                   operatorReplies={operatorReplies}
                   openExtendModal={openExtendModal}
                   openReceiptModal={openReceiptModal}
                   onConfirmReturn={handleConfirmReturn}
                   onWorkflowAction={handleWorkflowAction}
                   hideNotification={hideNotification}
-                />
-                <QuickActionsSection
-                  styles={styles}
-                  isMobileLayout={isDesktopWeb}
-                  navigation={navigation}
-                  employeeId={user?.employeeId}
-                  roleName={user?.roleName}
-                  supervisorName={user?.supervisorName}
-                  user={user}
+                  currentEmployeeId={user?.employeeId}
                 />
               </View>
-            )}
+            </View>
+          ) : (
+            <View style={styles.mainContent}>
+              <ActivitySection
+                styles={styles}
+                isMobileLayout={isDesktopWeb}
+                operatorReplies={operatorReplies}
+                openExtendModal={openExtendModal}
+                openReceiptModal={openReceiptModal}
+                onConfirmReturn={handleConfirmReturn}
+                onWorkflowAction={handleWorkflowAction}
+                hideNotification={hideNotification}
+                currentEmployeeId={user?.employeeId}
+              />
+              <QuickActionsSection
+                styles={styles}
+                isMobileLayout={isDesktopWeb}
+                navigation={navigation}
+                employeeId={user?.employeeId}
+                roleName={user?.roleName}
+                supervisorName={user?.supervisorName}
+                supervisorAssignedAssets={supervisorAssignedAssets}
+                isSubscriptionExpired={isSubscriptionExpired}
+                user={user}
+              />
+            </View>
+          )}
 
           {/* Bottom Navigation (desktop only) */}
           {/* {!isMobileLayout && (
@@ -724,8 +735,8 @@ const QuickActionsSection = ({
     onPress: () => void;
     variant?: 'primary' | 'secondary' | 'accent' | 'warning';
   }> = [
-    ...(!isSubscriptionExpired
-      ? [
+      ...(!isSubscriptionExpired
+        ? [
           {
             id: 'add_asset',
             label: '+ Add New Asset',
@@ -735,34 +746,34 @@ const QuickActionsSection = ({
           },
           ...(canAssign
             ? [
-                {
-                  id: 'assign_asset',
-                  label: 'Assign Asset',
-                  iconName: 'link-outline' as const,
-                  variant: 'secondary' as const,
-                  onPress: () =>
-                    navigation.navigate('AssignAsset', {
-                      supervisor_employeeId: employeeId,
-                      supervisorName: supervisorName,
-                    }),
-                },
-              ]
+              {
+                id: 'assign_asset',
+                label: 'Assign Asset',
+                iconName: 'link-outline' as const,
+                variant: 'secondary' as const,
+                onPress: () =>
+                  navigation.navigate('AssignAsset', {
+                    supervisor_employeeId: employeeId,
+                    supervisorName: supervisorName,
+                  }),
+              },
+            ]
             : []),
         ]
-      : []),
-    {
-      id: 'my_assigned_assets',
-      label: 'My Assigned Assets',
-      iconName: 'list-outline' as const,
-      variant: 'secondary' as const,
-      onPress: () =>
-        navigation.navigate('FieldAssets', {
-          employeeId: String(employeeId || ''),
-          operatorName: String(supervisorName || ''),
-        }),
-    },
-    ...(canReturn
-      ? [
+        : []),
+      {
+        id: 'my_assigned_assets',
+        label: 'My Assigned Assets',
+        iconName: 'list-outline' as const,
+        variant: 'secondary' as const,
+        onPress: () =>
+          navigation.navigate('FieldAssets', {
+            employeeId: String(employeeId || ''),
+            operatorName: String(supervisorName || ''),
+          }),
+      },
+      ...(canReturn
+        ? [
           {
             id: 'return_assigned_assets',
             label: 'Return Assigned Assets',
@@ -776,9 +787,9 @@ const QuickActionsSection = ({
               }),
           },
         ]
-      : []),
-    ...(canViewReports
-      ? [
+        : []),
+      ...(canViewReports
+        ? [
           {
             id: 'view_reports',
             label: 'View Reports',
@@ -791,20 +802,20 @@ const QuickActionsSection = ({
               }),
           },
         ]
-      : []),
-  ];
+        : []),
+    ];
 
   return (
     <View
       style={[
         isMobileLayout
           ? {
-              flex: 1,
-              width: '100%',
-              marginBottom: 0,
-              position: 'relative',
-              zIndex: 2,
-            }
+            flex: 1,
+            width: '100%',
+            marginBottom: 0,
+            position: 'relative',
+            zIndex: 2,
+          }
           : { flexBasis: '32%', maxWidth: 360, height: 'auto' },
       ]}
     >
@@ -822,6 +833,7 @@ const ActivitySection = ({
   onWorkflowAction,
   hideNotification,
   isMobileLayout,
+  currentEmployeeId,
 }: any) => (
   <View
     style={[
@@ -857,87 +869,91 @@ const ActivitySection = ({
           const isReturnPending = isReturnPendingNotification(item.reason, item.reply);
 
           return (
-          <View key={item.notificationId} style={styles.activityItem}>
-            <Ionicons name="chatbubbles-outline" size={24} color="#22D3EE" />
-            <View style={styles.activityTextContainer}>
-              <Text style={styles.activityText}>
-                Reply from{' '}
+            <View key={item.notificationId} style={styles.activityItem}>
+              <Ionicons name="chatbubbles-outline" size={24} color="#22D3EE" />
+              <View style={styles.activityTextContainer}>
+                {/* <Text style={styles.activityText}>
+                Reply to{' '}
                 <Text style={{ fontWeight: 'bold' }}>{item.operatorName}</Text>
-              </Text>
-              <Text style={[styles.activitySubtext, { textTransform: 'capitalize' }]}>
-                Status: {item.status || 'unread'}
-              </Text>
-              <Text style={styles.activitySubtext}>
-                “{parseReplyPayload(item.reply || item.reason).message}”
-              </Text>
-              {parseReplyPayload(item.reply).proofPhotos.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                  {parseReplyPayload(item.reply).proofPhotos.map((uri, idx) => (
-                    <Image
-                      key={`supervisor-proof-${item.notificationId}-${idx}`}
-                      source={{ uri }}
-                      style={{ width: 56, height: 56, borderRadius: 8, marginRight: 8 }}
-                    />
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-            {isConfirmed && !isReturnPending && (
-              <TouchableOpacity
-                onPress={() => openExtendModal(item)}
-                style={styles.extendButton}
-              >
-                <Text style={styles.extendButtonText}>Extend</Text>
-              </TouchableOpacity>
-            )}
-            {item.isAssignment && !hasReply && !isConfirmed && (
-              <TouchableOpacity
-                onPress={() => openReceiptModal(item)}
-                style={[styles.extendButton, { backgroundColor: '#0F766E', marginLeft: 8 }]}
-              >
-                <Text style={styles.extendButtonText}>Confirm Receipt</Text>
-              </TouchableOpacity>
-            )}
-            {isReturnPending && (
-              <TouchableOpacity
-                onPress={() => onConfirmReturn(item)}
-                style={[styles.extendButton, { backgroundColor: '#14532D', marginLeft: 8 }]}
-              >
-                <Text style={styles.extendButtonText}>Confirm Return</Text>
-              </TouchableOpacity>
-            )}
-            {(() => {
-              try {
-                if (!item.reply) return false;
-                const parsed = JSON.parse(item.reply);
-                return parsed.kind === 'workflow_approval_pending' && ['unread', 'replied'].includes(item.status);
-              } catch {
-                return false;
-              }
-            })() && (
-              <>
+              </Text> */}
+                <Text style={[styles.activitySubtext, { textTransform: 'capitalize' }]}>
+                  Status: {item.status || 'unread'}
+                </Text>
+                <Text style={styles.activitySubtext}>
+                  “{parseReplyPayload(item.reply || item.reason).message}”
+                </Text>
+                {parseReplyPayload(item.reply).proofPhotos.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                    {parseReplyPayload(item.reply).proofPhotos.map((uri, idx) => (
+                      <Image
+                        key={`supervisor-proof-${item.notificationId}-${idx}`}
+                        source={{ uri }}
+                        style={{ width: 56, height: 56, borderRadius: 8, marginRight: 8 }}
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+              {isConfirmed && !isReturnPending && (
                 <TouchableOpacity
-                  onPress={() => onWorkflowAction(item, 'approve')}
+                  onPress={() => openExtendModal(item)}
+                  style={styles.extendButton}
+                >
+                  <Text style={styles.extendButtonText}>Extend</Text>
+                </TouchableOpacity>
+              )}
+              {item.isAssignment && !hasReply && !isConfirmed && (
+                <TouchableOpacity
+                  onPress={() => openReceiptModal(item)}
+                  style={[styles.extendButton, { backgroundColor: '#0F766E', marginLeft: 8 }]}
+                >
+                  <Text style={styles.extendButtonText}>Confirm Receipt</Text>
+                </TouchableOpacity>
+              )}
+              {isReturnPending && (
+                <TouchableOpacity
+                  onPress={() => onConfirmReturn(item)}
                   style={[styles.extendButton, { backgroundColor: '#14532D', marginLeft: 8 }]}
                 >
-                  <Text style={styles.extendButtonText}>Approve</Text>
+                  <Text style={styles.extendButtonText}>Confirm Return</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => onWorkflowAction(item, 'reject')}
-                  style={[styles.extendButton, { backgroundColor: '#991B1B', marginLeft: 8 }]}
-                >
-                  <Text style={styles.extendButtonText}>Reject</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            <TouchableOpacity
-              onPress={() => hideNotification(item.notificationId)}
-              style={[styles.extendButton, { backgroundColor: '#334155', marginLeft: 8 }]}
-            >
-              <Text style={styles.extendButtonText}>Mark as Read</Text>
-            </TouchableOpacity>
-          </View>
-        );})}
+              )}
+              {(() => {
+                try {
+                  if (!item.reply) return false;
+                  const parsed = JSON.parse(item.reply);
+                  const isWorkflowPending = parsed.kind === 'workflow_approval_pending' && ['unread', 'replied'].includes(item.status);
+                  // Hide buttons if the current user is the one who raised the request
+                  const isOwnRequest = String(item.senderId) === String(currentEmployeeId);
+                  return isWorkflowPending && !isOwnRequest;
+                } catch {
+                  return false;
+                }
+              })() && (
+                  <>
+                    <TouchableOpacity
+                      onPress={() => onWorkflowAction(item, 'approve')}
+                      style={[styles.extendButton, { backgroundColor: '#14532D', marginLeft: 8 }]}
+                    >
+                      <Text style={styles.extendButtonText}>Approve</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => onWorkflowAction(item, 'reject')}
+                      style={[styles.extendButton, { backgroundColor: '#991B1B', marginLeft: 8 }]}
+                    >
+                      <Text style={styles.extendButtonText}>Reject</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              <TouchableOpacity
+                onPress={() => hideNotification(item.notificationId)}
+                style={[styles.extendButton, { backgroundColor: '#334155', marginLeft: 8 }]}
+              >
+                <Text style={styles.extendButtonText}>Mark as Read</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })}
       </ScrollView>
     )}
   </View>

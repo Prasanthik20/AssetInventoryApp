@@ -127,7 +127,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
        SET assigned_to = NULL,
            assigned_by = NULL,
            status_id = (
-             SELECT id FROM "Status" WHERE status ILIKE 'Unassigned' LIMIT 1
+             SELECT TOP 1 id FROM "Status" WHERE LOWER(status) = 'unassigned'
            )
        WHERE id = $1`,
       [resolvedAssetId],
@@ -136,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await query(
       `UPDATE "Notifications"
        SET status = 'resolved',
-           reply = COALESCE(reply, '') || CASE WHEN COALESCE(reply, '') = '' THEN '' ELSE E'\n' END || $2
+           reply = ISNULL(reply, '') + CASE WHEN ISNULL(reply, '') = '' THEN '' ELSE CHAR(10) END + $2
        WHERE id = $1`,
       [parsedNotificationId, `Return confirmed by employee ${parsedConfirmedBy}.`],
     );
@@ -148,15 +148,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
        SET status = 'resolved'
        WHERE "assetId" = $1
          AND id <> $2
-         AND COALESCE(status, '') <> 'resolved'
+         AND ISNULL(status, '') <> 'resolved'
          AND (
-           ($3::bigint IS NOT NULL AND "assignmentId" = $3)
+           ($3 IS NOT NULL AND "assignmentId" = $3)
            OR
-           ($3::bigint IS NULL AND "assignmentId" IS NULL)
+           ($3 IS NULL AND "assignmentId" IS NULL)
          )
          AND (
-           LOWER(COALESCE(reason, '')) LIKE '%has been returned by%'
-           OR LOWER(COALESCE(reply, '')) LIKE '%pending confirmation%'
+           LOWER(ISNULL(reason, '')) LIKE '%has been returned by%'
+           OR LOWER(ISNULL(reply, '')) LIKE '%pending confirmation%'
          )`,
       [resolvedAssetId, parsedNotificationId, hasAssignmentId ? parsedAssignmentId : null],
     );
@@ -207,7 +207,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await query(
         `INSERT INTO "Notifications"
         ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
-        VALUES ($1, $2, $3, $4, $5, $6, 'received', NOW(), $7)`,
+        VALUES ($1, $2, $3, $4, $5, $6, 'received', GETDATE(), $7)`,
         [
           resolvedAssetId,
           hasAssignmentId ? parsedAssignmentId : null,

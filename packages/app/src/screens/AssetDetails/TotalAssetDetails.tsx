@@ -23,6 +23,7 @@ import { globalColors, globalStyleTokens } from "../../styles/globalStyles";
 import ScreenWrapper from 'src/components/common/ScreenWrapper';
 import AssetCard from 'src/components/common/AssetCard';
 import useAssetMeta from '../../hooks/useAssetMeta';
+import useFetchAssets from 'src/hooks/useFetchAssets';
 import AssetFiltersBar from 'src/components/common/AssetFiltersBar';
 import AppSnackbar from 'src/components/common/AppSnackbar';
 
@@ -110,13 +111,18 @@ const TotalAssetsDetails: React.FC = () => {
     const isNarrowWeb = Platform.OS !== 'web' || width < 420;
     const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
 
-    const [assets, setAssets] = useState<Asset[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(true);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [totalCount, setTotalCount] = useState(0);
+    const {
+        assets,
+        setAssets,
+        loading,
+        loadingMore,
+        error,
+        page,
+        hasMore,
+        totalCount,
+        fetchAssets,
+        handleLoadMore
+    } = useFetchAssets({ limit: 50 });
 
     const [supervisorId, setSupervisorId] = useState<number | null>(null);
     const [supervisorName, setSupervisorName] = useState<string>('');
@@ -169,56 +175,48 @@ const TotalAssetsDetails: React.FC = () => {
         loadUser();
     }, []);
 
+    /* 🔹 Immediate in-memory state update on Edit, Assign, Return, or Extend operations */
+    useEffect(() => {
+        const routeParams = route.params as any;
+        if (!routeParams) return;
+
+        if (routeParams.updatedAsset) {
+            const updated = routeParams.updatedAsset;
+            const targetId = String(updated.assetId || updated.id);
+            setAssets(prev => prev.map(a => String(a.assetId || a.id) === targetId ? { ...a, ...updated } : a));
+        } else if (routeParams.updatedAssets) {
+            const updatedMap = routeParams.updatedAssets;
+            setAssets(prev => prev.map(a => {
+                const id = String(a.assetId || a.id);
+                return updatedMap[id] ? { ...a, ...updatedMap[id] } : a;
+            }));
+        } else if (routeParams.returnedAssetIds) {
+            const returnedIds = new Set(routeParams.returnedAssetIds.map(String));
+            setAssets(prev => prev.map(a => {
+                const id = String(a.assetId || a.id);
+                if (returnedIds.has(id)) {
+                    return {
+                        ...a,
+                        status: 'Unassigned',
+                        assignedTo: null,
+                        assignedBy: null,
+                        location: 'Office',
+                        expectedReturnDate: null
+                    };
+                }
+                return a;
+            }));
+        }
+    }, [route.params]);
+
     useFocusEffect(
         useCallback(() => {
-            fetchAssets(1, false);
-        }, [])
+            // Only fetch from API if assets are not loaded yet or explicit refresh param passed
+            if (assets.length === 0 || (route.params as any)?.refresh) {
+                fetchAssets(1, false);
+            }
+        }, [assets.length, (route.params as any)?.refresh])
     );
-
-    /* 🔹 Fetch assets with pagination */
-    const fetchAssets = async (pageNum = 1, append = false) => {
-        try {
-            if (pageNum === 1) setLoading(true);
-            else setLoadingMore(true);
-
-            const response = await axios.get(`${baseURL}/api/assets`, {
-                params: { page: pageNum, limit: 50 }
-            });
-            const rawData = response.data.assets || [];
-            const { total, totalPages } = response.data;
-
-            setTotalCount(total || 0);
-            setHasMore(pageNum < (totalPages || 1));
-
-            // De-duplicate by id
-            const uniqueMap = new Map();
-            rawData.forEach((item: any) => {
-                const id = item.assetId || item.id;
-                if (!uniqueMap.has(id)) uniqueMap.set(id, item);
-            });
-
-            const newAssets = Array.from(uniqueMap.values()) as Asset[];
-            setAssets(prev => {
-                if (!append) return newAssets;
-                const existingIds = new Set(prev.map(a => a.assetId || a.id));
-                const filteredNew = newAssets.filter(a => !existingIds.has(a.assetId || a.id));
-                return [...prev, ...filteredNew];
-            });
-        } catch (err) {
-            setError("Failed to fetch assets.");
-        } finally {
-            setLoading(false);
-            setLoadingMore(false);
-        }
-    };
-
-    const handleLoadMore = () => {
-        if (!loadingMore && hasMore && !loading) {
-            const nextPage = page + 1;
-            setPage(nextPage);
-            fetchAssets(nextPage, true);
-        }
-    };
 
     /* 🔹 Open modal */
     const handleOpenModal = (asset: Asset) => {

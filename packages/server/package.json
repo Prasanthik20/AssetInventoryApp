@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
-    "build": "npx prisma generate && npx next build",
+    "build": "next build",
     "start": "next start -p $PORT",
-    "deploy": "prisma migrate deploy && next start -p $PORT",
+    "deploy": "next start -p $PORT",
     "lint": "eslint"
   },
   "engines": {
@@ -35,6 +35,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/mssql": "^12.3.0",
     "@types/node": "^20",
     "@types/pg": "^8.16.0",
     "@types/react": "^19",

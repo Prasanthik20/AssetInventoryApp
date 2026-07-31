@@ -5,7 +5,7 @@ import { setCorsHeaders } from '@/lib/corsHeaders';
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '2gb',
+      sizeLimit: '50mb',
     },
   },
 };
@@ -135,12 +135,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 continue;
             }
 
-            const requestInsert = await query(
+            const requestIdRes = await query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "Approval_Requests"`, []);
+            const requestId = Number(requestIdRes.rows[0]?.next_id || 1);
+
+            await query(
                 `INSERT INTO "Approval_Requests"
-                 ("tenantId", "assetId", "workflowId", "currentStepSequence", "status", "requestedById", "payload", "createdAt", "updatedAt")
-                 VALUES ($1, $2, $3, 1, 'PENDING', $4, $5, NOW(), NOW())
-                 RETURNING id`,
+                 ("id", "tenantId", "assetId", "workflowId", "currentStepSequence", "status", "requestedById", "payload", "createdAt", "updatedAt")
+                 VALUES ($1, $2, $3, $4, 1, 'PENDING', $5, $6, GETDATE(), GETDATE())`,
                 [
+                    requestId,
                     tenantId,
                     assetId,
                     workflowId,
@@ -152,20 +155,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 ]
             );
 
-            const requestId = requestInsert.rows[0].id;
-
             const stepsResult = await query(
                 `SELECT "stepSequence", "approverRoleId" FROM "Approval_Workflow_Steps"
                  WHERE "workflowId" = $1 ORDER BY "stepSequence" ASC`,
                 [workflowId]
             );
 
+            const stepIdRes = await query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "Approval_Request_Steps"`, []);
+            let nextStepId = Number(stepIdRes.rows[0]?.next_id || 1);
+
             for (const step of stepsResult.rows) {
                 await query(
                     `INSERT INTO "Approval_Request_Steps"
-                     ("requestId", "stepSequence", "approverRoleId", "status")
-                     VALUES ($1, $2, $3, 'PENDING')`,
-                    [requestId, step.stepSequence, step.approverRoleId]
+                     ("id", "requestId", "stepSequence", "approverRoleId", "status")
+                     VALUES ($1, $2, $3, $4, 'PENDING')`,
+                    [nextStepId++, requestId, step.stepSequence, step.approverRoleId]
                 );
             }
 
@@ -191,7 +195,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 await query(
                     `INSERT INTO "Notifications"
                      ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
-                     VALUES ($1, NULL, $2, $3, $4, $5, 'unread', NOW(), $6)`,
+                     VALUES ($1, NULL, $2, $3, $4, $5, 'unread', GETDATE(), $6)`,
                     [
                         assetId,
                         managerEmployeeId,
@@ -245,7 +249,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await query(
           `INSERT INTO "Notifications"
             ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
-           VALUES ($1, NULL, $2, $3, $4, $5, 'unread', NOW(), $6)`,
+           VALUES ($1, NULL, $2, $3, $4, $5, 'unread', GETDATE(), $6)`,
           [
             assetId,
             managerEmployeeId,

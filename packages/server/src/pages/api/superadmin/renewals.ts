@@ -1,5 +1,5 @@
 import type { NextApiResponse } from 'next';
-import query, { pool } from '@/lib/db';
+import query from '@/lib/db';
 import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 import crypto from 'crypto';
 
@@ -60,24 +60,22 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       return res.status(400).json({ message: 'A rejection reason is required for rejection action.' });
     }
 
-    let client;
     try {
-      client = await pool.connect();
-      await client.query('BEGIN');
+      await query('BEGIN');
 
       // 1. Fetch and Lock request for update
-      const reqRes = await client.query(
-        'SELECT * FROM "RenewalRequests" WHERE id = $1 FOR UPDATE',
+      const reqRes = await query(
+        'SELECT * FROM "RenewalRequests" WHERE id = $1',
         [requestId]
       );
       if (reqRes.rows.length === 0) {
-        client.release();
+        await query('ROLLBACK');
         return res.status(404).json({ message: 'Renewal request not found.' });
       }
 
       const request = reqRes.rows[0];
       if (request.status !== 'submitted' && request.status !== 'reviewing') {
-        client.release();
+        await query('ROLLBACK');
         return res.status(400).json({
           message: `This request cannot be modified. Current status: ${request.status}`
         });
@@ -87,28 +85,28 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
       if (action === 'reject') {
         // Update request to rejected
-        await client.query(
+        await query(
           `UPDATE "RenewalRequests" 
            SET status = 'rejected', "rejectionReason" = $1, "reviewedBy" = $2, "reviewedAt" = NOW(), "updatedAt" = NOW()
            WHERE id = $3`,
           [rejectionReason, reviewerId, requestId]
         );
 
-        await client.query('COMMIT');
+        await query('COMMIT');
         return res.status(200).json({ success: true, message: 'Renewal request rejected successfully.' });
       }
 
       if (action === 'approve') {
         // A. Resolve plan pricing and metadata
-        const planRes = await client.query('SELECT * FROM "Plans" WHERE id = $1 LIMIT 1', [request.planId]);
+        const planRes = await query('SELECT * FROM "Plans" WHERE id = $1 LIMIT 1', [request.planId]);
         if (planRes.rows.length === 0) {
-          await client.query('ROLLBACK');
+          await query('ROLLBACK');
           return res.status(400).json({ message: 'Plan details not found.' });
         }
         const plan = planRes.rows[0];
 
         // B. Update request status to approved
-        await client.query(
+        await query(
           `UPDATE "RenewalRequests" 
            SET status = 'approved', "reviewedBy" = $1, "reviewedAt" = NOW(), "updatedAt" = NOW()
            WHERE id = $2`,
@@ -121,7 +119,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         // D. Create / Update Subscription record
         const newSubId = crypto.randomUUID();
-        await client.query(
+        await query(
           `INSERT INTO "Subscriptions" (
              id, "tenantId", "planId", "startDate", "endDate", status, "createdAt", "updatedAt"
            ) VALUES ($1, $2, $3, NOW(), $4, 'active', NOW(), NOW())`,
@@ -129,14 +127,14 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         );
 
         // E. Reactivate Tenant in main Tenants index
-        await client.query(
+        await query(
           `UPDATE "Tenants" SET status = 'active', "updatedAt" = NOW() WHERE id = $1`,
           [request.tenantId]
         );
 
         // F. Insert Payments ledger record
         const paymentId = crypto.randomUUID();
-        await client.query(
+        await query(
           `INSERT INTO "Payments" (
              id, "tenantId", amount, currency, status, "paymentMethod", "transactionId", "paymentDate", "createdAt"
            ) VALUES ($1, $2, $3, $4, 'completed', 'bank_transfer', $5, NOW(), NOW())`,
@@ -146,7 +144,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         // G. Generate Invoice
         const invoiceId = crypto.randomUUID();
         const invoiceNo = `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-        await client.query(
+        await query(
           `INSERT INTO "Invoices" (
              id, "tenantId", "invoiceNo", amount, tax, total, status, "dueDate", "paidDate", "createdAt"
            ) VALUES ($1, $2, $3, $4, 0, $4, 'paid', NOW(), NOW(), NOW())`,
@@ -155,14 +153,14 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         // H. Log Audit Log for change
         const auditId = crypto.randomUUID();
-        await client.query(
+        await query(
           `INSERT INTO "AuditLogs" (
              id, "tenantId", "userId", action, "entityName", "entityId", "createdAt"
            ) VALUES ($1, $2, $3, 'RENEWAL_APPROVED', 'Subscriptions', $4, NOW())`,
           [auditId, request.tenantId, parseInt(reviewerId, 10), newSubId]
         );
 
-        await client.query('COMMIT');
+        await query('COMMIT');
         return res.status(200).json({
           success: true,
           message: 'Renewal request approved successfully. Subscription extended and payment logged.',
@@ -173,15 +171,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       }
 
     } catch (error) {
-      if (client) {
-        await client.query('ROLLBACK');
-      }
+      await query('ROLLBACK');
       console.error('Super Admin Processing Renewal Error:', error);
       return res.status(500).json({ message: 'An internal server error occurred during transaction processing.' });
-    } finally {
-      if (client) {
-        client.release();
-      }
     }
   }
 

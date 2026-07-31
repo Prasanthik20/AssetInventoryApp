@@ -341,35 +341,11 @@ const AddEditAsset: React.FC = () => {
   };
 
   const handleImageUpload = () => {
-    if (Platform.OS === 'web') {
-      pickImage(false, 'photoURL');
-    } else {
-      Alert.alert(
-        "Upload Photo",
-        "Choose an option",
-        [
-          { text: "Take Photo", onPress: () => pickImage(true, 'photoURL') },
-          { text: "Choose from Gallery", onPress: () => pickImage(false, 'photoURL') },
-          { text: "Cancel", style: "cancel" }
-        ]
-      );
-    }
+    pickImage(false, 'photoURL');
   };
 
   const handleBarcodeUpload = () => {
-    if (Platform.OS === 'web') {
-      pickImage(false, 'barcode');
-    } else {
-      Alert.alert(
-        "Upload Barcode",
-        "Choose an option",
-        [
-          { text: "Take Photo", onPress: () => pickImage(true, 'barcode') },
-          { text: "Choose from Gallery", onPress: () => pickImage(false, 'barcode') },
-          { text: "Cancel", style: "cancel" }
-        ]
-      );
-    }
+    pickImage(false, 'barcode');
   };
 
   // Shared Date Change Handler

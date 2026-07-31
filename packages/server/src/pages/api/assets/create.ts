@@ -18,17 +18,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   const { tenantId } = req.user;
 
   try {
-    // Auto-migration for useful_life and salvage_value
-    try {
-      await query(`
-        ALTER TABLE "Asset_Details" 
-        ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
-        ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
-      `, []);
-    } catch (err) {
-      console.error('[AUTO-MIGRATION ERROR in assets create]', err);
-    }
-
     const payload = req.body?.data && typeof req.body.data === "object"
       ? req.body.data
       : req.body;
@@ -42,7 +31,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       assignedBy, assignedTo, expectedReturnDate,
       assignmentId, operatorId, senderId, receiverId,
       usefulLife, salvageValue,
-      dynamicFields // Expected as an array of { fieldId: number, value: string }
+      dynamicFields
     } = payload;
 
     if (!assetName?.toString().trim()) {
@@ -53,7 +42,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       return res.status(400).json({ message: "Serial number is required" });
     }
 
-    // Convert assignedBy and assignedTo to numbers (employee IDs)
     const assignedByNum = assignedBy ? parseInt(String(assignedBy), 10) : null;
     const assignedToNum = assignedTo ? parseInt(String(assignedTo), 10) : null;
     const operatorIdNum = operatorId ? parseInt(String(operatorId), 10) : null;
@@ -62,7 +50,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     // 1. Get Category ID
     const categoryRes = await query(
-      `SELECT "categoryId" FROM "Category" WHERE category = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
+      `SELECT TOP 1 "categoryId" FROM "Category" WHERE category = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL)`,
       [category, tenantId]
     );
     if (!categoryRes.rows.length) return res.status(400).json({ message: "Invalid category" });
@@ -77,21 +65,21 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // 2. Get Status ID
     const statusVal = (status || "Unassigned").trim();
     let statusRes = await query(
-      `SELECT id FROM "Status" WHERE (status = $1 OR status ILIKE $1) AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
+      `SELECT TOP 1 id FROM "Status" WHERE (status = $1 OR status LIKE $1) AND ("tenantId" = $2 OR "tenantId" IS NULL)`,
       [statusVal, tenantId]
     );
     if (!statusRes.rows.length) {
       statusRes = await query(
-        `SELECT id FROM "Status" WHERE status = $1 OR status ILIKE $1 LIMIT 1`,
+        `SELECT TOP 1 id FROM "Status" WHERE status = $1 OR status LIKE $1`,
         [statusVal]
       );
     }
     if (!statusRes.rows.length) return res.status(400).json({ message: "Invalid status" });
     const statusId = statusRes.rows[0].id;
 
-    // 3. Create endpoint should fail if serial number already exists.
+    // 3. Fail if serial number already exists
     const serialNumberRes = await query(
-      `SELECT id FROM "Asset_Details" WHERE "serial_no" = $1 AND "tenantId" = $2 LIMIT 1`,
+      `SELECT TOP 1 id FROM "Asset_Details" WHERE "serial_no" = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL)`,
       [serialNumber, tenantId]
     );
     if (serialNumberRes.rows.length > 0) {
@@ -100,22 +88,18 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       });
     }
 
-    // 4. INSERT new asset
-    await query("BEGIN", []);
-
-    // Lock id generation for this transaction
-    await query(`SELECT pg_advisory_xact_lock(hashtext('asset_details_id_lock'))`, []);
-
+    // 4. Calculate nextId
     const nextIdRes = await query(
       `SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "Asset_Details"`,
       []
     );
-    const nextId = nextIdRes.rows[0]?.next_id;
+    const nextId = Number(nextIdRes.rows[0]?.next_id || 1);
 
+    // 5. Insert Asset_Details
     const insertAsset = await query(
       `INSERT INTO "Asset_Details" (id, name, "categoryId", "controller_key", "model_no", "serial_no", "purchase_date", "warranty_expiry", price, location, "status_id", "photoURL", "barcodeURL", assigned_by, assigned_to, "tenantId", "useful_life", "salvage_value")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-      RETURNING id`,
+      OUTPUT INSERTED.id
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
       [
         nextId,
         assetName,
@@ -138,16 +122,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       ]
     );
 
-    const assetId = insertAsset.rows[0].id;
-    const assetIdStr = assetId.toString();
+    const assetId = insertAsset.rows[0]?.id || nextId;
+    const assetIdStr = String(assetId);
 
-    // 4. Update the generated asset_Id field
+    // 6. Update generated asset_Id
     await query(
       `UPDATE "Asset_Details" SET "asset_Id" = $1 WHERE id = $2`,
       [assetIdStr, assetId]
     );
 
-    // 5. Insert Dynamic Values (EAV)
+    // 7. Insert Dynamic Values (EAV)
     if (dynamicFields && Array.isArray(dynamicFields)) {
       for (const field of dynamicFields) {
         if (field.fieldId && field.value !== undefined) {
@@ -159,30 +143,27 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       }
     }
 
-    // 6. Insert into Category_Details
+    // 8. Insert into Category_Details
     const nextCategoryDetailsIdRes = await query(
       `SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "Category_Details"`,
       []
     );
-    const nextCategoryDetailsId = nextCategoryDetailsIdRes.rows[0]?.next_id;
+    const nextCategoryDetailsId = Number(nextCategoryDetailsIdRes.rows[0]?.next_id || 1);
 
     await query(
       `INSERT INTO "Category_Details" (id, "categoryId", name, "asset_Id") VALUES ($1, $2, $3, $4)`,
       [nextCategoryDetailsId, categoryId, assetName, assetIdStr]
     );
 
-    // 7. Optionally create assignment
+    // 9. Optionally create assignment
     if (operatorIdNum && senderIdNum && receiverIdNum) {
       await query(
         `INSERT INTO "Asset_Assignments" 
         ("assetId", "operator_employeeId", "supervisor_employeeId", "expected_return_date", "tenantId")
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT DO NOTHING`,
+        VALUES ($1, $2, $3, $4, $5)`,
         [assetId, operatorIdNum, senderIdNum || receiverIdNum, expectedReturnDate || null, tenantId]
       );
     }
-
-    await query("COMMIT", []);
 
     return res.status(201).json({
       message: "Asset created successfully",
@@ -204,13 +185,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     });
 
   } catch (error: any) {
-    try {
-      await query("ROLLBACK", []);
-    } catch {
-      // Ignore
-    }
-
-    console.error("FULL DATABASE ERROR:", error);
+    console.error("FULL DATABASE ERROR in assets/create:", error);
     return res.status(500).json({
       message: error.message,
       detail: error.detail || "Check console for full error logs"

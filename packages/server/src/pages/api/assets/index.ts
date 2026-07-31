@@ -27,22 +27,22 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(403).json({ message: 'Tenant ID missing. Please log in again.' });
     }
 
-    // 1️⃣ Run auto-migration ONCE per process boot to prevent locking table on every GET
+    // 1️⃣ Run auto-migration ONCE per process boot
     if (!isMigrated) {
         try {
             await query(`
-                ALTER TABLE "Asset_Details" 
-                ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
-                ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asset_Details') AND name = 'useful_life')
+                    ALTER TABLE "Asset_Details" ADD "useful_life" INT DEFAULT 5;
             `, []);
             isMigrated = true;
         } catch (err) {
             console.error('[AUTO-MIGRATION ERROR]', err);
+            isMigrated = true;
         }
     }
 
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit as string) || 50));
     const offset = (page - 1) * limit;
     const includeMedia = req.query.includeMedia === 'true';
 
@@ -61,16 +61,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             const updateQuery = `
                 UPDATE "Asset_Details"
                 SET status_id = (
-                    SELECT id FROM "Status" WHERE status = 'Overdue' AND ("tenantId" = $1 OR "tenantId" IS NULL) LIMIT 1
+                    SELECT TOP 1 id FROM "Status" WHERE status = 'Overdue' AND ("tenantId" = $1 OR "tenantId" IS NULL)
                 )
                 WHERE status_id = (
-                    SELECT id FROM "Status" WHERE status = 'Assigned' AND ("tenantId" = $1 OR "tenantId" IS NULL) LIMIT 1
+                    SELECT TOP 1 id FROM "Status" WHERE status = 'Assigned' AND ("tenantId" = $1 OR "tenantId" IS NULL)
                 )
                 AND "tenantId" = $1
                 AND assigned_to IS NOT NULL
                 AND id IN (
                     SELECT "assetId" FROM "Asset_Assignments"
-                    WHERE "expected_return_date" < CURRENT_DATE
+                    WHERE "expected_return_date" < GETDATE()
                       AND "tenantId" = $1
                       AND COALESCE(status, '') <> 'returned'
                       AND "returned_date" IS NULL
@@ -106,46 +106,43 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 aa."projectName" AS "projectName",
                 aa.assigned_date AS "assignedDate",
                 aa.expected_return_date AS "expectedReturnDate",
+                aa.returned_date AS "returnedDate",
                 COALESCE(aa."operator_employeeId", a.assigned_to) AS "operatorId",
                 COALESCE(aa."supervisor_employeeId", a.assigned_by) AS "senderId"
 
-            FROM "Asset_Details" a
-            LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId" AND (cat."tenantId" = a."tenantId" OR cat."tenantId" IS NULL OR a."tenantId" IS NULL)
-            LEFT JOIN "Status" s ON a.status_id = s.id
+            FROM "Asset_Details" a WITH (NOLOCK)
+            LEFT JOIN "Category" cat WITH (NOLOCK) ON a."categoryId" = cat."categoryId"
+            LEFT JOIN "Status" s WITH (NOLOCK) ON a.status_id = s.id
             
-            LEFT JOIN LATERAL (
-                SELECT * FROM "Asset_Assignments"
+            OUTER APPLY (
+                SELECT TOP 1 * FROM "Asset_Assignments" WITH (NOLOCK)
                 WHERE "assetId" = a.id
-                  AND ("tenantId" = $1 OR $1 IS NULL OR "tenantId" IS NULL)
-                  AND COALESCE(status, '') <> 'returned'
-                  AND "returned_date" IS NULL
+                  AND (a."tenantId" = $1 OR "tenantId" = $1 OR "tenantId" IS NULL)
+                  AND (COALESCE(status, '') <> 'returned')
                 ORDER BY id DESC
-                LIMIT 1
-            ) aa ON TRUE
+            ) aa
 
-            LEFT JOIN "Users" u ON CAST(u."employeeId" AS text) = CAST(a.assigned_by AS text) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
-            LEFT JOIN "Users" assignee ON CAST(assignee."employeeId" AS text) = CAST(a.assigned_to AS text) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" u WITH (NOLOCK) ON u."employeeId" = a.assigned_by AND (u."tenantId" = a."tenantId" OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" assignee WITH (NOLOCK) ON assignee."employeeId" = a.assigned_to AND (assignee."tenantId" = a."tenantId" OR a."tenantId" IS NULL)
             
-            LEFT JOIN "Users" u_aa ON CAST(u_aa."employeeId" AS text) = CAST(aa."supervisor_employeeId" AS text) AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
-            LEFT JOIN "Users" assignee_aa ON CAST(assignee_aa."employeeId" AS text) = CAST(aa."operator_employeeId" AS text) AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" u_aa WITH (NOLOCK) ON u_aa."employeeId" = aa."supervisor_employeeId" AND (u_aa."tenantId" = a."tenantId" OR a."tenantId" IS NULL)
+            LEFT JOIN "Users" assignee_aa WITH (NOLOCK) ON assignee_aa."employeeId" = aa."operator_employeeId" AND (assignee_aa."tenantId" = a."tenantId" OR a."tenantId" IS NULL)
 
-            WHERE (a."tenantId" = $1 OR $1 IS NULL)
-            ${isSearch ? `AND (a.name ILIKE $2 OR a."asset_Id" ILIKE $2 OR a."serial_no" ILIKE $2)` : ''}
+            WHERE (a."tenantId" = $1 OR a."tenantId" IS NULL)
+            ${isSearch ? `AND (a.name LIKE $2 OR a."asset_Id" LIKE $2 OR a."serial_no" LIKE $2)` : ''}
             ORDER BY a.id ASC
-            LIMIT $${isSearch ? 3 : 2} OFFSET $${isSearch ? 4 : 3};
+            OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY;
         `;
 
         const countQuery = `
             SELECT COUNT(*) as total
-            FROM "Asset_Details" a
-            WHERE (a."tenantId" = $1 OR $1 IS NULL)
-            ${isSearch ? `AND (a.name ILIKE $2 OR a."asset_Id" ILIKE $2 OR a."serial_no" ILIKE $2)` : ''};
+            FROM "Asset_Details" a WITH (NOLOCK)
+            WHERE (a."tenantId" = $1 OR a."tenantId" IS NULL)
+            ${isSearch ? `AND (a.name LIKE $2 OR a."asset_Id" LIKE $2 OR a."serial_no" LIKE $2)` : ''};
         `;
 
         const searchPattern = isSearch ? `%${search.trim()}%` : null;
-        const mainParams = isSearch
-            ? [tenantId, searchPattern, limit, offset]
-            : [tenantId, limit, offset];
+        const mainParams = isSearch ? [tenantId, searchPattern] : [tenantId];
         const countParams = isSearch ? [tenantId, searchPattern] : [tenantId];
 
         const [result, countResult] = await Promise.all([
@@ -194,6 +191,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 }
             }
 
+            const formatLocation = (loc: string | null | undefined): string => {
+                if (!loc || typeof loc !== 'string') return 'Office';
+                const trimmed = loc.trim();
+                if (!trimmed || trimmed.toLowerCase() === 'unassigned' || trimmed.toLowerCase() === 'null') {
+                    return 'Office';
+                }
+                return trimmed;
+            };
+
             return {
                 id: asset.id.toString(),
                 assetName: asset.assetName,
@@ -204,7 +210,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 status: asset.status,
                 assignedBy: asset.assignedBy || null,
                 assignedTo: asset.assignedTo || null,
-                location: asset.location,
+                location: formatLocation(asset.location),
                 purchaseDate: asset.purchaseDate,
                 warrantyExpiry: asset.warrantyExpiry,
                 price: asset.price,
@@ -212,6 +218,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 barcodeURL: sanitizeMedia(asset.barcodeURL),
                 expectedReturnDate: asset.expectedReturnDate || null,
                 assignedDate: asset.assignedDate || null,
+                returnedDate: asset.returnedDate || null,
                 projectName: asset.projectName || null,
                 assignmentId: asset.assignmentId ? asset.assignmentId.toString() : null,
                 operatorId: asset.operatorId ? asset.operatorId.toString() : null,

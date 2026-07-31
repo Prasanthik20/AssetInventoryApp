@@ -181,7 +181,7 @@ export default withAuth(async function handler(req: AuthenticatedRequest, res: N
       ${adWhereSql}
       ORDER BY
         CASE WHEN aa.id IS NULL THEN 1 ELSE 0 END,
-        aa.assigned_date DESC NULLS LAST,
+        aa.assigned_date DESC,
         aa.id DESC;
     `;
 

@@ -215,7 +215,7 @@ export default function AddCompanyScreen() {
                     </LinearGradient>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => navigation.navigate('CompanyLogin')}
+                    onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('CompanyLogin')}
                     style={[styles.cancelButton, isMobileLayout && { width: '100%' }]}
                   >
                     <LinearGradient

@@ -26,7 +26,20 @@ export default async function handler(
 
   const userIdStr = String(userIdRaw).trim();
 
+  const reqTenantId = req.query.tenantId ? String(req.query.tenantId).trim() : null;
+
   try {
+    // 1. Fetch user's tenantId & employeeId strictly by employeeId
+    const userRes = await query(
+      `SELECT TOP 1 "tenantId", "employeeId"
+       FROM "Users"
+       WHERE "employeeId" = $1 OR CAST("employeeId" AS VARCHAR(50)) = $1`,
+      [userIdStr]
+    );
+
+    const employeeId = userRes.rows[0]?.employeeId ? Number(userRes.rows[0].employeeId) : Number(userIdStr);
+    const tenantId = reqTenantId || userRes.rows[0]?.tenantId || null;
+
     const sql = `
       SELECT
         n.id                    AS "notificationId",
@@ -46,22 +59,18 @@ export default async function handler(
 
       FROM "Notifications" n
       LEFT JOIN "Asset_Details" ad ON ad.id = n."assetId"
-      LEFT JOIN "Users" s ON CAST(s."employeeId" AS text) = CAST(n."senderId" AS text) AND (s."tenantId" = n."tenantId" OR n."tenantId" IS NULL)
-      LEFT JOIN "Users" r ON CAST(r."employeeId" AS text) = CAST(n."receiverId" AS text) AND (r."tenantId" = n."tenantId" OR n."tenantId" IS NULL)
+      LEFT JOIN "Users" s ON (s."employeeId" = n."senderId" OR CAST(s."employeeId" AS VARCHAR(50)) = CAST(n."senderId" AS VARCHAR(50)))
+      LEFT JOIN "Users" r ON (r."employeeId" = n."receiverId" OR CAST(r."employeeId" AS VARCHAR(50)) = CAST(n."receiverId" AS VARCHAR(50)))
 
       WHERE (
-        CAST(n."receiverId" AS text) = $1
+        n."receiverId" = $1 OR CAST(n."receiverId" AS VARCHAR(50)) = CAST($1 AS VARCHAR(50))
       )
-      AND (
-        n."tenantId" = (SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = $1 LIMIT 1)
-        OR n."tenantId" IS NULL
-        OR (SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = $1 LIMIT 1) IS NULL
-      )
-        AND n.status IN ('unread', 'resolved', 'received', 'replied')
+        AND (n."tenantId" = $2 OR $2 IS NULL OR n."tenantId" IS NULL)
+        AND n.status IN ('unread', 'resolved', 'received', 'replied', 'pending')
       ORDER BY n.created_at DESC;
     `;
 
-    const { rows } = await query(sql, [userIdStr]);
+    const { rows } = await query(sql, [employeeId, tenantId]);
 
     const notifications = rows.map((n) => ({
       id: n.notificationId,

@@ -22,15 +22,21 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
       if (status && status !== 'all') {
         values.push(status);
-        whereClauses.push(`st.status ILIKE $${values.length}`);
+        whereClauses.push(`st.status LIKE $${values.length}`);
       }
 
       // Auto-migration for useful_life and salvage_value
       try {
         await query(`
-          ALTER TABLE "Asset_Details" 
-          ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
-          ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+          IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Asset_Details' AND COLUMN_NAME = 'useful_life')
+          BEGIN
+              ALTER TABLE "Asset_Details" ADD "useful_life" INT DEFAULT 5;
+          END
+          
+          IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Asset_Details' AND COLUMN_NAME = 'salvage_value')
+          BEGIN
+              ALTER TABLE "Asset_Details" ADD "salvage_value" VARCHAR(255);
+          END
         `, []);
       } catch (err) {
         console.error('[AUTO-MIGRATION ERROR in superadmin assets]', err);
@@ -39,7 +45,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
       const sql = `
-        SELECT 
+        SELECT TOP 1000
           a.id,
           a.name,
           a.serial_no AS "serialNo",
@@ -56,8 +62,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         LEFT JOIN
           "Status" st ON a."status_id" = st.id
         ${whereSQL}
-        ORDER BY a.id DESC
-        LIMIT 1000;
+        ORDER BY a.id DESC;
       `;
 
       const result = await query(sql, values);

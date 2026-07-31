@@ -5,7 +5,7 @@ import { setCorsHeaders } from '@/lib/corsHeaders';
 export const config = {
     api: {
         bodyParser: {
-            sizeLimit: '2gb',
+            sizeLimit: '50mb',
         },
     },
 };
@@ -250,12 +250,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     continue;
                 }
 
-                const requestInsert = await query(
+                const requestIdRes = await query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "Approval_Requests"`, []);
+                const requestId = Number(requestIdRes.rows[0]?.next_id || 1);
+
+                await query(
                     `INSERT INTO "Approval_Requests"
-                     ("tenantId", "assetId", "workflowId", "currentStepSequence", "status", "requestedById", "payload", "createdAt", "updatedAt")
-                     VALUES ($1, $2, $3, 1, 'PENDING', $4, $5, NOW(), NOW())
-                     RETURNING id`,
+                     ("id", "tenantId", "assetId", "workflowId", "currentStepSequence", "status", "requestedById", "payload", "createdAt", "updatedAt")
+                     VALUES ($1, $2, $3, $4, 1, 'PENDING', $5, $6, GETDATE(), GETDATE())`,
                     [
+                        requestId,
                         tenantId,
                         assetId,
                         workflowId,
@@ -267,20 +270,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     ]
                 );
 
-                const requestId = requestInsert.rows[0].id;
-
                 const stepsResult = await query(
                     `SELECT "stepSequence", "approverRoleId" FROM "Approval_Workflow_Steps"
                      WHERE "workflowId" = $1 ORDER BY "stepSequence" ASC`,
                     [workflowId]
                 );
 
+                const stepIdRes = await query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "Approval_Request_Steps"`, []);
+                let nextStepId = Number(stepIdRes.rows[0]?.next_id || 1);
+
                 for (const step of stepsResult.rows) {
                     await query(
                         `INSERT INTO "Approval_Request_Steps"
-                         ("requestId", "stepSequence", "approverRoleId", "status")
-                         VALUES ($1, $2, $3, 'PENDING')`,
-                        [requestId, step.stepSequence, step.approverRoleId]
+                         ("id", "requestId", "stepSequence", "approverRoleId", "status")
+                         VALUES ($1, $2, $3, $4, 'PENDING')`,
+                        [nextStepId++, requestId, step.stepSequence, step.approverRoleId]
                     );
                 }
 
@@ -305,8 +309,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 for (const approverId of approverIds) {
                     await query(
                         `INSERT INTO "Notifications"
-                         ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
-                         VALUES ($1, NULL, $2, $3, $4, $5, 'unread', NOW(), $6)`,
+                         ("assetId", "assignmentId", "senderId", "receiverId", "reason", "reply", "status", "tenantId")
+                         VALUES ($1, NULL, $2, $3, $4, $5, 'unread', $6)`,
                         [
                             assetId,
                             resolvedOperatorEmployeeId,
@@ -338,25 +342,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 UPDATE "Asset_Assignments"
                 SET 
                     "status" = 'returned',
-                    "returned_date" = NOW(),
+                    "returned_date" = GETDATE(),
                     "photoURL" = COALESCE($3, "photoURL"),
                     "barcodeURL" = COALESCE($4, "barcodeURL"),
-                    "serialNoVerified" = true,
+                    "serialNoVerified" = 1,
                     "tenantId" = COALESCE("tenantId", $6)
+                OUTPUT INSERTED.id, INSERTED.supervisor_employeeId
                 WHERE id = COALESCE($5, (
-                    SELECT id
+                    SELECT TOP 1 id
                     FROM "Asset_Assignments"
                     WHERE "operator_employeeId" = $1
                       AND "assetId" = $2
                       AND COALESCE("status", '') <> 'returned'
                       AND "returned_date" IS NULL
-                    ORDER BY "assigned_date" DESC NULLS LAST, id DESC
-                    LIMIT 1
+                    ORDER BY "assigned_date" DESC, id DESC
                 ))
                     AND "operator_employeeId" = $1
                     AND "assetId" = $2
                     AND COALESCE("status", '') <> 'returned'
-                RETURNING id, "supervisor_employeeId"
                 `,
                 [
                     resolvedOperatorEmployeeId,
@@ -384,9 +387,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 'assigned_to = $2',
                 'assigned_by = $2',
                 `status_id = (
-                    SELECT id FROM "Status" 
-                    WHERE status ILIKE 'Assigned' 
-                    LIMIT 1
+                    SELECT TOP 1 id FROM "Status" 
+                    WHERE status LIKE 'Assigned' 
                 )`
             ];
             const updateValues: Array<string | number | null> = [assetId, assigningSupervisorId];
@@ -410,7 +412,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 updateValues
             );
 
-            const recipients = new Set<number>([...adminEmployeeIds, assigningSupervisorId]);
+            const directMgrRes = await query(
+                `SELECT "reportingTo" FROM "Users" WHERE "employeeId" = $1 AND ("tenantId" = $2 OR $2 IS NULL) LIMIT 1`,
+                [resolvedOperatorEmployeeId, tenantId]
+            );
+            const directMgrId = Number(directMgrRes.rows[0]?.reportingTo);
+
+            const recipients = new Set<number>([
+                ...adminEmployeeIds, 
+                assigningSupervisorId,
+                ...(Number.isFinite(directMgrId) && directMgrId > 0 ? [directMgrId] : [])
+            ]);
             for (const receiverEmployeeId of recipients) {
                 if (!Number.isFinite(receiverEmployeeId)) {
                     continue;

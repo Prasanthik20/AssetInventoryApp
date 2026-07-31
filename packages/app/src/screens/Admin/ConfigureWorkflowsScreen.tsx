@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { baseURL } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
+import AppSnackbar from '../../components/common/AppSnackbar';
 
 interface WorkflowStep {
   stepId?: string;
@@ -51,30 +52,36 @@ export default function ConfigureWorkflowsScreen() {
   const [selectedType, setSelectedType] = useState<'CHECKOUT' | 'RETURN'>('CHECKOUT');
   const [currentSteps, setCurrentSteps] = useState<WorkflowStep[]>([]);
   const [isActive, setIsActive] = useState(true);
-  const [name, setName] = useState('');
+  const [name, setName] = useState('Checkout Approval Workflow');
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    setSnackbar({ visible: true, message, kind });
+  };
+
   useEffect(() => {
-    fetchData();
+    fetchInitialData();
   }, []);
 
-  const fetchData = async () => {
+  const fetchInitialData = async () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('token');
+      const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
-      // 1. Fetch roles
-      const rolesRes = await axios.get(`${baseURL}/api/approvals/roles`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      // 2. Fetch workflows
-      const workflowsRes = await axios.get(`${baseURL}/api/approvals/workflows`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const [rolesRes, workflowsRes] = await Promise.all([
+        axios.get(`${baseURL}/api/approvals/roles`, authHeader),
+        axios.get(`${baseURL}/api/approvals/workflows`, authHeader),
+      ]);
 
-      if (rolesRes.data) {
-        setRoles(rolesRes.data.roles || []);
+      if (rolesRes.data && rolesRes.data.roles) {
+        setRoles(rolesRes.data.roles);
       }
 
       if (workflowsRes.data) {
@@ -84,17 +91,17 @@ export default function ConfigureWorkflowsScreen() {
       }
     } catch (error: any) {
       console.error('Fetch workflows screen error:', error);
-      Alert.alert('Error', 'Failed to fetch workflow configurations.');
+      showSnackbar('Failed to fetch workflow configurations.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const loadWorkflowType = (list: Workflow[], type: 'CHECKOUT' | 'RETURN') => {
-    const matched = list.find(w => w.actionType === type);
+    const matched = list.find(w => String(w.actionType).toUpperCase() === type.toUpperCase());
     if (matched) {
       setCurrentSteps(matched.steps || []);
-      setIsActive(matched.isActive);
+      setIsActive(Boolean(matched.isActive));
       setName(matched.name);
     } else {
       setCurrentSteps([]);
@@ -110,7 +117,7 @@ export default function ConfigureWorkflowsScreen() {
 
   const handleAddStep = () => {
     if (roles.length === 0) {
-      Alert.alert('Configuration Error', 'Please create custom roles first.');
+      showSnackbar('Please create custom roles first.', 'error');
       return;
     }
     const nextSeq = currentSteps.length + 1;
@@ -118,7 +125,7 @@ export default function ConfigureWorkflowsScreen() {
       ...prev,
       {
         stepSequence: nextSeq,
-        approverRoleId: roles[0].roleId,
+        approverRoleId: String(roles[0].roleId),
         approverRoleName: roles[0].roleName
       }
     ]);
@@ -136,12 +143,12 @@ export default function ConfigureWorkflowsScreen() {
   };
 
   const handleStepRoleChange = (index: number, roleId: string) => {
-    const roleObj = roles.find(r => r.roleId === roleId);
+    const roleObj = roles.find(r => String(r.roleId) === String(roleId));
     setCurrentSteps(prev => {
       const updated = [...prev];
       updated[index] = {
         ...updated[index],
-        approverRoleId: roleId,
+        approverRoleId: String(roleId),
         approverRoleName: roleObj ? roleObj.roleName : ''
       };
       return updated;
@@ -150,12 +157,12 @@ export default function ConfigureWorkflowsScreen() {
 
   const handleSaveWorkflow = async () => {
     if (!name.trim()) {
-      Alert.alert('Validation Error', 'Workflow Name is required.');
+      showSnackbar('Workflow Name is required.', 'error');
       return;
     }
 
     if (isActive && currentSteps.length === 0) {
-      Alert.alert('Validation Error', 'An active workflow must have at least one approval step.');
+      showSnackbar('An active workflow must have at least one approval step.', 'error');
       return;
     }
 
@@ -175,7 +182,7 @@ export default function ConfigureWorkflowsScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      Alert.alert('Success', 'Workflow configuration saved successfully.');
+      showSnackbar('Workflow configuration saved successfully.', 'success');
       
       // Reload configurations
       const workflowsRes = await axios.get(`${baseURL}/api/approvals/workflows`, {
@@ -186,7 +193,7 @@ export default function ConfigureWorkflowsScreen() {
       }
     } catch (error: any) {
       console.error('Save workflow config error:', error?.response?.data || error);
-      Alert.alert('Error', error?.response?.data?.message || 'Failed to save workflow.');
+      showSnackbar(error?.response?.data?.message || 'Failed to save workflow.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -289,16 +296,16 @@ export default function ConfigureWorkflowsScreen() {
                   </View>
                   <View style={styles.pickerContainer}>
                     <Picker
-                      selectedValue={step.approverRoleId}
-                      onValueChange={(itemValue) => handleStepRoleChange(index, itemValue)}
+                      selectedValue={String(step.approverRoleId)}
+                      onValueChange={(itemValue) => handleStepRoleChange(index, String(itemValue))}
                       style={styles.picker}
                       dropdownIconColor="#22D3EE"
                     >
                       {roles.map((r) => (
                         <Picker.Item
-                          key={r.roleId}
+                          key={String(r.roleId)}
                           label={`Approver: ${r.roleName}`}
-                          value={r.roleId}
+                          value={String(r.roleId)}
                           color={Platform.OS === 'web' ? '#F8FAFC' : '#E6F3FF'}
                           style={{ backgroundColor: '#0F172A', color: '#F8FAFC' }}
                         />
@@ -325,6 +332,13 @@ export default function ConfigureWorkflowsScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <AppSnackbar
+        visible={snackbar.visible}
+        message={snackbar.message}
+        kind={snackbar.kind}
+        onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

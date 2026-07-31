@@ -24,6 +24,7 @@ import { Picker } from "@react-native-picker/picker";
 import { baseURL } from '../../navigation/types';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
 import { StatMetricCard } from '../../components/dashboard/StatMetricCard';
+import AppSnackbar from '../../components/common/AppSnackbar';
 
 interface Company {
   id: string;
@@ -123,6 +124,16 @@ export default function SuperAdminDashboard({ setUser }: any) {
     auditLogs: false,
   });
 
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    setSnackbar({ visible: true, message, kind });
+  };
+
   const fetchSuperAdminData = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
@@ -212,9 +223,10 @@ export default function SuperAdminDashboard({ setUser }: any) {
       // Refresh list
       await fetchSuperAdminData();
       setIsDetailsModalVisible(false);
+      showSnackbar('Tenant details updated successfully.', 'success');
     } catch (e) {
       console.error('Error updating tenant details:', e);
-      alert('Failed to save profile updates.');
+      showSnackbar('Failed to save profile updates.', 'error');
     } finally {
       setUpdatingProfile(false);
     }
@@ -230,7 +242,10 @@ export default function SuperAdminDashboard({ setUser }: any) {
       setEditorPrice(String(plan.price));
       setEditorCurrency(plan.currency || "INR");
 
-      const features = plan.features || {};
+      let features: any = {};
+      try {
+        features = typeof plan.features === 'string' ? JSON.parse(plan.features) : (plan.features || {});
+      } catch(e) {}
       setEditorFeatures({
         storage: features.storage || "2GB",
         reports: features.reports || "basic",
@@ -265,7 +280,7 @@ export default function SuperAdminDashboard({ setUser }: any) {
 
   const handleSavePlan = async () => {
     if (!editorId.trim() || !editorName.trim() || !editorPrice.trim()) {
-      alert("Please fill all required package details.");
+      showSnackbar("Please fill all required package details.", "error");
       return;
     }
 
@@ -287,9 +302,10 @@ export default function SuperAdminDashboard({ setUser }: any) {
       // Refresh catalog data
       await fetchSuperAdminData();
       setIsPlanEditorVisible(false);
+      showSnackbar('Plan package saved successfully.', 'success');
     } catch (e) {
       console.error('Error saving plan package:', e);
-      alert('Failed to save plans package.');
+      showSnackbar('Failed to save plans package.', 'error');
     }
   };
 
@@ -600,7 +616,10 @@ export default function SuperAdminDashboard({ setUser }: any) {
               </View>
               <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
                 {plans.map((plan) => {
-                  const features = plan.features || {};
+                  let features: any = {};
+                  try {
+                    features = typeof plan.features === 'string' ? JSON.parse(plan.features) : (plan.features || {});
+                  } catch(e) {}
                   return (
                     <View key={plan.id} style={styles.planOverviewCard}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -843,7 +862,7 @@ export default function SuperAdminDashboard({ setUser }: any) {
                       <Picker.Item label="Assigned" value="assigned" />
                       <Picker.Item label="Returned" value="overdue" />
                       <Picker.Item label="Maintenance" value="maintenance" />
-                      {/* <Picker.Item label="Damaged" value="damaged" /> */}
+                      <Picker.Item label="Overdue" value="overdue" />
                       {/* <Picker.Item label="Retired" value="retired" /> */}
                     </Picker>
                   </View>
@@ -937,26 +956,26 @@ export default function SuperAdminDashboard({ setUser }: any) {
                   <Text style={{ color: '#A9C6E4', fontSize: 15 }}>No assets are currently depreciating under 60% life across the platform.</Text>
                 </View>
               ) : (
-                <ScrollView horizontal={true} showsHorizontalScrollIndicator={true}>
-                  <View style={{ minWidth: 750 }}>
+                <ScrollView horizontal={true} showsHorizontalScrollIndicator={true} style={{ width: '100%' }} contentContainerStyle={{ minWidth: '100%' }}>
+                  <View style={{ width: '100%', minWidth: 750 }}>
                     {/* Table Header */}
                     <View style={{
                       flexDirection: 'row',
-                      backgroundColor: 'rgba(18, 45, 73, 0.86)',
+                      backgroundColor: 'rgba(18, 45, 73, 0.95)',
                       paddingVertical: 10,
                       paddingHorizontal: 12,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor: 'rgba(159, 207, 255, 0.22)',
+                      borderRadius: 6,
+                      borderBottomWidth: 1,
+                      borderColor: 'rgba(159, 207, 255, 0.2)',
                       marginBottom: 6
                     }}>
-                      <Text style={{ flex: 1.5, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Organization</Text>
-                      <Text style={{ flex: 2, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Asset Name</Text>
-                      <Text style={{ flex: 1.5, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Serial #</Text>
-                      <Text style={{ flex: 1, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Purchase Price</Text>
-                      <Text style={{ flex: 1.2, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Remaining Life</Text>
-                      <Text style={{ flex: 1.2, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Book Value</Text>
-                      <Text style={{ flex: 1.5, color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Action Required</Text>
+                      <View style={{ flex: 1.5 }}><Text style={{ color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Organization</Text></View>
+                      <View style={{ flex: 2 }}><Text style={{ color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Asset Name</Text></View>
+                      <View style={{ flex: 1.5 }}><Text style={{ color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Serial #</Text></View>
+                      <View style={{ flex: 1 }}><Text style={{ color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Purchase Price</Text></View>
+                      <View style={{ flex: 1.2 }}><Text style={{ color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Remaining Life</Text></View>
+                      <View style={{ flex: 1.2 }}><Text style={{ color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Book Value</Text></View>
+                      <View style={{ flex: 1.5 }}><Text style={{ color: '#E6F3FF', fontWeight: 'bold', fontSize: 13 }}>Action Required</Text></View>
                     </View>
 
                     {/* Table Body */}
@@ -971,16 +990,20 @@ export default function SuperAdminDashboard({ setUser }: any) {
                           alignItems: 'center',
                           backgroundColor: 'rgba(7, 24, 42, 0.92)'
                         }}>
-                          <Text style={{ flex: 1.5, color: '#E6F3FF', fontSize: 13, fontWeight: 'bold' }} numberOfLines={1}>{item.tenantName}</Text>
-                          <Text style={{ flex: 2, color: '#A9C6E4', fontSize: 13 }} numberOfLines={1}>{item.name}</Text>
-                          <Text style={{ flex: 1.5, color: '#A9C6E4', fontSize: 13 }} numberOfLines={1}>{item.serialNo || 'N/A'}</Text>
-                          <Text style={{ flex: 1, color: '#A9C6E4', fontSize: 13 }}>₹{parseFloat(item.price || 0).toLocaleString('en-IN')}</Text>
-                          <Text style={{ flex: 1.2, color: item.percentLifeRemaining < 20 ? '#EF4444' : '#F59E0B', fontSize: 13, fontWeight: 'bold' }}>
-                            {item.percentLifeRemaining}%
-                          </Text>
-                          <Text style={{ flex: 1.2, color: '#34D399', fontSize: 13, fontWeight: '600' }}>
-                            ₹{item.remainingValue.toLocaleString('en-IN')}
-                          </Text>
+                          <View style={{ flex: 1.5, paddingRight: 8 }}><Text style={{ color: '#E6F3FF', fontSize: 13, fontWeight: 'bold' }} numberOfLines={1}>{item.tenantName}</Text></View>
+                          <View style={{ flex: 2, paddingRight: 8 }}><Text style={{ color: '#A9C6E4', fontSize: 13 }} numberOfLines={1}>{item.name}</Text></View>
+                          <View style={{ flex: 1.5, paddingRight: 8 }}><Text style={{ color: '#A9C6E4', fontSize: 13 }} numberOfLines={1}>{item.serialNo || 'N/A'}</Text></View>
+                          <View style={{ flex: 1, paddingRight: 8 }}><Text style={{ color: '#A9C6E4', fontSize: 13 }}>₹{parseFloat(item.price || 0).toLocaleString('en-IN')}</Text></View>
+                          <View style={{ flex: 1.2, paddingRight: 8 }}>
+                            <Text style={{ color: item.percentLifeRemaining < 20 ? '#EF4444' : '#F59E0B', fontSize: 13, fontWeight: 'bold' }}>
+                              {item.percentLifeRemaining}%
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1.2, paddingRight: 8 }}>
+                            <Text style={{ color: '#34D399', fontSize: 13, fontWeight: '600' }}>
+                              ₹{item.remainingValue.toLocaleString('en-IN')}
+                            </Text>
+                          </View>
                           <View style={{ flex: 1.5 }}>
                             <View style={{
                               backgroundColor: item.percentLifeRemaining < 20 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',
@@ -1013,7 +1036,12 @@ export default function SuperAdminDashboard({ setUser }: any) {
             </View>
           </View>
         </Modal>
-
+        <AppSnackbar
+          visible={snackbar.visible}
+          message={snackbar.message}
+          kind={snackbar.kind}
+          onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+        />
       </SafeAreaView>
     </ImageBackground>
   );

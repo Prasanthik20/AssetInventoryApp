@@ -20,6 +20,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { baseURL, RootStackParamList } from '../../navigation/types';
 import { reportStyles } from './ReportsScreenStyle';
+import AppSnackbar from '../../components/common/AppSnackbar';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reports'>;
 
@@ -430,9 +431,19 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   }, [history, searchQuery, statusFilter]);
 
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    setSnackbar({ visible: true, message, kind });
+  };
+
   const exportAsExcel = useCallback(async () => {
     if (!filteredHistory.length) {
-      Alert.alert('No Data', 'There is no report data to export.');
+      showSnackbar('There is no report data to export.', 'info');
       return;
     }
 
@@ -508,18 +519,18 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
             UTI: 'public.comma-separated-values-text',
           });
         } else {
-          Alert.alert('Export Saved', `CSV saved at: ${fileUri}`);
+          showSnackbar(`CSV saved at: ${fileUri}`, 'success');
         }
       }
     } catch (error) {
       console.error('Excel export error:', error);
-      Alert.alert('Export Failed', 'Unable to export CSV.');
+      showSnackbar('Unable to export CSV.', 'error');
     }
   }, [filteredHistory]);
 
   const exportAsPdf = useCallback(async () => {
     if (!filteredHistory.length) {
-      Alert.alert('No Data', 'There is no report data to export.');
+      showSnackbar('There is no report data to export.', 'info');
       return;
     }
 
@@ -529,7 +540,7 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
       if (Platform.OS === 'web') {
         const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1200,height=800');
         if (!printWindow) {
-          Alert.alert('Export Failed', 'Unable to open print window. Please allow popups.');
+          showSnackbar('Unable to open print window. Please allow popups.', 'error');
           return;
         }
         printWindow.document.open();
@@ -551,12 +562,12 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
             UTI: 'com.adobe.pdf',
           });
         } else {
-          Alert.alert('Export Saved', `PDF saved at: ${result.uri}`);
+          showSnackbar(`PDF saved at: ${result.uri}`, 'success');
         }
       }
     } catch (error) {
       console.error('PDF export error:', error);
-      Alert.alert('Export Failed', 'Unable to export PDF.');
+      showSnackbar('Unable to export PDF.', 'error');
     }
   }, [filteredHistory, summary, title]);
 
@@ -993,6 +1004,12 @@ const ReportsScreen: React.FC<Props> = ({ navigation, route }) => {
             </View>
           </View>
         </Modal>
+        <AppSnackbar
+          visible={snackbar.visible}
+          message={snackbar.message}
+          kind={snackbar.kind}
+          onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+        />
       </SafeAreaView>
     </ImageBackground>
   );

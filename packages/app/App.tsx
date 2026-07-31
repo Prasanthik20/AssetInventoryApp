@@ -124,10 +124,10 @@ function App(): React.JSX.Element {
     config: {
       screens: {
         CompanyLogin: 'login',
-        AddCompany: 'add-company',
-        CompanyDashboard: 'company-dashboard',
-        CompanyUsersScreen: 'company-users',
-        AddCompanyUser: 'add-company-user',
+        AddCompany: 'add-organisation',
+        CompanyDashboard: 'dashboard',
+        CompanyUsersScreen: 'organisation-users',
+        AddCompanyUser: 'add-organization-user',
         CustomCategoryBuilder: 'categories/custom',
         ManagerDashboard: 'manager',
         SupervisorDashboard: 'supervisor',

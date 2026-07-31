@@ -4,9 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlserver"
+  url      = env("AZURE_DATABASE_URL")
 }
 
 model Tenants {
@@ -104,6 +103,9 @@ model Users {
   status                String?             @default("active")
   resetToken            String?
   resetTokenExpiry      DateTime?           @db.Timestamp(6)
+  reportingTo           BigInt?             @map("reportingTo")
+  manager               Users?              @relation("DirectReports", fields: [reportingTo], references: [employeeId])
+  reports               Users[]             @relation("DirectReports")
   operatorAssignments   Asset_Assignments[] @relation("OperatorAssignments")
   supervisorAssignments Asset_Assignments[] @relation("SupervisorAssignments")
   AssetsAssignedBy      Asset_Details[]     @relation("AssetsAssignedBy")
@@ -413,10 +415,10 @@ model Approval_Requests {
   createdAt           DateTime                 @db.Timestamp
   updatedAt           DateTime                 @db.Timestamp
 
-  tenant              Tenants                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  asset               Asset_Details            @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  workflow            Approval_Workflows       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  requestedByUser     Users                    @relation("RequestedBy", fields: [requestedById], references: [employeeId])
+  tenant              Tenants                  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  asset               Asset_Details            @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workflow            Approval_Workflows       @relation(fields: [workflowId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requestedByUser     Users                    @relation("RequestedBy", fields: [requestedById], references: [employeeId], onDelete: NoAction, onUpdate: NoAction)
   steps               Approval_Request_Steps[]
 }
 
@@ -430,7 +432,7 @@ model Approval_Request_Steps {
   actionedAt     DateTime?         @db.Timestamp
   notes          String?
   mediaURL       String?
-  request        Approval_Requests @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  approverRole   Roles             @relation(fields: [approverRoleId], references: [roleId], onDelete: Cascade)
-  actionedByUser Users?            @relation("ActionedBy", fields: [actionedById], references: [employeeId])
+  request        Approval_Requests @relation(fields: [requestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  approverRole   Roles             @relation(fields: [approverRoleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
+  actionedByUser Users?            @relation("ActionedBy", fields: [actionedById], references: [employeeId], onDelete: NoAction, onUpdate: NoAction)
 }

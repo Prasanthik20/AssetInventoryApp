@@ -41,7 +41,19 @@ async function handler(req: any, res: NextApiResponse) {
         permissionsByRole[row.roleId].push({ code: row.code, name: row.name });
       });
 
-      const roles = rolesResult.rows.map((row: any) => ({
+      // Deduplicate roles by roleName (prefer tenant-specific role over system default role)
+      const roleMap = new Map<string, any>();
+      rolesResult.rows.forEach((row: any) => {
+        const key = String(row.roleName || '').trim().toLowerCase();
+        if (!key) return;
+        if (!roleMap.has(key) || row.tenantId !== null) {
+          roleMap.set(key, row);
+        }
+      });
+
+      const uniqueRolesList = Array.from(roleMap.values());
+
+      const roles = uniqueRolesList.map((row: any) => ({
         roleId: row.roleId.toString(),
         roleName: row.roleName,
         isSystem: row.tenantId === null,
@@ -66,24 +78,40 @@ async function handler(req: any, res: NextApiResponse) {
     }
 
     try {
-      // Create role scoped to tenant
-      const roleInsert = await query(
-        `INSERT INTO "Roles" ("roleName", "tenantId")
-         VALUES ($1, $2)
-         RETURNING "roleId", "roleName"`,
-        [roleName.trim(), tenantId]
+      // Check if role already exists for tenant
+      const existingRole = await query(
+        `SELECT "roleId" FROM "Roles" 
+         WHERE "tenantId" = $1 
+           AND LOWER("roleName") = LOWER($2)`,
+        [tenantId, roleName.trim()]
       );
 
-      const newRole = roleInsert.rows[0];
-      const newRoleId = newRole.roleId;
+      if (existingRole.rows.length > 0) {
+        return res.status(400).json({ message: `Role '${roleName.trim()}' already exists` });
+      }
+
+      // Create role scoped to tenant
+      const maxRoleRes = await query(`SELECT COALESCE(MAX("roleId"), 0) + 1 AS next_id FROM "Roles"`, []);
+      const nextRoleId = BigInt(maxRoleRes.rows[0]?.next_id || 1);
+
+      const roleInsert = await query(
+        `INSERT INTO "Roles" ("roleId", "roleName", "tenantId")
+         OUTPUT INSERTED."roleId", INSERTED."roleName"
+         VALUES ($1, $2, $3)`,
+        [nextRoleId, roleName.trim(), tenantId]
+      );
+
+      const newRole = roleInsert.rows[0] || { roleId: nextRoleId, roleName: roleName.trim() };
+      const newRoleId = BigInt(newRole.roleId.toString());
 
       if (Array.isArray(permissionCodes) && permissionCodes.length > 0) {
         // Insert permission mappings
+        const placeholders = permissionCodes.map((_, i) => `$${i + 2}`).join(', ');
         await query(
           `INSERT INTO "Role_Permissions" ("roleId", "permissionId")
            SELECT $1, id FROM "Permissions"
-           WHERE code = ANY($2)`,
-          [newRoleId, permissionCodes]
+           WHERE code IN (${placeholders})`,
+          [newRoleId, ...permissionCodes]
         );
       }
 
@@ -141,11 +169,12 @@ async function handler(req: any, res: NextApiResponse) {
 
         // Bind new ones
         if (permissionCodes.length > 0) {
+          const placeholders = permissionCodes.map((_, i) => `$${i + 2}`).join(', ');
           await query(
             `INSERT INTO "Role_Permissions" ("roleId", "permissionId")
              SELECT $1, id FROM "Permissions"
-             WHERE code = ANY($2)`,
-             [roleId, permissionCodes]
+             WHERE code IN (${placeholders})`,
+             [roleId, ...permissionCodes]
           );
         }
       }
@@ -157,7 +186,44 @@ async function handler(req: any, res: NextApiResponse) {
     }
   }
 
-  res.setHeader('Allow', ['GET', 'POST', 'PUT']);
+  if (req.method === 'DELETE') {
+    const { roleId } = req.query;
+
+    if (!roleId) {
+      return res.status(400).json({ message: 'roleId is required' });
+    }
+
+    try {
+      // Verify custom role belongs to tenant
+      const roleCheck = await query(
+        `SELECT "tenantId" FROM "Roles" WHERE "roleId" = $1 LIMIT 1`,
+        [roleId]
+      );
+
+      if (roleCheck.rows.length === 0) {
+        return res.status(404).json({ message: 'Role not found' });
+      }
+
+      if (roleCheck.rows[0].tenantId === null) {
+        return res.status(403).json({ message: 'System default roles cannot be deleted' });
+      }
+
+      if (roleCheck.rows[0].tenantId !== tenantId) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+
+      // Drop permission mappings & role
+      await query(`DELETE FROM "Role_Permissions" WHERE "roleId" = $1`, [roleId]);
+      await query(`DELETE FROM "Roles" WHERE "roleId" = $1`, [roleId]);
+
+      return res.status(200).json({ message: 'Role deleted successfully' });
+    } catch (error: any) {
+      console.error('Delete role error:', error);
+      return res.status(500).json({ message: error.message || 'Internal server error' });
+    }
+  }
+
+  res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
   return res.status(405).json({ message: `Method ${req.method} not allowed` });
 }
 

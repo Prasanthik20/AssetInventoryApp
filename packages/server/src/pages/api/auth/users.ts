@@ -22,59 +22,78 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
 
   try {
     const sqlQuery = `
-      SELECT u.*, r."roleName",
-             COALESCE(
-               (
-                 SELECT json_agg(p.code)
-                 FROM "Role_Permissions" rp
-                 JOIN "Permissions" p ON rp."permissionId" = p.id
-                 WHERE rp."roleId" = u."roleId"
-               ),
-               '[]'::json
-             ) AS permissions,
-             json_agg(
-               json_build_object(
-                 'id', a.id,
-                 'name', a.name,
-                 'barcode', a."asset_Id"
-               )
-             ) FILTER (WHERE a.id IS NOT NULL) AS assignedAssets
+      SELECT u.*, r."roleName", mgr."fullName" AS "managerName"
       FROM "Users" AS u
       LEFT JOIN "Roles" AS r ON u."roleId" = r."roleId"
-      LEFT JOIN "Asset_Details" AS a ON a."assigned_to" = u."employeeId"
-      WHERE u."tenantId" = $1
+      LEFT JOIN "Users" AS mgr ON mgr."employeeId" = u."reportingTo" AND (mgr."tenantId" = u."tenantId" OR u."tenantId" IS NULL)
+      WHERE (u."tenantId" = $1 OR $1 IS NULL)
         AND (r."roleName" IS NULL OR LOWER(r."roleName") NOT IN ('super admin', 'superadmin'))
-      GROUP BY u."userId", r."roleName"
       ORDER BY u."userId" ASC;
     `;
 
     const result = await query(sqlQuery, [tenantId]);
 
-    const users = result.rows.map((user: any) => ({
-      userId: user.userId.toString(),
-      employeeId: user.employeeId.toString(),
-      fullName: user.fullName,
-      email: user.email,
-      phoneNumber: user.phoneNumber || null,
-      address: user.address || null,
-      photoURL: user.photoURL || null,
-      role: {
-        roleName: user.roleName || 'Unassigned',
-        permissions: user.permissions || []
-      },
-      assignedAssets: user.assignedassets || [],
-    }));
+    // Fetch assigned assets for users
+    const assetsRes = await query(
+      `SELECT id, name, "asset_Id" AS barcode, assigned_to
+       FROM "Asset_Details"
+       WHERE assigned_to IS NOT NULL AND ("tenantId" = $1 OR $1 IS NULL)`,
+      [tenantId]
+    );
 
-    res.status(200).json({
-      message: 'Users fetched successfully!',
-      count: users.length,
-      users,
+    // Fetch role permissions
+    const permissionsRes = await query(
+      `SELECT rp."roleId", p.code
+       FROM "Role_Permissions" rp
+       JOIN "Permissions" p ON rp."permissionId" = p.id`
+    );
+
+    const permissionsByRole: Record<string, string[]> = {};
+    permissionsRes.rows.forEach((row: any) => {
+      const roleIdStr = String(row.roleId);
+      if (!permissionsByRole[roleIdStr]) permissionsByRole[roleIdStr] = [];
+      permissionsByRole[roleIdStr].push(row.code);
     });
-  } catch (error) {
-    console.error('❌ Get All Users API Error:', error);
-    res.status(500).json({
-      message: 'An internal server error occurred while fetching users.',
+
+    const assetsByUser: Record<string, any[]> = {};
+    assetsRes.rows.forEach((row: any) => {
+      const empIdStr = String(row.assigned_to);
+      if (!assetsByUser[empIdStr]) assetsByUser[empIdStr] = [];
+      assetsByUser[empIdStr].push({
+        id: row.id,
+        name: row.name,
+        barcode: row.barcode
+      });
     });
+
+    const users = result.rows.map((user: any) => {
+      const empIdStr = String(user.employeeId);
+      const roleIdStr = user.roleId ? String(user.roleId) : '';
+
+      return {
+        userId: user.userId.toString(),
+        employeeId: user.employeeId.toString(),
+        fullName: user.fullName,
+        email: user.email,
+        phoneNumber: user.phoneNumber || null,
+        address: user.address || null,
+        photoURL: user.photoURL || null,
+        roleId: user.roleId ? user.roleId.toString() : null,
+        roleName: user.roleName || null,
+        reportingTo: user.reportingTo ? user.reportingTo.toString() : null,
+        managerName: user.managerName || null,
+        designation: user.designation || null,
+        status: user.status || 'active',
+        isPrimaryContact: Boolean(user.isPrimaryContact),
+        permissions: permissionsByRole[roleIdStr] || [],
+        assignedAssets: assetsByUser[empIdStr] || []
+      };
+    });
+
+    res.status(200).json(users);
+  } catch (error: any) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Failed to fetch users', details: String(error) });
   }
 }
 

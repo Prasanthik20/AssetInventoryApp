@@ -1,5 +1,5 @@
 import type { NextApiResponse } from 'next';
-import query, { pool } from '@/lib/db';
+import query from '@/lib/db';
 import { withAuth, AuthenticatedRequest } from '@/lib/apiHandler';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -18,33 +18,32 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           t.id, 
           t.name, 
           t.status, 
-          t."organizationType",
-          t."createdAt",
+          t."organizationType" AS "organizationType",
+          t."createdAt" AS "createdAt",
           COALESCE(sub.name, 'No active plan') AS "planName",
           COALESCE(sub.plan_id, 'free-trial') AS "planId",
-          sub."startDate",
-          sub."endDate",
+          sub."startDate" AS "startDate",
+          sub."endDate" AS "endDate",
           admin."fullName" AS "adminName",
           admin.email AS "adminEmail",
           admin."phoneNumber" AS "adminPhone",
           admin.address AS "adminAddress",
-          (SELECT COUNT(*)::int FROM "Asset_Details" WHERE "tenantId" = t.id) AS "assetsCount"
+          (SELECT COUNT(*) FROM "Asset_Details" WHERE "tenantId" = t.id) AS "assetsCount"
         FROM 
           "Tenants" t
-        LEFT JOIN LATERAL (
-          SELECT p.name, p.id AS plan_id, s."startDate", s."endDate"
+        OUTER APPLY (
+          SELECT TOP 1 p.name, p.id AS plan_id, s."startDate" AS "startDate", s."endDate" AS "endDate"
           FROM "Subscriptions" s
           JOIN "Plans" p ON s."planId" = p.id
           WHERE s."tenantId" = t.id
           ORDER BY s."updatedAt" DESC
-          LIMIT 1
-        ) sub ON TRUE
-        LEFT JOIN LATERAL (
-          SELECT u."fullName", u.email, u."phoneNumber", u.address
+        ) sub
+        OUTER APPLY (
+          SELECT TOP 1 u."fullName", u.email, u."phoneNumber", u.address
           FROM "Users" u
           LEFT JOIN "Roles" r ON u."roleId" = r."roleId"
           WHERE u."tenantId" = t.id AND (
-            u."isPrimaryContact" = TRUE OR
+            u."isPrimaryContact" = 1 OR
             (r."roleName" IS NOT NULL AND (
               LOWER(r."roleName") IN ('admin', 'super admin', 'superadmin', 'tenant admin', 'tenantadmin')
               OR EXISTS (
@@ -55,8 +54,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             ))
           )
           ORDER BY u."userId" ASC
-          LIMIT 1
-        ) admin ON TRUE
+        ) admin
         ORDER BY 
           t."createdAt" DESC;
       `;
@@ -79,20 +77,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       return res.status(400).json({ message: 'Tenant ID, status, and target plan ID are required.' });
     }
 
-    let client;
-
     try {
-      client = await pool.connect();
-      await client.query('BEGIN');
+      await query('BEGIN');
 
       // A. Update Tenant Status
-      await client.query(
+      await query(
         `UPDATE "Tenants" SET status = $1, "updatedAt" = NOW() WHERE id = $2`,
         [status, tenantId]
       );
 
       // B. Update/Upsert Subscription
-      const subCheck = await client.query(
+      const subCheck = await query(
         `SELECT id FROM "Subscriptions" WHERE "tenantId" = $1 ORDER BY "createdAt" DESC LIMIT 1`,
         [tenantId]
       );
@@ -101,7 +96,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
       if (subCheck.rows.length > 0) {
         // Update plan and status of the current subscription
-        await client.query(
+        await query(
           `UPDATE "Subscriptions" 
            SET "planId" = $1, status = $2, "updatedAt" = NOW() 
            WHERE id = $3`,
@@ -112,29 +107,23 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const crypto = require('crypto');
         const newSubId = crypto.randomUUID();
         const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days default
-        await client.query(
+        await query(
           `INSERT INTO "Subscriptions" (id, "tenantId", "planId", "startDate", "endDate", status, "createdAt", "updatedAt")
            VALUES ($1, $2, $3, NOW(), $4, $5, NOW(), NOW())`,
           [newSubId, tenantId, planId, endDate.toISOString(), subStatus]
         );
       }
 
-      await client.query('COMMIT');
+      await query('COMMIT');
       return res.status(200).json({
         success: true,
         message: 'Tenant profile, status, and subscription updated successfully!'
       });
 
     } catch (error) {
-      if (client) {
-        await client.query('ROLLBACK');
-      }
+      await query('ROLLBACK');
       console.error('Super Admin Update Tenant Error:', error);
       return res.status(500).json({ message: 'An internal server error occurred during transaction processing.' });
-    } finally {
-      if (client) {
-        client.release();
-      }
     }
   }
 

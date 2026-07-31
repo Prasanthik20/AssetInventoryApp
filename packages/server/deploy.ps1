@@ -1,10 +1,13 @@
 # Windows PowerShell Deployment Script
 $ErrorActionPreference = "Stop"
 
-Write-Host "1. Syncing database schema with Prisma (npx prisma db push)..." -ForegroundColor Cyan
-npx prisma db push --schema=prisma/schema.prisma
+# Write-Host "1. Syncing database schema with Prisma (npx prisma db push)..." -ForegroundColor Cyan
+# npx prisma db push --schema=prisma/schema.prisma
 
 Write-Host "2. Building server..." -ForegroundColor Cyan
+if (Test-Path .next) {
+    Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue
+}
 npm run build
 
 Write-Host "3. Preparing deploy_exact directory..." -ForegroundColor Cyan

@@ -49,11 +49,12 @@ const ReturnAssetScreen: React.FC = () => {
     const toAssetKey = (value: unknown) => String(toAssetId(value));
     const toAssignmentId = (value: unknown) => Number(value);
     const getSelectionId = (item: Asset) => {
-        const assignmentId = toAssignmentId(item.assignmentId);
-        if (!Number.isNaN(assignmentId) && assignmentId > 0) {
-            return assignmentId;
+        // ALWAYS use assetId for UI selection uniqueness since an operator can only have one active assignment per asset
+        const assetId = toAssetId(item.assetId || item.id);
+        if (!Number.isNaN(assetId) && assetId > 0) {
+            return assetId;
         }
-        return toAssetId(item.assetId);
+        return Math.random();
     };
 
     const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
@@ -170,35 +171,11 @@ const ReturnAssetScreen: React.FC = () => {
     };
 
     const handleUploadBarcode = (targetAssetId?: number | string) => {
-        if (Platform.OS === 'web') {
-            pickImage(false, true, targetAssetId);
-        } else {
-            Alert.alert(
-                "Upload Barcode",
-                "Choose an option",
-                [
-                    { text: "Take Photo", onPress: () => pickImage(true, true, targetAssetId) },
-                    { text: "Choose from Gallery", onPress: () => pickImage(false, true, targetAssetId) },
-                    { text: "Cancel", style: "cancel" }
-                ]
-            );
-        }
+        pickImage(false, true, targetAssetId);
     };
 
     const handleUploadPhoto = (targetAssetId?: number | string) => {
-        if (Platform.OS === 'web') {
-            pickImage(false, false, targetAssetId);
-        } else {
-            Alert.alert(
-                "Upload Photo",
-                "Choose an option",
-                [
-                    { text: "Take Photo", onPress: () => pickImage(true, false, targetAssetId) },
-                    { text: "Choose from Gallery", onPress: () => pickImage(false, false, targetAssetId) },
-                    { text: "Cancel", style: "cancel" }
-                ]
-            );
-        }
+        pickImage(false, false, targetAssetId);
     };
 
     const toggleAssetSelection = (id: number) => {
@@ -290,7 +267,7 @@ const ReturnAssetScreen: React.FC = () => {
                 ...(barcodeURL && { barcodeURL }),
             };
 
-            console.log("RETURN PAYLOAD 👉", payload);
+            // console.log("RETURN PAYLOAD 👉", payload);
 
             const response = await axios.post(
                 actorRole === 'supervisor'
@@ -299,7 +276,7 @@ const ReturnAssetScreen: React.FC = () => {
                 payload
             );
 
-            console.log("RETURN RESPONSE 👉", response.data);
+            // console.log("RETURN RESPONSE 👉", response.data);
 
             if (response.status === 200) {
                 showSnackbar("Assets returned successfully", 'success');

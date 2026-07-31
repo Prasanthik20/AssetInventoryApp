@@ -12,14 +12,16 @@ import AssetFiltersBar from 'src/components/common/AssetFiltersBar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigateToDashboard } from '../../utils/navigation';
 
+import useFetchAssets from 'src/hooks/useFetchAssets';
+
 const OfficeAssets: React.FC = () => {
   const navigation = useNavigation<any>();
   const { width, height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 900;
   const isNarrowWeb = Platform.OS !== 'web' || width < 420;
   const isMobileLayout = Platform.OS !== 'web' || !isDesktopWeb;
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  const { assets, loading, fetchAssets } = useFetchAssets({ filterStatus: 'Unassigned' });
   const { categories } = useAssetMeta();
 
   // Categories from API
@@ -45,35 +47,20 @@ const OfficeAssets: React.FC = () => {
     // Search Filter: Check if assetName or barcode matches search text
     const matchesSearch = searchText
       ? asset.assetName.toLowerCase().includes(searchText.toLowerCase()) ||
-      asset.assignedTo?.toLowerCase().includes(searchText.toLowerCase()) ||
-      asset.location?.toLowerCase().includes(searchText.toLowerCase()) ||
-      // barcode may be undefined, so check before calling toLowerCase
-      (asset.barcode?.toLowerCase().includes(searchText.toLowerCase()) ?? false)
+        asset.assignedTo?.toLowerCase().includes(searchText.toLowerCase()) ||
+        asset.location?.toLowerCase().includes(searchText.toLowerCase()) ||
+        // barcode may be undefined, so check before calling toLowerCase
+        (asset.barcode?.toLowerCase().includes(searchText.toLowerCase()) ?? false)
       : true;
-
     return matchesCategory && matchesSearch;
   });
 
-  const fetchAssets = async () => {
-    try {
-      const response = await axios.get(`${baseURL}/api/assets`);
-      const data = response.data;
-
-      // Filter for Unassigned assets (Office)
-      const officeAssets = data.assets.filter((asset: Asset) => asset.status === 'Unassigned');
-      setAssets(officeAssets);
-    } catch (err) {
-      console.error('Error fetching office assets:', err);
-      setAssets([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useFocusEffect(
     useCallback(() => {
-      fetchAssets();
-    }, [])
+      if (assets.length === 0) {
+        fetchAssets();
+      }
+    }, [assets.length])
   );
 
   const handleGoBack = async () => {

@@ -53,14 +53,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN "Status" s ON s.id = a.status_id
       LEFT JOIN "Users" assignee ON assignee."employeeId" = a.assigned_to AND (assignee."tenantId" = a."tenantId" OR a."tenantId" IS NULL)
       LEFT JOIN "Users" assigner ON assigner."employeeId" = a.assigned_by AND (assigner."tenantId" = a."tenantId" OR a."tenantId" IS NULL)
-      LEFT JOIN LATERAL (
-        SELECT * FROM "Asset_Assignments"
+      OUTER APPLY (
+        SELECT TOP 1 * FROM "Asset_Assignments"
         WHERE "assetId" = a.id
           AND COALESCE(status, '') <> 'returned'
           AND "returned_date" IS NULL
         ORDER BY id DESC
-        LIMIT 1
-      ) aa ON TRUE
+      ) aa
       WHERE (
         CAST(a.assigned_to AS text) = CAST($1 AS text)
         OR CAST(aa."operator_employeeId" AS text) = CAST($1 AS text)
@@ -116,7 +115,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status: row.status,
         assignedTo: row.assignedTo,
         assignedBy: row.assignedBy,
-        location: row.location,
+        location: (!row.location || String(row.location).trim().toLowerCase() === 'unassigned' || String(row.location).trim().toLowerCase() === 'null') ? 'Office' : String(row.location).trim(),
         purchaseDate: row.purchaseDate,
         warrantyExpiry: row.warrantyExpiry,
         price: row.price,

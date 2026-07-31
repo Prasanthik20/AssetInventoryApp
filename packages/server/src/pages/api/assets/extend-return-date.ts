@@ -35,14 +35,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 2️⃣ Update expected return date in Asset_Assignments
     await query(
       `UPDATE "Asset_Assignments"
-       SET expected_return_date = GREATEST(COALESCE(expected_return_date, CURRENT_DATE), CURRENT_DATE) + ($1 * INTERVAL '1 day')
-       WHERE id = $2 OR (id = (SELECT id FROM "Asset_Assignments" WHERE "assetId" = $3 AND COALESCE(status, '') <> 'returned' ORDER BY id DESC LIMIT 1))`,
+       SET expected_return_date = DATEADD(day, $1, CASE WHEN expected_return_date > CAST(GETDATE() AS DATE) THEN CAST(expected_return_date AS DATE) ELSE CAST(GETDATE() AS DATE) END)
+       WHERE id = $2 OR (id = (SELECT TOP 1 id FROM "Asset_Assignments" WHERE "assetId" = $3 AND COALESCE(status, '') <> 'returned' ORDER BY id DESC))`,
       [daysToExtend, assignmentId, assetId]
     );
 
     // 3️⃣ Update status in Asset_Details (set to 'Assigned')
     const statusRes: any = await query(
-      `SELECT id FROM "Status" WHERE LOWER(status) = 'assigned' LIMIT 1`
+      `SELECT TOP 1 id FROM "Status" WHERE LOWER(status) = 'assigned'`
     );
 
     if (statusRes.rows.length) {
@@ -57,17 +57,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 4️⃣ Create notification for operator/employee confirming the extension
     const extensionMessage = `Asset return date extended by ${daysToExtend} day(s) by manager/supervisor.`;
+
     await query(
       `INSERT INTO "Notifications" 
         ("assignmentId", "assetId", "senderId", "receiverId", "reason", "reply", "status", "created_at", "tenantId")
-        VALUES ($1, $2, $3, $4, $5, $6, 'unread', NOW(), $7)`,
+        VALUES ($1, $2, $3, $4, $5, $6, 'unread', GETDATE(), $7)`,
       [assignmentId, assetId, supervisorId, operatorId, 'Extension Approved', extensionMessage, tenantId]
     );
 
-    // 5️⃣ Mark original notification as resolved
+    // 5️⃣ Mark original notification (and any duplicates for this assignment) as resolved
     await query(
-      `UPDATE "Notifications" SET status = 'resolved' WHERE id = $1`,
-      [notificationId]
+      `UPDATE "Notifications" SET status = 'resolved' WHERE "assignmentId" = $1 AND reason LIKE '%Extension%' AND status != 'resolved'`,
+      [assignmentId]
     );
 
     return res.status(200).json({

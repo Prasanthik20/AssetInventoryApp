@@ -1,7 +1,7 @@
 import type { NextApiResponse } from "next";
 import query from "@/lib/db";
-import bcrypt from "bcrypt";
-import { withAuth, AuthenticatedRequest } from "@/lib/apiHandler";
+import bcrypt from "bcryptjs";
+import { AuthenticatedRequest } from "@/lib/apiHandler";
 import { withSubscriptionLimit, getSubscriptionInfo } from "@/lib/subscription";
 
 async function addUserHandler(
@@ -13,12 +13,11 @@ async function addUserHandler(
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const { fullName, email, password, phoneNumber, address, roleName } =
-    req.body;
+  const { fullName, email, password, phoneNumber, address, roleName } = req.body;
   const { tenantId } = req.user;
 
   if (!fullName || !email || !password || !roleName) {
-    return res.status(400).json({ message: "Missing required fields." });
+    return res.status(400).json({ message: "Missing required fields (fullName, email, password, roleName)." });
   }
 
   if (!tenantId) {
@@ -26,7 +25,17 @@ async function addUserHandler(
   }
 
   try {
-    // Check subscription plan limits for administrators
+    // 1️⃣ Check for existing user email
+    const existingUser = await query(
+      `SELECT "userId" FROM "Users" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
+      [email.trim()]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({ message: "A user with this email address already exists." });
+    }
+
+    // 2️⃣ Check subscription plan limits for administrators
     const subInfo = await getSubscriptionInfo(tenantId);
     const planId = subInfo?.planId || 'free-trial';
 
@@ -51,59 +60,77 @@ async function addUserHandler(
         });
       }
     }
-    // 1️⃣ Get roleId
+
+    // 3️⃣ Get roleId (case-insensitive)
     const roleResult = await query(
-      'SELECT "roleId" FROM "Roles" WHERE "roleName" = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1',
-      [roleName, tenantId]
+      `SELECT "roleId" FROM "Roles" 
+       WHERE LOWER("roleName") = LOWER($1) AND ("tenantId" = $2 OR "tenantId" IS NULL) 
+       ORDER BY "tenantId" DESC LIMIT 1`,
+      [roleName.trim(), tenantId]
     );
 
     if (roleResult.rows.length === 0) {
-      return res.status(400).json({ message: "Invalid role selected." });
+      return res.status(400).json({ message: `Invalid role '${roleName}' selected.` });
     }
 
     const roleId = roleResult.rows[0].roleId;
 
-    // 2️⃣ Hash password using bcrypt
-    const passwordHash = await bcrypt.hash(password, 10); // 10 = salt rounds
+    // 4️⃣ Generate unique userId & employeeId
+    const maxUserRes = await query(`SELECT COALESCE(MAX("userId"), 0) + 1 AS next_id FROM "Users"`, []);
+    const nextUserId = BigInt(maxUserRes.rows[0]?.next_id || 1);
 
-    // 3️⃣ Insert user
+    const maxEmpRes = await query(`SELECT COALESCE(MAX("employeeId"), 0) + 1 AS next_id FROM "Users"`, []);
+    const nextEmpId = BigInt(maxEmpRes.rows[0]?.next_id || 1);
+
+    // 5️⃣ Hash password using bcryptjs
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // 6️⃣ Insert user
     const sql = `
       INSERT INTO "Users" (
-        "fullName", "email", "passwordHash",
-        "phoneNumber", "address", "roleId", "tenantId"
+        "userId", "employeeId", "fullName", "email", "passwordHash",
+        "phoneNumber", "address", "roleId", "tenantId", "status"
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING "userId";
+      OUTPUT INSERTED."userId"
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active');
     `;
 
     const values = [
-      fullName,
-      email,
+      nextUserId,
+      nextEmpId,
+      fullName.trim(),
+      email.trim().toLowerCase(),
       passwordHash,
-      phoneNumber || null,
-      address || null,
+      phoneNumber ? phoneNumber.trim() : null,
+      address ? address.trim() : null,
       roleId,
       tenantId,
     ];
 
     const result = await query(sql, values);
+    const newUserId = result.rows[0]?.userId || result.rows[0]?.id || '1';
 
     return res.status(201).json({
       message: "User created successfully",
-      userId: result.rows[0].userId.toString(),
+      userId: String(newUserId),
     });
   } catch (error: any) {
     console.error("❌ Add User API Error:", error);
 
-    if (error.code === "23505") {
-      return res
-        .status(409)
-        .json({ message: "Email already exists." });
+    const errStr = String(error.message || error);
+    if (
+      error.code === "23505" || 
+      error.number === 2627 || 
+      error.number === 2601 || 
+      errStr.includes("Violation of UNIQUE") || 
+      errStr.includes("duplicate key")
+    ) {
+      return res.status(409).json({ message: "A user with this email address already exists." });
     }
 
-    return res
-      .status(500)
-      .json({ message: "An internal server error occurred." });
+    return res.status(500).json({
+      message: error.message || "An internal server error occurred while creating the user."
+    });
   }
 }
 

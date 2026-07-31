@@ -18,6 +18,7 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { baseURL } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import AppSnackbar from '../../components/common/AppSnackbar';
 
 interface Category {
   id: string;
@@ -36,6 +37,16 @@ interface CustomField {
 
 export default function CustomCategoryBuilder() {
   const navigation = useNavigation<any>();
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    setSnackbar({ visible: true, message, kind });
+  };
+
   const handleGoBack = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
@@ -77,6 +88,7 @@ export default function CustomCategoryBuilder() {
       setCategories(res.data.categories || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
+      showSnackbar('Error fetching categories.', 'error');
     } finally {
       setLoading(false);
     }
@@ -84,7 +96,7 @@ export default function CustomCategoryBuilder() {
 
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) {
-      Alert.alert('Error', 'Category name is required.');
+      showSnackbar('Category name is required.', 'error');
       return;
     }
     try {
@@ -94,9 +106,10 @@ export default function CustomCategoryBuilder() {
       setNewCategoryName('');
       setNewCatModalVisible(false);
       fetchCategories();
+      showSnackbar('Category created successfully.', 'success');
     } catch (error) {
       console.error('Error creating category:', error);
-      Alert.alert('Error', 'Failed to create category.');
+      showSnackbar('Failed to create category.', 'error');
     }
   };
 
@@ -108,6 +121,7 @@ export default function CustomCategoryBuilder() {
       setFields(res.data.fields || []);
     } catch (error) {
       console.error('Error fetching fields:', error);
+      showSnackbar('Error fetching fields.', 'error');
     } finally {
       setFieldsLoading(false);
     }
@@ -116,7 +130,7 @@ export default function CustomCategoryBuilder() {
   const handleAddField = async () => {
     if (!selectedCategory) return;
     if (!newFieldName.trim()) {
-      Alert.alert('Error', 'Field name is required.');
+      showSnackbar('Field name is required.', 'error');
       return;
     }
     try {
@@ -127,9 +141,10 @@ export default function CustomCategoryBuilder() {
       });
       setNewFieldName('');
       fetchFields(selectedCategory);
+      showSnackbar('Custom field added successfully.', 'success');
     } catch (error) {
       console.error('Error adding field:', error);
-      Alert.alert('Error', 'Failed to add custom field.');
+      showSnackbar('Failed to add custom field.', 'error');
     }
   };
 
@@ -301,6 +316,12 @@ export default function CustomCategoryBuilder() {
               </View>
             </View>
           </Modal>
+          <AppSnackbar
+            visible={snackbar.visible}
+            message={snackbar.message}
+            kind={snackbar.kind}
+            onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+          />
         </View>
       </SafeAreaView>
     </ImageBackground>

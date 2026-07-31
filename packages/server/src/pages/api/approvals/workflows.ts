@@ -5,6 +5,10 @@ import { withPermission } from '@/lib/apiHandler';
 async function handler(req: any, res: NextApiResponse) {
   const { tenantId } = req.user;
 
+  if (!tenantId) {
+    return res.status(403).json({ message: 'Tenant context missing.' });
+  }
+
   if (req.method === 'GET') {
     try {
       // 1. Fetch workflows
@@ -20,7 +24,7 @@ async function handler(req: any, res: NextApiResponse) {
       const stepsResult = await query(
         `SELECT aws.id, aws."workflowId", aws."stepSequence", aws."approverRoleId", r."roleName"
          FROM "Approval_Workflow_Steps" aws
-         INNER JOIN "Roles" r ON aws."approverRoleId" = r."roleId"
+         LEFT JOIN "Roles" r ON aws."approverRoleId" = r."roleId"
          INNER JOIN "Approval_Workflows" aw ON aws."workflowId" = aw.id
          WHERE aw."tenantId" = $1
          ORDER BY aws."workflowId" ASC, aws."stepSequence" ASC`,
@@ -30,24 +34,28 @@ async function handler(req: any, res: NextApiResponse) {
       // Group steps by workflowId
       const stepsByWorkflow: Record<string, any[]> = {};
       stepsResult.rows.forEach((row: any) => {
-        if (!stepsByWorkflow[row.workflowId]) {
-          stepsByWorkflow[row.workflowId] = [];
+        const wId = row.workflowId ? String(row.workflowId) : '';
+        if (!stepsByWorkflow[wId]) {
+          stepsByWorkflow[wId] = [];
         }
-        stepsByWorkflow[row.workflowId].push({
-          stepId: row.id.toString(),
-          stepSequence: row.stepSequence,
-          approverRoleId: row.approverRoleId.toString(),
-          approverRoleName: row.roleName
+        stepsByWorkflow[wId].push({
+          stepId: row.id ? String(row.id) : '',
+          stepSequence: Number(row.stepSequence),
+          approverRoleId: row.approverRoleId ? String(row.approverRoleId) : '',
+          approverRoleName: row.roleName || 'Unknown Role'
         });
       });
 
-      const workflows = workflowsResult.rows.map((row: any) => ({
-        workflowId: row.id.toString(),
-        name: row.name,
-        actionType: row.actionType,
-        isActive: row.isActive,
-        steps: stepsByWorkflow[row.id] || []
-      }));
+      const workflows = workflowsResult.rows.map((row: any) => {
+        const idStr = row.id ? String(row.id) : '';
+        return {
+          workflowId: idStr,
+          name: row.name,
+          actionType: row.actionType,
+          isActive: Boolean(row.isActive),
+          steps: stepsByWorkflow[idStr] || []
+        };
+      });
 
       return res.status(200).json({ workflows });
     } catch (error: any) {
@@ -68,17 +76,19 @@ async function handler(req: any, res: NextApiResponse) {
     }
 
     try {
+      await query('BEGIN');
+
       // 1. Create or update the workflow config (UPSERT style based on actionType)
       const existingCheck = await query(
-        `SELECT id FROM "Approval_Workflows" 
-         WHERE "tenantId" = $1 AND "actionType" = $2 LIMIT 1`,
+        `SELECT TOP 1 id FROM "Approval_Workflows" 
+         WHERE "tenantId" = $1 AND "actionType" = $2`,
         [tenantId, actionType]
       );
 
       let workflowId: bigint;
 
       if (existingCheck.rows.length > 0) {
-        workflowId = existingCheck.rows[0].id;
+        workflowId = BigInt(existingCheck.rows[0].id.toString());
         await query(
           `UPDATE "Approval_Workflows"
            SET name = $1, "isActive" = $2
@@ -86,13 +96,20 @@ async function handler(req: any, res: NextApiResponse) {
           [name, isActive !== false, workflowId]
         );
       } else {
+        const maxWfRes = await query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "Approval_Workflows"`, []);
+        const nextWorkflowId = BigInt(maxWfRes.rows[0]?.next_id || 1);
+
         const insertResult = await query(
-          `INSERT INTO "Approval_Workflows" ("tenantId", name, "actionType", "isActive")
-           VALUES ($1, $2, $3, $4)
-           RETURNING id`,
-          [tenantId, name, actionType, isActive !== false]
+          `INSERT INTO "Approval_Workflows" (id, "tenantId", name, "actionType", "isActive")
+           OUTPUT INSERTED.id
+           VALUES ($1, $2, $3, $4, $5)`,
+          [nextWorkflowId, tenantId, name, actionType, isActive !== false]
         );
-        workflowId = insertResult.rows[0].id;
+        if (!insertResult.rows.length) {
+          workflowId = nextWorkflowId;
+        } else {
+          workflowId = BigInt(insertResult.rows[0].id.toString());
+        }
       }
 
       // 2. Refresh workflow steps (Delete and Reinsert)
@@ -112,12 +129,17 @@ async function handler(req: any, res: NextApiResponse) {
           throw new Error(`approverRoleId is required for step ${i + 1}`);
         }
 
+        const maxStepRes = await query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "Approval_Workflow_Steps"`, []);
+        const nextStepId = BigInt(maxStepRes.rows[0]?.next_id || 1);
+
         await query(
-          `INSERT INTO "Approval_Workflow_Steps" ("workflowId", "stepSequence", "approverRoleId")
-           VALUES ($1, $2, $3)`,
-          [workflowId, stepSequence, approverRoleId]
+          `INSERT INTO "Approval_Workflow_Steps" (id, "workflowId", "stepSequence", "approverRoleId")
+           VALUES ($1, $2, $3, $4)`,
+          [nextStepId, workflowId, parseInt(String(stepSequence), 10), BigInt(String(approverRoleId))]
         );
       }
+
+      await query('COMMIT');
 
       return res.status(200).json({
         message: 'Workflow configuration updated successfully',
@@ -125,6 +147,7 @@ async function handler(req: any, res: NextApiResponse) {
       });
 
     } catch (error: any) {
+      try { await query('ROLLBACK'); } catch (_) {}
       console.error('Save workflow error:', error);
       return res.status(500).json({ message: error.message || 'Internal server error' });
     }

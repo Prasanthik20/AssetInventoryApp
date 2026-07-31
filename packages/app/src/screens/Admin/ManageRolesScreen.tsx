@@ -18,6 +18,7 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { baseURL } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import AppSnackbar from '../../components/common/AppSnackbar';
 
 interface Permission {
   id: number;
@@ -48,6 +49,16 @@ export default function ManageRolesScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  }>({ visible: false, message: '', kind: 'info' });
+
+  const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+    setSnackbar({ visible: true, message, kind });
+  };
+
   useEffect(() => {
     fetchRolesAndPermissions();
   }, []);
@@ -65,7 +76,7 @@ export default function ManageRolesScreen() {
       }
     } catch (error: any) {
       console.error('Fetch roles screen error:', error);
-      Alert.alert('Error', 'Failed to fetch roles list.');
+      showSnackbar('Failed to fetch roles list.', 'error');
     } finally {
       setLoading(false);
     }
@@ -81,7 +92,7 @@ export default function ManageRolesScreen() {
 
   const handleOpenEdit = (role: Role) => {
     if (role.isSystem) {
-      Alert.alert('System Role', 'System-default roles are read-only to ensure baseline application logic.');
+      showSnackbar('System-default roles are read-only to ensure baseline application logic.', 'info');
       return;
     }
     setSelectedRole(role);
@@ -98,8 +109,9 @@ export default function ManageRolesScreen() {
   };
 
   const handleSaveRole = async () => {
+    if (actionLoading) return;
     if (!newRoleName.trim()) {
-      Alert.alert('Validation Error', 'Role Name is required.');
+      showSnackbar('Role Name is required.', 'error');
       return;
     }
 
@@ -115,7 +127,7 @@ export default function ManageRolesScreen() {
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        Alert.alert('Success', 'Role updated successfully.');
+        showSnackbar('Role updated successfully.', 'success');
       } else {
         await axios.post(`${baseURL}/api/approvals/roles`, {
           roleName: newRoleName.trim(),
@@ -123,15 +135,30 @@ export default function ManageRolesScreen() {
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        Alert.alert('Success', 'Role created successfully.');
+        showSnackbar('Role created successfully.', 'success');
       }
       setRoleModalVisible(false);
       fetchRolesAndPermissions();
     } catch (error: any) {
       console.error('Save role error:', error?.response?.data || error);
-      Alert.alert('Error', error?.response?.data?.message || 'Failed to save role configuration.');
+      showSnackbar(error?.response?.data?.message || 'Failed to save role configuration.', 'error');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleDeleteRole = async (role: Role) => {
+    if (role.isSystem) return;
+    try {
+      const token = await AsyncStorage.getItem('token');
+      await axios.delete(`${baseURL}/api/approvals/roles?roleId=${role.roleId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showSnackbar('Role deleted successfully.', 'success');
+      fetchRolesAndPermissions();
+    } catch (error: any) {
+      console.error('Delete role error:', error?.response?.data || error);
+      showSnackbar(error?.response?.data?.message || 'Failed to delete role.', 'error');
     }
   };
 
@@ -182,9 +209,14 @@ export default function ManageRolesScreen() {
                   </Text>
                 </View>
                 {!item.isSystem && (
-                  <TouchableOpacity onPress={() => handleOpenEdit(item)} style={styles.editIcon}>
-                    <Ionicons name="create-outline" size={20} color="#22D3EE" />
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                    <TouchableOpacity onPress={() => handleOpenEdit(item)} style={styles.editIcon}>
+                      <Ionicons name="create-outline" size={20} color="#22D3EE" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDeleteRole(item)} style={styles.editIcon}>
+                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
               <Text style={styles.sectionSubTitle}>Assigned Permissions:</Text>
@@ -266,6 +298,13 @@ export default function ManageRolesScreen() {
           </View>
         </View>
       </Modal>
+
+      <AppSnackbar
+        visible={snackbar.visible}
+        message={snackbar.message}
+        kind={snackbar.kind}
+        onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

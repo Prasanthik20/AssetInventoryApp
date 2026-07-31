@@ -9,11 +9,22 @@ import { useNavigation } from "@react-navigation/native";
 import axios from 'axios';
 import { baseURL } from '../../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import AppSnackbar from '../../components/common/AppSnackbar';
 
 
 const AddCompanyUser: React.FC = () => {
     const navigation = useNavigation<any>();
     const isWeb = Platform.OS === 'web';
+
+    const [snackbar, setSnackbar] = useState<{
+        visible: boolean;
+        message: string;
+        kind: 'success' | 'error' | 'info';
+    }>({ visible: false, message: '', kind: 'info' });
+
+    const showSnackbar = (message: string, kind: 'success' | 'error' | 'info' = 'info') => {
+        setSnackbar({ visible: true, message, kind });
+    };
 
     const handleGoBack = () => {
         if (navigation.canGoBack()) {
@@ -42,16 +53,19 @@ const AddCompanyUser: React.FC = () => {
                 const response = await axios.get(`${baseURL}/api/approvals/roles`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                if (response.data && response.data.roles) {
-                    setRolesList(response.data.roles);
-                    setRole(response.data.roles[0].roleName);
-                    // Default to 'Supervisor' if found, otherwise first role
-                    // const supervisorRole = response.data.roles.find((r: any) => r.roleName === 'Supervisor');
-                    // if (supervisorRole) {
-                    // setRole(supervisorRole.roleName);
-                    // } else if (response.data.roles.length > 0) {
-                    // setRole(response.data.roles[0].roleName);
-                    // }
+                if (response.data && Array.isArray(response.data.roles)) {
+                    const uniqueMap = new Map();
+                    response.data.roles.forEach((r: any) => {
+                        const name = String(r.roleName || '').trim();
+                        if (name && !uniqueMap.has(name.toLowerCase())) {
+                            uniqueMap.set(name.toLowerCase(), r);
+                        }
+                    });
+                    const cleanedList: any[] = Array.from(uniqueMap.values());
+                    setRolesList(cleanedList);
+                    if (cleanedList.length > 0) {
+                        setRole(cleanedList[0].roleName);
+                    }
                 }
             } catch (error) {
                 console.error("Fetch roles error in AddCompanyUser:", error);
@@ -99,15 +113,17 @@ const AddCompanyUser: React.FC = () => {
             );
 
             if (response.status === 201) {
-                alert("User Added Successfully");
-                handleGoBack();
+                showSnackbar("User Added Successfully", "success");
+                setTimeout(() => {
+                    handleGoBack();
+                }, 1200);
             }
         } catch (error: any) { // ': any' fixes the 'unknown' type error
             console.error("Axios add-user error:", error.response?.status, error.response?.data);
 
             // If it's still 404, the file isn't where we think it is on the server
             const errorMessage = error.response?.data?.message || "Error: " + error.response?.status;
-            alert(errorMessage);
+            showSnackbar(errorMessage, "error");
         } finally {
             setLoading(false);
         }
@@ -231,6 +247,12 @@ const AddCompanyUser: React.FC = () => {
                         </View>
                     </ScrollView>
                 </View>
+                <AppSnackbar
+                    visible={snackbar.visible}
+                    message={snackbar.message}
+                    kind={snackbar.kind}
+                    onClose={() => setSnackbar((prev) => ({ ...prev, visible: false }))}
+                />
             </SafeAreaView>
         </ImageBackground>
     );

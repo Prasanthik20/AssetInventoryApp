@@ -194,6 +194,8 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
             const normalizedAssets = rawAssets.map((a: any) => ({
                 ...a,
                 assignedBy: a.assignedBy || a.assigned_by || a.senderId,
+                assignedById: a.assignedById || a.assigned_by || a.senderId,
+                assignedTo: a.assignedTo || a.assigned_to || a.receiverId,
                 assetId: a.assetId || a.id,
                 serialNumber: a.serialNumber || a.serialNo || a.s_n || a.serial_number,
             }));
@@ -331,7 +333,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
             selectedAsset ||
             myAssets.find(a => a.assetName === modalConfig.assetName);
 
-        if (!asset || (!asset.assignedBy && !asset.assigned_by)) {
+        if (!asset || (!asset.assignedById && !asset.assignedBy && !asset.assigned_by)) {
             console.error('Missing Supervisor ID. Asset data:', asset);
             console.error('Critical: No asset context found for submission');
             showSnackbar('Could not identify which asset to update.', 'error');
@@ -343,7 +345,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                 assetId: asset.assetId,
                 assignmentId: asset.assignmentId || null,
                 operatorId: Number(user?.employeeId),
-                supervisorId: asset.assignedBy || asset.assigned_by,
+                supervisorId: asset.assignedById || asset.assignedBy || asset.assigned_by,
                 reason: reason,
             };
             console.log('DEBUG PAYLOAD:', payload);
@@ -422,6 +424,40 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
         } catch (error: any) {
             console.error('Reply Error:', error.response?.data || error.message);
             showSnackbar('Could not send reply. Check server logs.', 'error');
+        }
+    };
+
+    const handleWorkflowAction = async (item: any, action: 'approve' | 'reject') => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const notifId = Number(item.id || item.notificationId);
+            let requestId = notifId;
+            if (item.reply) {
+                try {
+                    const parsed = JSON.parse(item.reply);
+                    if (parsed.requestId) requestId = Number(parsed.requestId);
+                } catch { }
+            }
+
+            const response = await axios.post(
+                `${baseURL}/api/approvals/action`,
+                {
+                    requestId,
+                    notificationId: notifId,
+                    action,
+                    notes: action === 'approve' ? 'Accepted by Assignee' : 'Rejected by Assignee'
+                },
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            showSnackbar(response.data.message || (action === 'approve' ? 'Asset assignment accepted!' : 'Asset assignment rejected.'), 'success');
+            setNotifications((prev) => prev.filter((n) => Number(n.id) !== notifId));
+            fetchOperatorData();
+        } catch (error: any) {
+            console.error('Operator workflow action error:', error?.response?.data || error);
+            showSnackbar(error?.response?.data?.message || 'Failed to process assignment action.', 'error');
         }
     };
 
@@ -517,14 +553,14 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                 <DashboardHeader
                     companyName={user?.operatorName || user?.fullName || 'Employee Portal'}
                     userName={user?.fullName || 'Employee'}
-                    userRole="Employee / User"
+                    userRole={user?.roleName || user?.role || 'Operator'}
                     onLogout={handleLogout}
                     activities={notifications.map((n: any) => ({
-                      id: n.id,
-                      title: n.reason || 'Notification',
-                      subtitle: n.reply || undefined,
-                      time: n.created_at ? new Date(n.created_at).toLocaleTimeString() : undefined,
-                      rawItem: n,
+                        id: n.id,
+                        title: n.reason || 'Notification',
+                        subtitle: n.reply || undefined,
+                        time: n.created_at ? new Date(n.created_at).toLocaleTimeString() : undefined,
+                        rawItem: n,
                     }))}
                 />
 
@@ -579,431 +615,252 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                             ]}
                         />
                     </View>
+                    <View
+                        style={[
+                            styles.dashboardTwoColumnRow,
+                            !isMobileLayout && styles.dashboardTwoColumnRowWeb,
+                        ]}
+                    >
+                        {/* ASSETS */}
                         <View
                             style={[
-                                styles.dashboardTwoColumnRow,
-                                !isMobileLayout && styles.dashboardTwoColumnRowWeb,
+                                styles.assetsSection,
+                                styles.dashboardColumn,
+                                !isMobileLayout && styles.dashboardColumnWeb,
                             ]}
                         >
-                            {/* ASSETS */}
-                            <View
-                                style={[
-                                    styles.assetsSection,
-                                    styles.dashboardColumn,
-                                    !isMobileLayout && styles.dashboardColumnWeb,
-                                ]}
-                            >
-                                <View style={styles.notificationsHeaderRow}>
-                                    <Text style={styles.sectionTitle}>My Assets</Text>
-                                    <TouchableOpacity
-                                        onPress={() =>
-                                            navigation.navigate('ReturnAsset', {
-                                                assets: activeAssets,
-                                                operatorEmployeeId: user?.employeeId,
-                                            })
-                                        }
+                            <View style={styles.notificationsHeaderRow}>
+                                <Text style={styles.sectionTitle}>My Assets</Text>
+                                <TouchableOpacity
+                                    onPress={() =>
+                                        navigation.navigate('ReturnAsset', {
+                                            assets: activeAssets,
+                                            operatorEmployeeId: user?.employeeId,
+                                        })
+                                    }
+                                >
+                                    <LinearGradient
+                                        colors={['#0EA5E9', '#0F766E']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.returnButtonCompact}
                                     >
-                                        <LinearGradient
-                                            colors={['#0EA5E9', '#0F766E']}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={styles.returnButtonCompact}
-                                        >
-                                            <Text style={styles.returnButtonCompactText}>
-                                                RETURN ASSET
-                                            </Text>
-                                        </LinearGradient>
-                                    </TouchableOpacity>
-                                </View>
-                                {activeAssets.length === 0 ? (
-                                    <Text style={{ color: '#A9C6E4', marginTop: 10 }}>
-                                        No assets assigned.
-                                    </Text>
-                                ) : (
-                                    visibleMyAssets.map((asset, index) => {
-                                        const updatedReturnDate = getUpdatedReturnDate(
-                                            asset.assetId,
-                                        );
-                                        const rawDate =
-                                            updatedReturnDate || asset.expectedReturnDate;
+                                        <Text style={styles.returnButtonCompactText}>
+                                            RETURN ASSET
+                                        </Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </View>
+                            {activeAssets.length === 0 ? (
+                                <Text style={{ color: '#A9C6E4', marginTop: 10 }}>
+                                    No assets assigned.
+                                </Text>
+                            ) : (
+                                visibleMyAssets.map((asset, index) => {
+                                    const updatedReturnDate = getUpdatedReturnDate(
+                                        asset.assetId,
+                                    );
+                                    const rawDate =
+                                        updatedReturnDate || asset.expectedReturnDate;
 
-                                        // 🔥 IST Consistent Formatting
-                                        const formattedDate = rawDate
-                                            ? new Date(rawDate).toLocaleDateString('en-IN', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: 'numeric',
-                                                timeZone: 'Asia/Kolkata',
-                                            })
-                                            : 'No due date';
-                                        const isOverdue = rawDate && isAssetOverdue(rawDate);
-                                        const isExtended = Boolean(updatedReturnDate);
+                                    // 🔥 IST Consistent Formatting
+                                    const formattedDate = rawDate
+                                        ? new Date(rawDate).toLocaleDateString('en-IN', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            timeZone: 'Asia/Kolkata',
+                                        })
+                                        : 'No due date';
+                                    const isOverdue = rawDate && isAssetOverdue(rawDate);
+                                    const isExtended = Boolean(updatedReturnDate);
 
-                                        return (
-                                            <View style={styles.assetItem} key={index}>
-                                                <View style={styles.assetIconBg}>
-                                                    <Ionicons
-                                                        name="cube-outline"
-                                                        size={20}
-                                                        color="#22D3EE"
-                                                    />
-                                                </View>
+                                    return (
+                                        <View style={styles.assetItem} key={index}>
+                                            <View style={styles.assetIconBg}>
+                                                <Ionicons
+                                                    name="cube-outline"
+                                                    size={20}
+                                                    color="#22D3EE"
+                                                />
+                                            </View>
 
-                                                <View style={styles.assetNameContainer}>
-                                                    <Text style={styles.assetName}>
-                                                        {asset.assetName}
+                                            <View style={styles.assetNameContainer}>
+                                                <Text style={styles.assetName}>
+                                                    {asset.assetName}
+                                                </Text>
+                                                <Text
+                                                    style={{
+                                                        fontSize: 11,
+                                                        color: '#A9C6E4',
+                                                        marginTop: 2,
+                                                        fontStyle: 'italic',
+                                                    }}
+                                                >
+                                                    Read-only details
+                                                </Text>
+
+                                                {/* 👇 Displaying Serial Number and Barcode */}
+                                                <View style={{ flexDirection: 'row', marginTop: 2 }}>
+                                                    <Text
+                                                        style={{
+                                                            fontSize: 12,
+                                                            color: '#A9C6E4',
+                                                            fontWeight: '500',
+                                                        }}
+                                                    >
+                                                        S/N:{' '}
+                                                        <Text style={{ color: '#E6F3FF' }}>
+                                                            {asset.serialNo || 'N/A'}
+                                                        </Text>
                                                     </Text>
                                                     <Text
                                                         style={{
-                                                            fontSize: 11,
+                                                            fontSize: 12,
                                                             color: '#A9C6E4',
-                                                            marginTop: 2,
-                                                            fontStyle: 'italic',
+                                                            marginLeft: 10,
+                                                            fontWeight: '500',
                                                         }}
                                                     >
-                                                        Read-only details
-                                                    </Text>
-
-                                                    {/* 👇 Displaying Serial Number and Barcode */}
-                                                    <View style={{ flexDirection: 'row', marginTop: 2 }}>
-                                                        <Text
-                                                            style={{
-                                                                fontSize: 12,
-                                                                color: '#A9C6E4',
-                                                                fontWeight: '500',
-                                                            }}
-                                                        >
-                                                            S/N:{' '}
-                                                            <Text style={{ color: '#E6F3FF' }}>
-                                                                {asset.serialNo || 'N/A'}
-                                                            </Text>
+                                                        Barcode:{' '}
+                                                        <Text style={{ color: '#E6F3FF' }}>
+                                                            {asset.barcode}
                                                         </Text>
-                                                        <Text
-                                                            style={{
-                                                                fontSize: 12,
-                                                                color: '#A9C6E4',
-                                                                marginLeft: 10,
-                                                                fontWeight: '500',
-                                                            }}
-                                                        >
-                                                            Barcode:{' '}
-                                                            <Text style={{ color: '#E6F3FF' }}>
-                                                                {asset.barcode}
-                                                            </Text>
-                                                        </Text>
-                                                    </View>
-                                                    <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
-                                                        Location: <Text style={{ color: '#E6F3FF' }}>{asset.location || 'N/A'}</Text>
-                                                    </Text>
-                                                    <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
-                                                        Assigned By: <Text style={{ color: '#E6F3FF' }}>{asset.assignedBy || 'N/A'}</Text>
                                                     </Text>
                                                 </View>
-                                                <View style={styles.dueDateContainer}>
-                                                    <Text
-                                                        style={[
-                                                            styles.assetDueDate,
-                                                            isOverdue
-                                                                ? { color: '#F97373', fontWeight: 'bold' }
-                                                                : isExtended
-                                                                    ? { color: '#34D399', fontWeight: 'bold' }
-                                                                    : {},
-                                                        ]}
-                                                    >
-                                                        {isOverdue
-                                                            ? 'OVERDUE'
+                                                <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
+                                                    Location: <Text style={{ color: '#E6F3FF' }}>{asset.location || 'N/A'}</Text>
+                                                </Text>
+                                                <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
+                                                    Assigned By: <Text style={{ color: '#E6F3FF' }}>{asset.assignedBy || 'N/A'}</Text>
+                                                </Text>
+                                                <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
+                                                    Assigned To: <Text style={{ color: '#E6F3FF' }}>{asset.assignedTo || 'N/A'}</Text>
+                                                </Text>
+                                            </View>
+                                            <View style={styles.dueDateContainer}>
+                                                <Text
+                                                    style={[
+                                                        styles.assetDueDate,
+                                                        isOverdue
+                                                            ? { color: '#F97373', fontWeight: 'bold' }
                                                             : isExtended
-                                                                ? `Extended: ${formattedDate}`
-                                                                : formattedDate}
-                                                    </Text>
+                                                                ? { color: '#34D399', fontWeight: 'bold' }
+                                                                : {},
+                                                    ]}
+                                                >
+                                                    Due Date:&nbsp;
+                                                    {isOverdue
+                                                        ? 'OVERDUE'
+                                                        : isExtended
+                                                            ? `Extended: ${formattedDate}`
+                                                            : formattedDate}
+                                                </Text>
 
-                                                    {/* Only show "Update" if it's overdue AND hasn't been extended yet today */}
-                                                    {isOverdue && !isExtended && (
-                                                        <TouchableOpacity
-                                                            style={styles.notifyButton}
-                                                            onPress={() => {
-                                                                handleOpenModal({
-                                                                    title: 'Extension Request',
-                                                                    assetName: asset.assetName,
-                                                                    onSubmit: reason =>
-                                                                        handleOverdueSubmit(reason, asset),
-                                                                });
-                                                            }}
-                                                        >
-                                                            <Text style={styles.notifyButtonText}>
-                                                                Update
-                                                            </Text>
-                                                        </TouchableOpacity>
-                                                    )}
-                                                </View>
+                                                {/* Only show "Update" if it's overdue AND hasn't been extended yet today */}
+                                                {isOverdue && !isExtended && (
+                                                    <TouchableOpacity
+                                                        style={styles.notifyButton}
+                                                        onPress={() => {
+                                                            handleOpenModal({
+                                                                title: 'Extension Request',
+                                                                assetName: asset.assetName,
+                                                                onSubmit: reason =>
+                                                                    handleOverdueSubmit(reason, asset),
+                                                            });
+                                                        }}
+                                                    >
+                                                        <Text style={styles.notifyButtonText}>
+                                                            Update
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                )}
                                             </View>
-                                        );
-                                    })
-                                )}
+                                        </View>
+                                    );
+                                })
+                            )}
 
-                                {activeAssets.length > 5 && (
-                                    <TouchableOpacity
-                                        style={styles.showMoreButton}
-                                        onPress={() => setShowAllAssets(prev => !prev)}
-                                    >
-                                        <Text style={styles.showMoreText}>
-                                            {showAllAssets
-                                                ? 'Show Less'
-                                                : `Show More (${activeAssets.length - 5} more)`}
-                                        </Text>
-                                    </TouchableOpacity>
-                                )}
+                            {activeAssets.length > 5 && (
+                                <TouchableOpacity
+                                    style={styles.showMoreButton}
+                                    onPress={() => setShowAllAssets(prev => !prev)}
+                                >
+                                    <Text style={styles.showMoreText}>
+                                        {showAllAssets
+                                            ? 'Show Less'
+                                            : `Show More (${activeAssets.length - 5} more)`}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
 
-                                <Text style={[styles.subSectionTitle, { marginTop: 14 }]}>Returned History</Text>
-                                {returnedAssets.length === 0 ? (
-                                    <Text style={styles.noItemsText}>No returned assets yet.</Text>
-                                ) : (
-                                    visibleReturnedAssets.map((asset, index) => {
-                                        const returnedOn = asset.returnedDate
-                                            ? new Date(asset.returnedDate).toLocaleDateString('en-IN', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: 'numeric',
-                                                timeZone: 'Asia/Kolkata',
-                                            })
-                                            : 'N/A';
+                            <Text style={[styles.subSectionTitle, { marginTop: 14 }]}>Returned History</Text>
+                            {returnedAssets.length === 0 ? (
+                                <Text style={styles.noItemsText}>No returned assets yet.</Text>
+                            ) : (
+                                visibleReturnedAssets.map((asset, index) => {
+                                    const returnedOn = asset.returnedDate
+                                        ? new Date(asset.returnedDate).toLocaleDateString('en-IN', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            timeZone: 'Asia/Kolkata',
+                                        })
+                                        : 'N/A';
 
-                                        return (
-                                            <View style={styles.assetItem} key={`returned-${asset.assignmentId || index}`}>
-                                                <View style={styles.assetIconBg}>
-                                                    <Ionicons name="checkmark-done-circle-outline" size={20} color="#34D399" />
-                                                </View>
-                                                <View style={styles.assetNameContainer}>
-                                                    <Text style={styles.assetName}>{asset.assetName}</Text>
-                                                    <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
-                                                        Returned On: <Text style={{ color: '#E6F3FF' }}>{returnedOn}</Text>
-                                                    </Text>
-                                                    <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
-                                                        Status: <Text style={{ color: '#34D399', fontWeight: '700' }}>{asset.status || 'Returned'}</Text>
-                                                    </Text>
-                                                </View>
+                                    return (
+                                        <View style={styles.assetItem} key={`returned-${asset.assignmentId || index}`}>
+                                            <View style={styles.assetIconBg}>
+                                                <Ionicons name="checkmark-done-circle-outline" size={20} color="#34D399" />
                                             </View>
-                                        );
-                                    })
-                                )}
+                                            <View style={styles.assetNameContainer}>
+                                                <Text style={styles.assetName}>{asset.assetName}</Text>
+                                                <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
+                                                    Returned On: <Text style={{ color: '#E6F3FF' }}>{returnedOn}</Text>
+                                                </Text>
+                                                <Text style={{ fontSize: 12, color: '#A9C6E4', marginTop: 2 }}>
+                                                    Status: <Text style={{ color: '#34D399', fontWeight: '700' }}>{asset.status || 'Returned'}</Text>
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    );
+                                })
+                            )}
 
-                                {returnedAssets.length > 5 && (
-                                    <TouchableOpacity
-                                        style={styles.showMoreButton}
-                                        onPress={() => setShowAllReturnedAssets(prev => !prev)}
-                                    >
-                                        <Text style={styles.showMoreText}>
-                                            {showAllReturnedAssets
-                                                ? 'Show Less'
-                                                : `Show More (${returnedAssets.length - 5} more)`}
-                                        </Text>
-                                    </TouchableOpacity>
-                                )}
+                            {returnedAssets.length > 5 && (
+                                <TouchableOpacity
+                                    style={styles.showMoreButton}
+                                    onPress={() => setShowAllReturnedAssets(prev => !prev)}
+                                >
+                                    <Text style={styles.showMoreText}>
+                                        {showAllReturnedAssets
+                                            ? 'Show Less'
+                                            : `Show More (${returnedAssets.length - 5} more)`}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* NOTIFICATIONS */}
+                        <View
+                            style={[
+                                styles.assetsSection,
+                                styles.dashboardColumn,
+                                !isMobileLayout && styles.dashboardColumnWeb,
+                            ]}
+                        >
+                            <View style={styles.notificationsHeaderRow}>
+                                <Text style={styles.sectionTitle}>Notifications</Text>
+                                {/* <Text style={styles.subSectionTitle}>Reply To Supervisor</Text> */}
                             </View>
-
-                            {/* NOTIFICATIONS */}
                             <View
                                 style={[
-                                    styles.assetsSection,
-                                    styles.dashboardColumn,
-                                    !isMobileLayout && styles.dashboardColumnWeb,
+                                    styles.replyRowContainer,
+                                    !isMobileLayout && styles.replyRowContainerWeb,
                                 ]}
                             >
-                                <View style={styles.notificationsHeaderRow}>
-                                    <Text style={styles.sectionTitle}>Notifications</Text>
-                                    {/* <Text style={styles.subSectionTitle}>Reply To Supervisor</Text> */}
-                                </View>
-                                <View
-                                    style={[
-                                        styles.replyRowContainer,
-                                        !isMobileLayout && styles.replyRowContainerWeb,
-                                    ]}
-                                >
-                                    {pendingReplyNotifications.length === 0 ? (
-                                        <Text style={styles.noItemsText}>No pending replies.</Text>
-                                    ) : (
-                                        <ScrollView
-                                            style={styles.notificationsInnerScroll}
-                                            contentContainerStyle={styles.notificationsInnerScrollContent}
-                                            nestedScrollEnabled
-                                            showsVerticalScrollIndicator
-                                        >
-                                            {visiblePendingNotifications.map(item => {
-                                                const isFromSupervisor =
-                                                    Number(item.sender.employeeId) !==
-                                                    Number(user?.employeeId);
-                                                const isResolved = item.status === 'resolved';
-                                                const hasReplied = !!item.reply && item.reply.length > 0;
-                                                const isConfirmed = ['received', 'confirmed'].includes(
-                                                    String(item.status || '').toLowerCase(),
-                                                );
-
-                                                return (
-                                                    <View
-                                                        key={item.id.toString()}
-                                                        style={[
-                                                            styles.notificationItem,
-                                                            !isMobileLayout && styles.replyRowItemWeb,
-                                                            isFromSupervisor
-                                                                ? {
-                                                                    backgroundColor: 'rgba(14, 165, 233, 0.14)',
-                                                                    borderColor: 'rgba(34, 211, 238, 0.35)',
-                                                                    borderWidth: 1,
-                                                                }
-                                                                : {},
-                                                            isResolved && {
-                                                                opacity: 0.5,
-                                                                backgroundColor: 'rgba(18, 45, 73, 0.7)',
-                                                            },
-                                                        ]}
-                                                    >
-                                                        <Ionicons
-                                                            name={
-                                                                isResolved
-                                                                    ? 'checkmark-done-circle'
-                                                                    : isFromSupervisor
-                                                                        ? 'checkmark-circle-outline'
-                                                                        : 'notifications-outline'
-                                                            }
-                                                            size={24}
-                                                            color={
-                                                                isResolved
-                                                                    ? '#999'
-                                                                    : isFromSupervisor
-                                                                        ? '#22D3EE'
-                                                                        : '#22D3EE'
-                                                            }
-                                                        />
-
-                                                        <View style={styles.notificationContent}>
-                                                            <Text
-                                                                style={[
-                                                                    styles.notificationReason,
-                                                                    {
-                                                                        color: isResolved ? '#6b7280' : '#A9C6E4',
-                                                                        textTransform: 'capitalize',
-                                                                    },
-                                                                ]}
-                                                            >
-                                                                Status: {item.status || 'unread'}
-                                                            </Text>
-                                                            <Text
-                                                                style={[
-                                                                    styles.notificationText,
-                                                                    isResolved && { color: '#999' },
-                                                                ]}
-                                                            >
-                                                                {isFromSupervisor ? (
-                                                                    <Text
-                                                                        style={{
-                                                                            color: '#22D3EE',
-                                                                            fontWeight: 'bold',
-                                                                        }}
-                                                                    >
-                                                                        Update from Supervisor:
-                                                                    </Text>
-                                                                ) : (
-                                                                    <Text>
-                                                                        Your Request for{' '}
-                                                                        <Text style={{ fontWeight: 'bold' }}>
-                                                                            {item.asset.name}
-                                                                        </Text>
-                                                                        :
-                                                                    </Text>
-                                                                )}
-                                                            </Text>
-                                                            <Text
-                                                                style={[
-                                                                    styles.notificationReason,
-                                                                    isResolved && {
-                                                                        color: '#999',
-                                                                        fontStyle: 'italic',
-                                                                    },
-                                                                ]}
-                                                            >
-                                                                "{item.reason}"
-                                                            </Text>
-
-                                                            {hasReplied && (
-                                                                <>
-                                                                    <Text style={styles.repliedText}>
-                                                                        <Text style={{ fontWeight: 'bold' }}>
-                                                                            Message:{' '}
-                                                                        </Text>
-                                                                        "{parseReplyPayload(item.reply).message}"
-                                                                    </Text>
-                                                                    {parseReplyPayload(item.reply).proofPhotos.length > 0 && (
-                                                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
-                                                                            {parseReplyPayload(item.reply).proofPhotos.map((uri, idx) => (
-                                                                                <Image
-                                                                                    key={`pending-proof-${item.id}-${idx}`}
-                                                                                    source={{ uri }}
-                                                                                    style={{ width: 56, height: 56, borderRadius: 8, marginRight: 8 }}
-                                                                                />
-                                                                            ))}
-                                                                        </ScrollView>
-                                                                    )}
-                                                                </>
-                                                            )}
-                                                        </View>
-
-                                                        {isFromSupervisor && !hasReplied && !isResolved && !isConfirmed && (
-                                                            <TouchableOpacity
-                                                                style={styles.replyButton}
-                                                                onPress={() =>
-                                                                    handleOpenModal({
-                                                                        title: isAssignmentNotification(item)
-                                                                            ? 'Confirm Asset Receipt'
-                                                                            : 'Reply to Supervisor',
-                                                                        assetName: item.asset.name,
-                                                                        requireProofImages: isAssignmentNotification(item),
-                                                                        onSubmit: (replyMessage, proofImages) =>
-                                                                            handleReplySubmit(replyMessage, item, proofImages),
-                                                                    })
-                                                                }
-                                                            >
-                                                                <Text style={styles.replyButtonText}>
-                                                                    {isAssignmentNotification(item) ? 'Confirm' : 'Reply'}
-                                                                </Text>
-                                                            </TouchableOpacity>
-                                                        )}
-
-                                                        <TouchableOpacity
-                                                            style={styles.replyButton}
-                                                            onPress={() => hideNotification(item.id)}
-                                                        >
-                                                            <Text style={styles.replyButtonText}>Mark as Read</Text>
-                                                        </TouchableOpacity>
-                                                    </View>
-                                                );
-                                            })}
-                                        </ScrollView>
-                                    )}
-                                </View>
-
-                                {pendingReplyNotifications.length > 5 && (
-                                    <TouchableOpacity
-                                        style={styles.showMoreButton}
-                                        onPress={() =>
-                                            setShowAllPendingNotifications(prev => !prev)
-                                        }
-                                    >
-                                        <Text style={styles.showMoreText}>
-                                            {showAllPendingNotifications
-                                                ? 'Show Less'
-                                                : `Show More (${pendingReplyNotifications.length - 5
-                                                } more)`}
-                                        </Text>
-                                    </TouchableOpacity>
-                                )}
-
-                                <Text style={[styles.subSectionTitle, { marginTop: 16 }]}>
-                                    History
-                                </Text>
-                                {historyNotifications.length === 0 ? (
-                                    <Text style={styles.noItemsText}>
-                                        No history notifications.
-                                    </Text>
+                                {pendingReplyNotifications.length === 0 ? (
+                                    <Text style={styles.noItemsText}>No pending replies.</Text>
                                 ) : (
                                     <ScrollView
                                         style={styles.notificationsInnerScroll}
@@ -1011,27 +868,31 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                                         nestedScrollEnabled
                                         showsVerticalScrollIndicator
                                     >
-                                        {visibleHistoryNotifications.map(item => {
+                                        {visiblePendingNotifications.map(item => {
                                             const isFromSupervisor =
                                                 Number(item.sender.employeeId) !==
                                                 Number(user?.employeeId);
                                             const isResolved = item.status === 'resolved';
                                             const hasReplied = !!item.reply && item.reply.length > 0;
+                                            const isConfirmed = ['received', 'confirmed'].includes(
+                                                String(item.status || '').toLowerCase(),
+                                            );
 
                                             return (
                                                 <View
-                                                    key={`history-${item.id.toString()}`}
+                                                    key={item.id.toString()}
                                                     style={[
                                                         styles.notificationItem,
+                                                        !isMobileLayout && styles.replyRowItemWeb,
                                                         isFromSupervisor
                                                             ? {
-                                                                backgroundColor: 'rgba(148, 163, 184, 0.14)',
-                                                                borderColor: 'rgba(148, 163, 184, 0.35)',
+                                                                backgroundColor: 'rgba(14, 165, 233, 0.14)',
+                                                                borderColor: 'rgba(34, 211, 238, 0.35)',
                                                                 borderWidth: 1,
                                                             }
                                                             : {},
                                                         isResolved && {
-                                                            opacity: 0.75,
+                                                            opacity: 0.5,
                                                             backgroundColor: 'rgba(18, 45, 73, 0.7)',
                                                         },
                                                     ]}
@@ -1040,16 +901,16 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                                                         name={
                                                             isResolved
                                                                 ? 'checkmark-done-circle'
-                                                                : hasReplied
-                                                                    ? 'checkmark-circle'
+                                                                : isFromSupervisor
+                                                                    ? 'checkmark-circle-outline'
                                                                     : 'notifications-outline'
                                                         }
                                                         size={24}
                                                         color={
                                                             isResolved
-                                                                ? '#6b7280'
-                                                                : hasReplied
-                                                                    ? '#34D399'
+                                                                ? '#999'
+                                                                : isFromSupervisor
+                                                                    ? '#22D3EE'
                                                                     : '#22D3EE'
                                                         }
                                                     />
@@ -1069,14 +930,17 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                                                         <Text
                                                             style={[
                                                                 styles.notificationText,
-                                                                isResolved && { color: '#6b7280' },
+                                                                isResolved && { color: '#999' },
                                                             ]}
                                                         >
                                                             {isFromSupervisor ? (
                                                                 <Text
-                                                                    style={{ color: '#A9C6E4', fontWeight: 'bold' }}
+                                                                    style={{
+                                                                        color: '#22D3EE',
+                                                                        fontWeight: 'bold',
+                                                                    }}
                                                                 >
-                                                                    Supervisor Update:
+                                                                    Update from Supervisor:
                                                                 </Text>
                                                             ) : (
                                                                 <Text>
@@ -1092,7 +956,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                                                             style={[
                                                                 styles.notificationReason,
                                                                 isResolved && {
-                                                                    color: '#6b7280',
+                                                                    color: '#999',
                                                                     fontStyle: 'italic',
                                                                 },
                                                             ]}
@@ -1104,7 +968,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                                                             <>
                                                                 <Text style={styles.repliedText}>
                                                                     <Text style={{ fontWeight: 'bold' }}>
-                                                                        Reply Sent:{' '}
+                                                                        Message:{' '}
                                                                     </Text>
                                                                     "{parseReplyPayload(item.reply).message}"
                                                                 </Text>
@@ -1112,7 +976,7 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                                                                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
                                                                         {parseReplyPayload(item.reply).proofPhotos.map((uri, idx) => (
                                                                             <Image
-                                                                                key={`history-proof-${item.id}-${idx}`}
+                                                                                key={`pending-proof-${item.id}-${idx}`}
                                                                                 source={{ uri }}
                                                                                 style={{ width: 56, height: 56, borderRadius: 8, marginRight: 8 }}
                                                                             />
@@ -1121,35 +985,226 @@ const OperatorDashboard: React.FC<Props> = ({ user, setUser, navigation }) => {
                                                                 )}
                                                             </>
                                                         )}
-
-                                                        <TouchableOpacity
-                                                            style={[styles.replyButton, { alignSelf: 'flex-start', marginTop: 8 }]}
-                                                            onPress={() => hideNotification(item.id)}
-                                                        >
-                                                            <Text style={styles.replyButtonText}>Mark as Read</Text>
-                                                        </TouchableOpacity>
                                                     </View>
+
+                                                    {isFromSupervisor && !hasReplied && !isResolved && !isConfirmed && (
+                                                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                                                            {isAssignmentNotification(item) ? (
+                                                                <>
+                                                                    <TouchableOpacity
+                                                                        style={[styles.replyButton, { backgroundColor: '#10B981', paddingHorizontal: 12 }]}
+                                                                        onPress={() => handleWorkflowAction(item, 'approve')}
+                                                                    >
+                                                                        <Text style={[styles.replyButtonText, { color: '#FFFFFF' }]}>Approve (Accept)</Text>
+                                                                    </TouchableOpacity>
+                                                                    <TouchableOpacity
+                                                                        style={[styles.replyButton, { backgroundColor: '#EF4444', paddingHorizontal: 12 }]}
+                                                                        onPress={() => handleWorkflowAction(item, 'reject')}
+                                                                    >
+                                                                        <Text style={[styles.replyButtonText, { color: '#FFFFFF' }]}>Reject</Text>
+                                                                    </TouchableOpacity>
+                                                                </>
+                                                            ) : (
+                                                                <TouchableOpacity
+                                                                    style={styles.replyButton}
+                                                                    onPress={() =>
+                                                                        handleOpenModal({
+                                                                            title: 'Reply',
+                                                                            assetName: item.asset.name,
+                                                                            requireProofImages: false,
+                                                                            onSubmit: (replyMessage, proofImages) =>
+                                                                                handleReplySubmit(replyMessage, item, proofImages),
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    <Text style={styles.replyButtonText}>Reply</Text>
+                                                                </TouchableOpacity>
+                                                            )}
+                                                        </View>
+                                                    )}
+
+                                                    <TouchableOpacity
+                                                        style={styles.replyButton}
+                                                        onPress={() => hideNotification(item.id)}
+                                                    >
+                                                        <Text style={styles.replyButtonText}>Mark as Read</Text>
+                                                    </TouchableOpacity>
                                                 </View>
                                             );
                                         })}
                                     </ScrollView>
                                 )}
-
-                                {historyNotifications.length > 5 && (
-                                    <TouchableOpacity
-                                        style={styles.showMoreButton}
-                                        onPress={() => setShowAllHistory(prev => !prev)}
-                                    >
-                                        <Text style={styles.showMoreText}>
-                                            {showAllHistory
-                                                ? 'Show Less'
-                                                : `Show More (${historyNotifications.length - 5} more)`}
-                                        </Text>
-                                    </TouchableOpacity>
-                                )}
                             </View>
+
+                            {pendingReplyNotifications.length > 5 && (
+                                <TouchableOpacity
+                                    style={styles.showMoreButton}
+                                    onPress={() =>
+                                        setShowAllPendingNotifications(prev => !prev)
+                                    }
+                                >
+                                    <Text style={styles.showMoreText}>
+                                        {showAllPendingNotifications
+                                            ? 'Show Less'
+                                            : `Show More (${pendingReplyNotifications.length - 5
+                                            } more)`}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+
+                            <Text style={[styles.subSectionTitle, { marginTop: 16 }]}>
+                                History
+                            </Text>
+                            {historyNotifications.length === 0 ? (
+                                <Text style={styles.noItemsText}>
+                                    No history notifications.
+                                </Text>
+                            ) : (
+                                <ScrollView
+                                    style={styles.notificationsInnerScroll}
+                                    contentContainerStyle={styles.notificationsInnerScrollContent}
+                                    nestedScrollEnabled
+                                    showsVerticalScrollIndicator
+                                >
+                                    {visibleHistoryNotifications.map(item => {
+                                        const isFromSupervisor =
+                                            Number(item.sender.employeeId) !==
+                                            Number(user?.employeeId);
+                                        const isResolved = item.status === 'resolved';
+                                        const hasReplied = !!item.reply && item.reply.length > 0;
+
+                                        return (
+                                            <View
+                                                key={`history-${item.id.toString()}`}
+                                                style={[
+                                                    styles.notificationItem,
+                                                    isFromSupervisor
+                                                        ? {
+                                                            backgroundColor: 'rgba(148, 163, 184, 0.14)',
+                                                            borderColor: 'rgba(148, 163, 184, 0.35)',
+                                                            borderWidth: 1,
+                                                        }
+                                                        : {},
+                                                    isResolved && {
+                                                        opacity: 0.75,
+                                                        backgroundColor: 'rgba(18, 45, 73, 0.7)',
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name={
+                                                        isResolved
+                                                            ? 'checkmark-done-circle'
+                                                            : hasReplied
+                                                                ? 'checkmark-circle'
+                                                                : 'notifications-outline'
+                                                    }
+                                                    size={24}
+                                                    color={
+                                                        isResolved
+                                                            ? '#6b7280'
+                                                            : hasReplied
+                                                                ? '#34D399'
+                                                                : '#22D3EE'
+                                                    }
+                                                />
+
+                                                <View style={styles.notificationContent}>
+                                                    <Text
+                                                        style={[
+                                                            styles.notificationReason,
+                                                            {
+                                                                color: isResolved ? '#6b7280' : '#A9C6E4',
+                                                                textTransform: 'capitalize',
+                                                            },
+                                                        ]}
+                                                    >
+                                                        Status: {item.status || 'unread'}
+                                                    </Text>
+                                                    <Text
+                                                        style={[
+                                                            styles.notificationText,
+                                                            isResolved && { color: '#6b7280' },
+                                                        ]}
+                                                    >
+                                                        {isFromSupervisor ? (
+                                                            <Text
+                                                                style={{ color: '#A9C6E4', fontWeight: 'bold' }}
+                                                            >
+                                                                Supervisor Update:
+                                                            </Text>
+                                                        ) : (
+                                                            <Text>
+                                                                Your Request for{' '}
+                                                                <Text style={{ fontWeight: 'bold' }}>
+                                                                    {item.asset.name}
+                                                                </Text>
+                                                                :
+                                                            </Text>
+                                                        )}
+                                                    </Text>
+                                                    <Text
+                                                        style={[
+                                                            styles.notificationReason,
+                                                            isResolved && {
+                                                                color: '#6b7280',
+                                                                fontStyle: 'italic',
+                                                            },
+                                                        ]}
+                                                    >
+                                                        "{item.reason}"
+                                                    </Text>
+
+                                                    {hasReplied && (
+                                                        <>
+                                                            <Text style={styles.repliedText}>
+                                                                <Text style={{ fontWeight: 'bold' }}>
+                                                                    Reply Sent:{' '}
+                                                                </Text>
+                                                                "{parseReplyPayload(item.reply).message}"
+                                                            </Text>
+                                                            {parseReplyPayload(item.reply).proofPhotos.length > 0 && (
+                                                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                                                                    {parseReplyPayload(item.reply).proofPhotos.map((uri, idx) => (
+                                                                        <Image
+                                                                            key={`history-proof-${item.id}-${idx}`}
+                                                                            source={{ uri }}
+                                                                            style={{ width: 56, height: 56, borderRadius: 8, marginRight: 8 }}
+                                                                        />
+                                                                    ))}
+                                                                </ScrollView>
+                                                            )}
+                                                        </>
+                                                    )}
+
+                                                    <TouchableOpacity
+                                                        style={[styles.replyButton, { alignSelf: 'flex-start', marginTop: 8 }]}
+                                                        onPress={() => hideNotification(item.id)}
+                                                    >
+                                                        <Text style={styles.replyButtonText}>Mark as Read</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        );
+                                    })}
+                                </ScrollView>
+                            )}
+
+                            {historyNotifications.length > 5 && (
+                                <TouchableOpacity
+                                    style={styles.showMoreButton}
+                                    onPress={() => setShowAllHistory(prev => !prev)}
+                                >
+                                    <Text style={styles.showMoreText}>
+                                        {showAllHistory
+                                            ? 'Show Less'
+                                            : `Show More (${historyNotifications.length - 5} more)`}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
-                    </ScrollView>
+                    </View>
+                </ScrollView>
 
                 <OverdueNotificationModal
                     visible={modalVisible}

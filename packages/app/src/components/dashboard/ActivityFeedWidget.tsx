@@ -49,7 +49,29 @@ const parseNotificationPayload = (raw: any, defaultTitle: string, defaultSubtitl
     displayMessage = raw.reason;
   }
 
-  const msgLower = (displayMessage + ' ' + (raw?.reason || '')).toLowerCase();
+  const textToParse = (displayMessage + ' ' + (raw?.reason || '')).trim();
+
+  // Pattern 1: "assigned from [Sender] to [Receiver]"
+  const matchFromTo = textToParse.match(/assigned\s+from\s+(.+?)\s+to\s+(.+?)(?:\.|$)/i);
+  if (matchFromTo) {
+    senderName = matchFromTo[1].trim();
+    receiverName = matchFromTo[2].trim();
+  } else {
+    // Pattern 2: "assigned to [Receiver] by [Sender]"
+    const matchToBy = textToParse.match(/assigned\s+to\s+(.+?)\s+by\s+(.+?)(?:\.|$)/i);
+    if (matchToBy) {
+      receiverName = matchToBy[1].trim();
+      senderName = matchToBy[2].trim();
+    } else {
+      // Pattern 3: "Confirmation: [Receiver] received assignment"
+      const matchConf = textToParse.match(/Confirmation:\s*(.+?)\s*received\s+assignment/i);
+      if (matchConf) {
+        receiverName = matchConf[1].trim();
+      }
+    }
+  }
+
+  const msgLower = textToParse.toLowerCase();
   if (msgLower.includes('returned') || msgLower.includes('return')) {
     eventType = 'return';
   } else if (msgLower.includes('assigned') || msgLower.includes('assignment')) {
@@ -83,7 +105,8 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
     if (!raw || !raw.reply) return false;
     try {
       const parsed = JSON.parse(raw.reply);
-      return parsed.kind === 'workflow_approval_pending' && ['unread', 'replied'].includes(raw.status);
+      const isPendingKind = parsed.kind === 'workflow_approval_pending' || parsed.kind === 'asset_assignment_acceptance';
+      return isPendingKind && ['unread', 'replied'].includes(raw.status);
     } catch {
       return false;
     }

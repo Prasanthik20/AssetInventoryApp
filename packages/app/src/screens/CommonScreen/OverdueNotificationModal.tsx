@@ -133,19 +133,7 @@ const OverdueNotificationModal: React.FC<Props> = ({
     };
 
     const handlePickProofImages = () => {
-        if (Platform.OS === 'web') {
-            pickImage(false);
-        } else {
-            Alert.alert(
-                "Upload Proof Images",
-                "Choose an option",
-                [
-                    { text: "Take Photo", onPress: () => pickImage(true) },
-                    { text: "Choose from Gallery", onPress: () => pickImage(false) },
-                    { text: "Cancel", style: "cancel" }
-                ]
-            );
-        }
+        pickImage(false);
     };
 
     const handleSubmit = () => {

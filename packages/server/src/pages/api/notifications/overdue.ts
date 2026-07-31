@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const tenantIdResult = await query(
-      `SELECT "tenantId" FROM "Users" WHERE "employeeId" = $1 LIMIT 1`,
+      `SELECT TOP 1 "tenantId" FROM "Users" WHERE "employeeId" = $1`,
       [operatorId]
     );
     const tenantId = tenantIdResult.rows[0]?.tenantId || null;
@@ -46,8 +46,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `
       INSERT INTO "Notifications"
       ("assetId", "assignmentId", "senderId", "receiverId", "reason", "status", "created_at", "tenantId")
-      VALUES ($1, $2, $3, $4, $5, 'unread', NOW(), $6)
-      RETURNING *
+      OUTPUT INSERTED.*
+      VALUES ($1, $2, $3, $4, $5, 'unread', GETDATE(), $6)
       `,
       [
         assetId,

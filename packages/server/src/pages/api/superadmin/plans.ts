@@ -9,100 +9,45 @@ async function ensureDatabaseSchema() {
   try {
     // 1. Alter table to add min_users and min_assets if not exist
     await query(`
-      ALTER TABLE "Plans" 
-      ADD COLUMN IF NOT EXISTS min_users INT DEFAULT 1,
-      ADD COLUMN IF NOT EXISTS min_assets INT DEFAULT 1;
+      IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Plans' AND COLUMN_NAME = 'min_users')
+      BEGIN
+          ALTER TABLE "Plans" ADD "min_users" INT DEFAULT 1;
+      END
+
+      IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Plans' AND COLUMN_NAME = 'min_assets')
+      BEGIN
+          ALTER TABLE "Plans" ADD "min_assets" INT DEFAULT 1;
+      END
     `);
 
-    // 2. Insert/update plans with the specified default dataset
+    // 2. Insert/update plans with the specified default dataset using MERGE
     const plansSql = `
-      INSERT INTO "Plans" (
-        id, 
-        name, 
-        min_users, 
-        "maxUsers", 
-        min_assets, 
-        "maxAssets", 
-        price, 
-        currency, 
-        features,
-        "createdAt"
-      ) VALUES 
-      (
-        'free-trial', 
-        'Free Trial', 
-        1, 
-        5, 
-        1, 
-        100, 
-        0.00, 
-        'INR', 
-        '{"qrCode": false, "reports": "basic", "storage": "2GB", "support": "email", "apiAccess": false, "dashboard": "basic", "trialDays": 30, "customCategories": false}',
-        '2026-05-14T02:36:33.002Z'
-      ),
-      (
-        'starter', 
-        'Starter', 
-        6, 
-        25, 
-        101, 
-        2500, 
-        4999.00, 
-        'INR', 
-        '{"qrCode": true, "reports": "standard", "storage": "25GB", "support": "email", "apiAccess": false, "yearlyPrice": 59988, "customCategories": false, "emailNotifications": true}',
-        '2026-05-14T02:36:33.002Z'
-      ),
-      (
-        'professional', 
-        'Professional', 
-        26, 
-        100, 
-        2501, 
-        25000, 
-        14999.00, 
-        'INR', 
-        '{"qrCode": true, "reports": "advanced", "storage": "100GB", "support": "priority", "apiAccess": true, "auditLogs": true, "yearlyPrice": 179988, "dynamicFields": true, "roleManagement": true, "customCategories": true, "emailNotifications": true}',
-        '2026-05-14T02:36:33.002Z'
-      ),
-      (
-        'enterprise', 
-        'Enterprise Plan', 
-        101, 
-        999999, 
-        25001, 
-        999999, 
-        -1.00, 
-        'INR', 
-        '{"sla": true, "sso": true, "qrCode": true, "reports": "advanced", "storage": "Unlimited", "support": "dedicated", "apiAccess": true, "auditLogs": true, "dedicatedDB": true, "multiBranch": true, "customPricing": true, "dynamicFields": true, "whiteLabeling": true, "roleManagement": true, "customCategories": true, "customIntegrations": true, "emailNotifications": true}',
-        '2026-05-14T02:18:07.300Z'
-      ),
-      (
-        'enterprise-demo', 
-        'Enterprise (Demo)', 
-        1, 
-        999, 
-        1, 
-        999999, 
-        0.00, 
-        'INR', 
-        NULL,
-        '2026-06-13T00:26:34.959Z'
-      )
-      ON CONFLICT (id) 
-      DO UPDATE SET 
-        name = EXCLUDED.name,
-        min_users = EXCLUDED.min_users,
-        "maxUsers" = EXCLUDED."maxUsers",
-        min_assets = EXCLUDED.min_assets,
-        "maxAssets" = EXCLUDED."maxAssets",
-        price = EXCLUDED.price,
-        currency = EXCLUDED.currency,
-        features = EXCLUDED.features,
-        "createdAt" = EXCLUDED."createdAt";
+      MERGE INTO "Plans" AS target
+      USING (VALUES 
+        ('free-trial', 'Free Trial', 1, 5, 1, 100, 0.00, 'INR', '{"qrCode": false, "reports": "basic", "storage": "2GB", "support": "email", "apiAccess": false, "dashboard": "basic", "trialDays": 30, "customCategories": false}', '2026-05-14T02:36:33.002Z'),
+        ('starter', 'Starter', 6, 25, 101, 2500, 4999.00, 'INR', '{"qrCode": true, "reports": "standard", "storage": "25GB", "support": "email", "apiAccess": false, "yearlyPrice": 59988, "customCategories": false, "emailNotifications": true}', '2026-05-14T02:36:33.002Z'),
+        ('professional', 'Professional', 26, 100, 2501, 25000, 14999.00, 'INR', '{"qrCode": true, "reports": "advanced", "storage": "100GB", "support": "priority", "apiAccess": true, "auditLogs": true, "yearlyPrice": 179988, "dynamicFields": true, "roleManagement": true, "customCategories": true, "emailNotifications": true}', '2026-05-14T02:36:33.002Z'),
+        ('enterprise', 'Enterprise Plan', 101, 999999, 25001, 999999, -1.00, 'INR', '{"sla": true, "sso": true, "qrCode": true, "reports": "advanced", "storage": "Unlimited", "support": "dedicated", "apiAccess": true, "auditLogs": true, "dedicatedDB": true, "multiBranch": true, "customPricing": true, "dynamicFields": true, "whiteLabeling": true, "roleManagement": true, "customCategories": true, "customIntegrations": true, "emailNotifications": true}', '2026-05-14T02:18:07.300Z'),
+        ('enterprise-demo', 'Enterprise (Demo)', 1, 999, 1, 999999, 0.00, 'INR', NULL, '2026-06-13T00:26:34.959Z')
+      ) AS source (id, name, min_users, maxUsers, min_assets, maxAssets, price, currency, features, createdAt)
+      ON target.id = source.id
+      WHEN MATCHED THEN
+        UPDATE SET 
+          name = source.name,
+          min_users = source.min_users,
+          "maxUsers" = source.maxUsers,
+          min_assets = source.min_assets,
+          "maxAssets" = source.maxAssets,
+          price = source.price,
+          currency = source.currency,
+          features = source.features
+      WHEN NOT MATCHED THEN
+        INSERT (id, name, min_users, "maxUsers", min_assets, "maxAssets", price, currency, features, "createdAt")
+        VALUES (source.id, source.name, source.min_users, source.maxUsers, source.min_assets, source.maxAssets, source.price, source.currency, source.features, source.createdAt);
     `;
     await query(plansSql);
     isDbMigrated = true;
-    console.log('Postgres plans schema auto-migration and seeding succeeded.');
+    console.log('SQL Server plans schema auto-migration and seeding succeeded.');
   } catch (err) {
     console.error('ensureDatabaseSchema plans migration error:', err);
   }
@@ -153,18 +98,23 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     try {
       const sql = `
-        INSERT INTO "Plans" (id, name, min_users, "maxUsers", min_assets, "maxAssets", price, currency, features, "createdAt")
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          min_users = EXCLUDED.min_users,
-          "maxUsers" = EXCLUDED."maxUsers",
-          min_assets = EXCLUDED.min_assets,
-          "maxAssets" = EXCLUDED."maxAssets",
-          price = EXCLUDED.price,
-          currency = EXCLUDED.currency,
-          features = EXCLUDED.features
-        RETURNING *;
+        MERGE INTO "Plans" AS target
+        USING (SELECT $1 AS id) AS source
+        ON target.id = source.id
+        WHEN MATCHED THEN
+          UPDATE SET
+            name = $2,
+            min_users = $3,
+            "maxUsers" = $4,
+            min_assets = $5,
+            "maxAssets" = $6,
+            price = $7,
+            currency = $8,
+            features = $9
+        WHEN NOT MATCHED THEN
+          INSERT (id, name, min_users, "maxUsers", min_assets, "maxAssets", price, currency, features, "createdAt")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, GETDATE())
+        OUTPUT INSERTED.*;
       `;
 
       const values = [

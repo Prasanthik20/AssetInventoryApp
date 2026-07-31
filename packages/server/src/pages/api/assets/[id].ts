@@ -26,9 +26,14 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   // Auto-migration for useful_life and salvage_value
   try {
     await query(`
-      ALTER TABLE "Asset_Details" 
-      ADD COLUMN IF NOT EXISTS "useful_life" INT DEFAULT 5,
-      ADD COLUMN IF NOT EXISTS "salvage_value" VARCHAR(255);
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asset_Details') AND name = 'useful_life')
+      BEGIN
+        ALTER TABLE "Asset_Details" ADD "useful_life" INT DEFAULT 5;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asset_Details') AND name = 'salvage_value')
+      BEGIN
+        ALTER TABLE "Asset_Details" ADD "salvage_value" VARCHAR(255);
+      END
     `, []);
   } catch (err) {
     console.error('[AUTO-MIGRATION ERROR]', err);
@@ -90,17 +95,22 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
       if (category !== undefined) {
         const categoryRes = await query(
-          `SELECT "categoryId" FROM "Category" WHERE category = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
-          [category, tenantId]
+          `SELECT TOP 1 "categoryId", category FROM "Category"
+           WHERE (category = $1 OR LOWER(category) = LOWER($1) OR CAST("categoryId" AS VARCHAR) = $1)
+             AND ("tenantId" = $2 OR "tenantId" IS NULL)`,
+          [String(category).trim(), tenantId]
         );
         if (categoryRes.rows.length > 0) {
           updates.push(`"categoryId" = $${paramIndex++}`);
           values.push(categoryRes.rows[0].categoryId);
-          effectiveCategory = String(category || '').trim().toLowerCase();
+          effectiveCategory = String(categoryRes.rows[0].category || '').trim().toLowerCase();
+        } else {
+          try { await query("ROLLBACK", []); } catch (_) { }
+          return res.status(400).json({ message: `Invalid category: "${category}"` });
         }
       }
 
-      if (controllerKey !== undefined || category !== undefined) {
+      if (controllerKey !== undefined) {
         const normalizedControllerKey =
           typeof controllerKey === 'string' ? controllerKey.trim() : String(controllerKey || '').trim();
         const controllerKeyValue = effectiveCategory.includes('controller')
@@ -109,6 +119,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         updates.push(`"controller_key" = $${paramIndex++}`);
         values.push(controllerKeyValue);
+      } else if (category !== undefined && !effectiveCategory.includes('controller')) {
+        updates.push(`"controller_key" = $${paramIndex++}`);
+        values.push(null);
       }
 
       if (modelNumber !== undefined) {
@@ -179,7 +192,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           UPDATE "Asset_Details"
           SET ${updates.join(', ')}
           WHERE id = $${paramIndex++} AND "tenantId" = $${paramIndex}
-          RETURNING id
         `;
         await query(updateQuery, values);
       }
@@ -190,10 +202,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           if (field.fieldId) {
             // Check if field exists for this category/tenant
             const fieldExistsRes = await query(
-              `SELECT id FROM "AssetCategoryFields" WHERE id = $1 AND "tenantId" = $2 LIMIT 1`,
+              `SELECT id FROM "AssetCategoryFields" WHERE id = $1 AND ("tenantId" = $2 OR "tenantId" IS NULL) LIMIT 1`,
               [field.fieldId, tenantId]
             );
-            
+
             if (fieldExistsRes.rows.length > 0) {
               await query(`DELETE FROM "AssetDynamicValues" WHERE "assetId" = $1 AND "fieldId" = $2`, [parseInt(assetId), field.fieldId]);
               await query(`INSERT INTO "AssetDynamicValues" ("assetId", "fieldId", value) VALUES ($1, $2, $3)`, [parseInt(assetId), field.fieldId, String(field.value)]);
@@ -210,7 +222,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       });
 
     } catch (error: any) {
-      await query("ROLLBACK", []);
+      try {
+        await query("ROLLBACK", []);
+      } catch (_) { }
       console.error('Update Asset Error:', error);
       return res.status(500).json({
         message: error.message || 'Internal server error.',
@@ -250,23 +264,22 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         
         aa.assigned_date AS assigned_date,
         aa.expected_return_date AS expected_return_date,
+        aa.returned_date AS returned_date,
         aa."projectName" AS "projectName"
       FROM "Asset_Details" a
       LEFT JOIN "Category" cat ON a."categoryId" = cat."categoryId" AND (cat."tenantId" = a."tenantId" OR cat."tenantId" IS NULL OR a."tenantId" IS NULL)
       LEFT JOIN "Status" s ON a.status_id = s.id
-      LEFT JOIN LATERAL (
-        SELECT * FROM "Asset_Assignments"
+      OUTER APPLY (
+        SELECT TOP 1 * FROM "Asset_Assignments"
         WHERE "assetId" = a.id
           AND ("tenantId" = $2 OR $2 IS NULL OR "tenantId" IS NULL)
-          AND COALESCE(status, '') <> 'returned'
-          AND "returned_date" IS NULL
+          AND (COALESCE(status, '') <> 'returned')
         ORDER BY id DESC
-        LIMIT 1
-      ) aa ON TRUE
-      LEFT JOIN "Users" u ON CAST(u."employeeId" AS text) = CAST(a.assigned_by AS text) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
-      LEFT JOIN "Users" u_aa ON CAST(u_aa."employeeId" AS text) = CAST(aa."supervisor_employeeId" AS text) AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
-      LEFT JOIN "Users" assignee ON CAST(assignee."employeeId" AS text) = CAST(a.assigned_to AS text) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
-      LEFT JOIN "Users" assignee_aa ON CAST(assignee_aa."employeeId" AS text) = CAST(aa."operator_employeeId" AS text) AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+      ) aa
+      LEFT JOIN "Users" u ON (u."employeeId" = a.assigned_by OR u."userId" = a.assigned_by) AND (u."tenantId" = a."tenantId" OR u."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" u_aa ON (u_aa."employeeId" = aa."supervisor_employeeId" OR u_aa."userId" = aa."supervisor_employeeId") AND (u_aa."tenantId" = a."tenantId" OR u_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" assignee ON (assignee."employeeId" = a.assigned_to OR assignee."userId" = a.assigned_to) AND (assignee."tenantId" = a."tenantId" OR assignee."tenantId" IS NULL OR a."tenantId" IS NULL)
+      LEFT JOIN "Users" assignee_aa ON (assignee_aa."employeeId" = aa."operator_employeeId" OR assignee_aa."userId" = aa."operator_employeeId") AND (assignee_aa."tenantId" = a."tenantId" OR assignee_aa."tenantId" IS NULL OR a."tenantId" IS NULL)
       WHERE a.id = $1 AND (a."tenantId" = $2 OR $2 IS NULL);
     `;
 
@@ -328,6 +341,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       }
     }
 
+    const formatLocation = (loc: string | null | undefined): string => {
+      if (!loc || typeof loc !== 'string') return 'Office';
+      const trimmed = loc.trim();
+      if (!trimmed || trimmed.toLowerCase() === 'unassigned' || trimmed.toLowerCase() === 'null') {
+        return 'Office';
+      }
+      return trimmed;
+    };
+
     const formatted = {
       assetId: asset.assetId,
       assetName: asset.assetName,
@@ -338,7 +360,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       modelNumber: asset.modelNumber,
       serialNumber: asset.serialNumber,
       barcode: asset.barcode,
-      location: asset.location,
+      location: formatLocation(asset.location),
       photoURL: asset.photoURL || null,
       assignedBy: asset.assignedBy || 'N/A',
       assignedTo: asset.assignedToName || 'N/A',
@@ -346,6 +368,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       purchaseDate: formatDate(asset.purchaseDate),
       assignedDate: formatDate(asset.assigned_date),
       expectedReturnDate: formatDate(asset.expected_return_date),
+      returnedDate: formatDate(asset.returned_date),
       projectName: asset.projectName || null,
       price: asset.price || null,
       value: asset.price ? parseFloat(asset.price).toLocaleString() : 'N/A',

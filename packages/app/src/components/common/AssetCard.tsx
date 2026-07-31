@@ -32,8 +32,9 @@ const formatDate = (dateStr?: string | null): string => {
 const AssetCard: React.FC<AssetCardProps> = ({ asset, isMobileLayout, onPress, onAssignPress, onNotifyPress, index }) => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'AssetFullDetails'>>();
   const handlePress = onPress ?? (() => navigation.navigate('AssetFullDetails', { asset }));
-  const isUnassigned = !asset.assignedTo || asset.status?.toLowerCase() === 'unassigned';
-  const isOverdue = asset.status?.toLowerCase() === 'overdue';
+  const statusLower = (asset.status || '').toLowerCase();
+  const isUnassigned = statusLower === 'unassigned' || (!asset.assignedTo && statusLower !== 'assigned' && statusLower !== 'overdue');
+  const isOverdue = statusLower === 'overdue';
 
   const getStatusStyle = () => {
     let backgroundColor = 'rgba(148, 163, 184, 0.18)';

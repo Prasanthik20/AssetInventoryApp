@@ -298,7 +298,7 @@ export function opratorStyles(viewport?: DashboardViewport) {
     },
 
     assetName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
-    assetDueDate: { fontSize: 14, color: theme.textSecondary, fontWeight: '500' },
+    assetDueDate: { fontSize: 14, color: theme.textSecondary, fontWeight: '500' , paddingHorizontal:10},
 
     returnButton: {
       paddingVertical: 18,

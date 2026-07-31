@@ -11,6 +11,7 @@ import {
     Image, 
     ActivityIndicator,
     useWindowDimensions,
+    ScrollView,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -40,34 +41,81 @@ const CompanyUsersScreen: React.FC = () => {
     const isDesktopWeb = width >= 900;
     const navigation = useNavigation<CompanyUsersNavigationProp>();
     const [companyUsersData, setCompanyUsersData] = React.useState<User[]>([]);
+    const [rolesList, setRolesList] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [filter, setFilter] = React.useState('All');
     const [searchQuery, setSearchQuery] = React.useState('');
     const [errorText, setErrorText] = React.useState('');
     const [isSubscriptionExpired, setIsSubscriptionExpired] = React.useState(false);
 
-    const roleBadgeMap: Record<string, string> = {
-        supervisor: '#0F766E',
-        operator: '#2563EB',
-        admin: '#7C3AED',
-        'super admin': '#7C3AED',
-        superadmin: '#7C3AED',
+    const PALETTE = [
+        '#0F766E', '#2563EB', '#7C3AED', '#D97706', '#059669',
+        '#9333EA', '#0284C7', '#E11D48', '#4F46E5', '#C05621'
+    ];
+
+    const GRADIENT_PALETTE: Array<[string, string]> = [
+        ['#0EA5E9', '#0F766E'],
+        ['#3B82F6', '#1D4ED8'],
+        ['#14B8A6', '#0F766E'],
+        ['#8B5CF6', '#6D28D9'],
+        ['#F59E0B', '#B45309'],
+        ['#10B981', '#047857'],
+        ['#F43F5E', '#BE123C'],
+        ['#6366F1', '#4338CA']
+    ];
+
+    const getRoleBadgeColor = (roleStr: string = ''): string => {
+        const normalized = roleStr.trim().toLowerCase();
+        if (!normalized) return '#475569';
+        let hash = 0;
+        for (let i = 0; i < normalized.length; i++) {
+            hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const index = Math.abs(hash) % PALETTE.length;
+        return PALETTE[index];
     };
 
-    const filterColorMap: Record<string, [string, string]> = {
-        All: ['#0EA5E9', '#0F766E'],
-        Supervisor: ['#3B82F6', '#1D4ED8'],
-        Operator: ['#14B8A6', '#0F766E'],
+    const getFilterColors = (f: string): [string, string] => {
+        if (f === 'All') return ['#0EA5E9', '#0F766E'];
+        const lower = f.trim().toLowerCase();
+        let hash = 0;
+        for (let i = 0; i < lower.length; i++) {
+            hash = lower.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const index = Math.abs(hash) % GRADIENT_PALETTE.length;
+        return GRADIENT_PALETTE[index];
     };
+
+    const availableRoles = React.useMemo(() => {
+        const set = new Set<string>();
+        companyUsersData.forEach(u => {
+            if (u.role && u.role !== 'Unassigned') {
+                set.add(u.role);
+            }
+        });
+        rolesList.forEach(r => {
+            if (r && r !== 'Unassigned') set.add(r);
+        });
+        return ['All', ...Array.from(set)];
+    }, [companyUsersData, rolesList]);
 
     const fetchUsers = async () => {
         try {
             setLoading(true);
             setErrorText('');
-            const [usersResponse, assetsResponse] = await Promise.all([
-                axios.get(`${baseURL}/api/auth/users`),
-                axios.get(`${baseURL}/api/assets`),
+            const token = await AsyncStorage.getItem('token');
+            const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+
+            const [usersResponse, assetsResponse, rolesResponse] = await Promise.all([
+                axios.get(`${baseURL}/api/auth/users`, { headers: authHeader }),
+                axios.get(`${baseURL}/api/assets?limit=1000`, { headers: authHeader }),
+                axios.get(`${baseURL}/api/approvals/roles`, { headers: authHeader }).catch(() => ({ data: { roles: [] } })),
             ]);
+
+            if (rolesResponse.data?.roles) {
+                const fetchedRoleNames = rolesResponse.data.roles.map((r: any) => r.roleName).filter(Boolean);
+                setRolesList(fetchedRoleNames);
+            }
 
             const usersData = usersResponse.data;
             const rawUsers = usersData.users || usersData.data || usersData || [];
@@ -120,8 +168,8 @@ const CompanyUsersScreen: React.FC = () => {
                 employeeId,
                 name: fullName,
                 email: u.email,
-                role: u.role?.roleName || 'Unassigned',
-                status: 'Active', // default
+                role: u.roleName || u.role?.roleName || (typeof u.role === 'string' ? u.role : '') || u.designation || 'Unassigned',
+                status: u.status || 'Active',
                 avatarUrl: u.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
                 assignedAssets: mergedAssets,
             }});
@@ -149,14 +197,18 @@ const CompanyUsersScreen: React.FC = () => {
     // Filter & Search
     const filteredUsers = React.useMemo(() => {
         return companyUsersData
-            .filter(user => (filter === 'All' ? true : user.role === filter))
+            .filter(user => {
+                if (filter === 'All') return true;
+                return String(user.role || '').trim().toLowerCase() === filter.trim().toLowerCase();
+            })
             .filter(user =>
                 user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                user.email.toLowerCase().includes(searchQuery.toLowerCase())
+                user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (user.employeeId && user.employeeId.toLowerCase().includes(searchQuery.toLowerCase()))
             );
     }, [filter, searchQuery, companyUsersData]);
 
-         const renderUser = ({ item }: { item: User }) => (
+    const renderUser = ({ item }: { item: User }) => (
         <TouchableOpacity
                 onPress={() => {
                     navigation.navigate("FieldAssets", {
@@ -176,8 +228,7 @@ const CompanyUsersScreen: React.FC = () => {
                         style={[
                             styles.roleBadge,
                             {
-                                backgroundColor:
-                                    roleBadgeMap[String(item.role || '').toLowerCase()] || '#475569',
+                                backgroundColor: getRoleBadgeColor(item.role),
                             },
                         ]}
                     >
@@ -207,7 +258,7 @@ const CompanyUsersScreen: React.FC = () => {
                     )}
                 </View>
             </View>
-        </TouchableOpacity> // ✅ CORRECT: Closing tag now correctly wraps the entire card
+        </TouchableOpacity>
     );
 
     const handleGoBack = async () => {
@@ -246,24 +297,29 @@ const CompanyUsersScreen: React.FC = () => {
                         <View style={styles.searchContainer}>
                             <Feather name="search" size={20} color="#A9C6E4" style={styles.searchIcon} />
                             <TextInput
-                                placeholder="Search by name or email..."
+                                placeholder="Search by name, email, ID..."
                                 placeholderTextColor="#7FA2C8"
                                 style={styles.searchInput}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                             />
                         </View>
-                        <View style={styles.filterContainer}>
-                            {['All', 'Supervisor', 'Operator'].map(f => (
-                                <TouchableOpacity key={f} onPress={() => setFilter(f)}>
-                                    <LinearGradient
-                                        colors={filter === f ? (filterColorMap[f] || ['#0EA5E9', '#0F766E']) : ['rgba(18, 45, 73, 0.86)', 'rgba(10, 35, 62, 0.9)']}
-                                        style={styles.filterButton}
-                                    >
-                                        <Text style={[styles.filterText, { color: filter === f ? '#FFFFFF' : '#A9C6E4' }]}>{f}</Text>
-                                    </LinearGradient>
-                                </TouchableOpacity>
-                            ))}
+                        <View style={styles.filterWrapper}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScrollContainer}>
+                                {availableRoles.map(f => {
+                                    const isSelected = filter.toLowerCase() === f.toLowerCase();
+                                    return (
+                                        <TouchableOpacity key={f} onPress={() => setFilter(f)} style={{ marginRight: 8 }}>
+                                            <LinearGradient
+                                                colors={isSelected ? getFilterColors(f) : ['rgba(18, 45, 73, 0.86)', 'rgba(10, 35, 62, 0.9)']}
+                                                style={styles.filterButton}
+                                            >
+                                                <Text style={[styles.filterText, { color: isSelected ? '#FFFFFF' : '#A9C6E4' }]}>{f}</Text>
+                                            </LinearGradient>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
                         </View>
                     </View>
 
@@ -333,10 +389,12 @@ const styles = StyleSheet.create({
     },
     searchIcon: { marginRight: 10 },
     searchInput: { flex: 1, height: 45, fontSize: 15, color: '#E6F3FF' },
+    filterWrapper: { marginTop: 2 },
+    filterScrollContainer: { paddingVertical: 4, paddingHorizontal: 2, flexDirection: 'row', alignItems: 'center' },
     filterContainer: { flexDirection: 'row', justifyContent: 'space-around', gap: 8 },
     filterButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 20,
+        paddingVertical: 8,
+        paddingHorizontal: 18,
         borderRadius: 20,
         borderWidth: 1,
         borderColor: 'rgba(159, 207, 255, 0.22)',
@@ -346,7 +404,7 @@ const styles = StyleSheet.create({
         shadowRadius: 3,
         elevation: 2,
     },
-    filterText: { fontWeight: '600' },
+    filterText: { fontWeight: '600', fontSize: 13 },
     listContainer: { padding: 15 },
     userCard: {
         backgroundColor: 'rgba(18, 45, 73, 0.86)',

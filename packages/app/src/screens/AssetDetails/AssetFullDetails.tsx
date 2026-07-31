@@ -328,35 +328,11 @@ const AssetFullDetails: React.FC = () => {
     };
 
     const handleImageUpload = () => {
-        if (Platform.OS === 'web') {
-            pickImage(false, false);
-        } else {
-            Alert.alert(
-                "Upload Photo",
-                "Choose an option",
-                [
-                    { text: "Take Photo", onPress: () => pickImage(true, false) },
-                    { text: "Choose from Gallery", onPress: () => pickImage(false, false) },
-                    { text: "Cancel", style: "cancel" }
-                ]
-            );
-        }
+        pickImage(false, false);
     };
 
     const handleBarcodeUpload = () => {
-        if (Platform.OS === 'web') {
-            pickImage(false, true);
-        } else {
-            Alert.alert(
-                "Upload Barcode",
-                "Choose an option",
-                [
-                    { text: "Take Photo", onPress: () => pickImage(true, true) },
-                    { text: "Choose from Gallery", onPress: () => pickImage(false, true) },
-                    { text: "Cancel", style: "cancel" }
-                ]
-            );
-        }
+        pickImage(false, true);
     };
 
     const handleSaveAsset = async () => {

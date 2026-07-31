@@ -147,18 +147,7 @@ const BillingScreen: React.FC = () => {
   };
 
   const handleUploadReceipt = () => {
-    if (Platform.OS === 'web') {
-      pickImage();
-    } else {
-      Alert.alert(
-        'Upload Transfer Receipt',
-        'Choose receipt screenshot from Gallery',
-        [
-          { text: 'Open Gallery', onPress: pickImage },
-          { text: 'Cancel', style: 'cancel' }
-        ]
-      );
-    }
+    pickImage();
   };
 
   const handleSubmitRenewal = async () => {

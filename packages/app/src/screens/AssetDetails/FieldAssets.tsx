@@ -24,6 +24,8 @@ import useAssetMeta from '../../hooks/useAssetMeta';
 import AssetFiltersBar from 'src/components/common/AssetFiltersBar';
 import AppSnackbar from 'src/components/common/AppSnackbar';
 
+import useFetchAssets from 'src/hooks/useFetchAssets';
+
 type FieldAssetsNavProp = StackNavigationProp<
   RootStackParamList,
   'FieldAssets'
@@ -44,11 +46,11 @@ const FieldAssets: React.FC = () => {
 
   const styles = fieldStyles(isMobileLayout);
 
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const { assets, setAssets } = useFetchAssets();
+  const [loading, setLoading] = useState(false);
   const [filteredAssets, setFilteredAssets] = useState<Asset[]>([]); // 🔥 For search filtering
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [adminId, setAdminId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isModalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationStats, setLocationStats] = useState<LocationStat[]>([]);
@@ -173,7 +175,7 @@ const FieldAssets: React.FC = () => {
   const fetchAssets = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${baseURL}/api/assets`);
+      const response = await axios.get(`${baseURL}/api/assets?limit=1000`);
       const data = response.data;
 
       const processed = (data.assets || [])
@@ -203,8 +205,10 @@ const FieldAssets: React.FC = () => {
 
   useFocusEffect(
     useCallback(() => {
-      fetchAssets();
-    }, []),
+      if (assets.length === 0) {
+        fetchAssets();
+      }
+    }, [assets.length]),
   );
 
   // 3. 🔥 Search Logic

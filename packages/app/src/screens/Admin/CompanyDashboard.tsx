@@ -148,6 +148,7 @@ const CompanyDashboard: React.FC<Props> = ({
   const [user, setUser] = useState<any>(null);
   const [depreciatingAssetsCount, setDepreciatingAssetsCount] = useState<number>(0);
   const [depreciatingAssets, setDepreciatingAssets] = useState<any[]>([]);
+  const [myAssignedAssets, setMyAssignedAssets] = useState<any[]>([]);
   const [isDepreciationModalVisible, setIsDepreciationModalVisible] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [totalCategories, setTotalCategories] = useState<number>(0);
@@ -156,15 +157,22 @@ const CompanyDashboard: React.FC<Props> = ({
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get(`${baseURL}/api/auth/users`);
+      const token = await AsyncStorage.getItem('token');
+      const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get(`${baseURL}/api/auth/users`, { headers: authHeader });
       const data = response.data;
 
-      if (Array.isArray(data.users)) {
-        setUsers(data.users);
+      const usersList = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.users)
+        ? data.users
+        : Array.isArray(data?.data)
+        ? data.data
+        : [];
+
+      setUsers(usersList);
+      if (typeof data?.count === 'number') {
         setTotalUsers(data.count);
-      } else {
-        setUsers([]);
-        console.error('Users API format error:', data);
       }
     } catch (error) {
       console.error('Users API Error:', error);
@@ -200,22 +208,32 @@ const CompanyDashboard: React.FC<Props> = ({
     try {
       const response = await axios.get(`${baseURL}/api/dashboard`);
       const data = response.data;
+      const metrics = data.metrics || data;
 
-      setTotalAssets(data.totalAssets);
-      setTotalUsers(data.totalUsers);
-      setOfficeAssets(data.officeAssets);
-      setFieldAssets(data.fieldAssets);
-      setUnassignedAssets(data.unassignedAssets);
-      setAssignedAssets(data.assignedAssets);
-      setOverdueAssets(data.overdueAssets);
-      setUnderMaintenanceAssets(data.underMaintenanceAssets);
-      setFieldLocationStats(data.fieldLocationStats || []);
-      setTotalCategories(data.totalCategories || 0);
-      setDepreciatingAssetsCount(data.depreciatingAssetsCount || 0);
+      setTotalAssets(metrics.totalAssets ?? 0);
+      setTotalUsers(metrics.totalUsers ?? 0);
+      setOfficeAssets(metrics.officeAssets ?? 0);
+      setFieldAssets(metrics.fieldAssets ?? 0);
+      setUnassignedAssets(metrics.unassignedAssets ?? 0);
+      setAssignedAssets(metrics.assignedAssets ?? 0);
+      setOverdueAssets(metrics.overdueAssets ?? 0);
+      setUnderMaintenanceAssets(metrics.underMaintenanceAssets ?? 0);
+      setFieldLocationStats(data.fieldLocationStats || data.fieldLocationBreakdown || metrics.fieldLocationStats || []);
+      setTotalCategories(metrics.totalCategories ?? 0);
+      setDepreciatingAssetsCount(metrics.depreciatingAssetsCount || metrics.depreciatedAssetsCount || 0);
       setDepreciatingAssets(data.depreciatingAssets || []);
 
       const sub = data.subscription || null;
       setSubscription(sub);
+
+      if (user?.employeeId) {
+        try {
+          const myRes = await axios.get(`${baseURL}/api/my-assets?id=${user.employeeId}`);
+          setMyAssignedAssets(myRes.data?.assets || []);
+        } catch (err) {
+          console.error('CompanyDashboard my-assets error:', err);
+        }
+      }
 
       if (sub && sub.endDate) {
         const endDate = new Date(sub.endDate);
@@ -348,13 +366,15 @@ const CompanyDashboard: React.FC<Props> = ({
   const handleWorkflowAction = async (item: any, action: 'approve' | 'reject') => {
     try {
       const parsed = JSON.parse(item.reply || '{}');
-      const requestId = Number(parsed.requestId);
+      const notifId = Number(item.id || item.notificationId);
+      const requestId = Number(parsed.requestId) || notifId;
       const token = await AsyncStorage.getItem('token');
 
       await axios.post(
         `${baseURL}/api/approvals/action`,
         {
           requestId,
+          notificationId: notifId,
           action,
           notes: action === 'approve' ? 'Approved via Admin Dashboard' : 'Rejected via Admin Dashboard'
         },
@@ -406,7 +426,7 @@ const CompanyDashboard: React.FC<Props> = ({
         <DashboardHeader
           companyName={user?.companyName || user?.fullName || 'ASQ - Asset Management'}
           userName={user?.fullName || 'Admin'}
-          userRole="Tenant Admin"
+          userRole={user?.roleName || user?.role || 'Tenant Admin'}
           onLogout={handleLogout}
           activities={notifications.map((n) => ({
             id: n.id,
@@ -476,6 +496,20 @@ const CompanyDashboard: React.FC<Props> = ({
                     iconName="hardware-chip-outline"
                     accentColor="#22D3EE"
                     onPress={() => navigation.navigate('TotalAssetDetails')}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 180 }}>
+                  <StatMetricCard
+                    title="MY ASSIGNED ASSETS"
+                    count={myAssignedAssets.length}
+                    iconName="file-tray-full-outline"
+                    accentColor="#F59E0B"
+                    onPress={() =>
+                      navigation.navigate('FieldAssets', {
+                        employeeId: String(user?.employeeId || ''),
+                        operatorName: String(user?.fullName || ''),
+                      })
+                    }
                   />
                 </View>
                 <View style={{ flex: 1, minWidth: 180 }}>
@@ -664,8 +698,8 @@ const CompanyDashboard: React.FC<Props> = ({
                 <Text style={{ color: '#94A3B8', fontSize: 15 }}>No assets are currently depreciating under 60% life.</Text>
               </View>
             ) : (
-              <ScrollView horizontal={true} showsHorizontalScrollIndicator={true}>
-                <View style={{ minWidth: 600 }}>
+              <ScrollView horizontal={true} showsHorizontalScrollIndicator={true} style={{ width: '100%' }} contentContainerStyle={{ minWidth: '100%' }}>
+                <View style={{ width: '100%', minWidth: 600 }}>
                   {/* Table Header */}
                   <View style={{
                     flexDirection: 'row',
@@ -676,12 +710,12 @@ const CompanyDashboard: React.FC<Props> = ({
                     borderBottomWidth: 1,
                     borderColor: '#334155'
                   }}>
-                    <Text style={{ flex: 2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Asset Name</Text>
-                    <Text style={{ flex: 1.5, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Serial #</Text>
-                    <Text style={{ flex: 1, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Purchase Price</Text>
-                    <Text style={{ flex: 1.2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Remaining Life</Text>
-                    <Text style={{ flex: 1.2, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Book Value</Text>
-                    <Text style={{ flex: 1.5, color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Action Recommendation</Text>
+                    <View style={{ flex: 2 }}><Text style={{ color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Asset Name</Text></View>
+                    <View style={{ flex: 1.5 }}><Text style={{ color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Serial #</Text></View>
+                    <View style={{ flex: 1 }}><Text style={{ color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Purchase Price</Text></View>
+                    <View style={{ flex: 1.2 }}><Text style={{ color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Remaining Life</Text></View>
+                    <View style={{ flex: 1.2 }}><Text style={{ color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Book Value</Text></View>
+                    <View style={{ flex: 1.5 }}><Text style={{ color: '#f2f5faff', fontWeight: 'bold', fontSize: 13 }}>Action Recommendation</Text></View>
                   </View>
 
                   {/* Table Body */}
@@ -695,15 +729,19 @@ const CompanyDashboard: React.FC<Props> = ({
                         borderColor: 'rgba(51, 65, 85, 0.5)',
                         alignItems: 'center'
                       }}>
-                        <Text style={{ flex: 2, color: '#F1F5F9', fontSize: 13, fontWeight: '500' }} numberOfLines={1}>{item.name}</Text>
-                        <Text style={{ flex: 1.5, color: '#CBD5E1', fontSize: 13 }} numberOfLines={1}>{item.serialNo || 'N/A'}</Text>
-                        <Text style={{ flex: 1, color: '#CBD5E1', fontSize: 13 }}>₹{parseFloat(item.price || 0).toLocaleString('en-IN')}</Text>
-                        <Text style={{ flex: 1.2, color: item.percentLifeRemaining < 20 ? '#EF4444' : '#F59E0B', fontSize: 13, fontWeight: 'bold' }}>
-                          {item.percentLifeRemaining}%
-                        </Text>
-                        <Text style={{ flex: 1.2, color: '#10B981', fontSize: 13, fontWeight: '600' }}>
-                          ₹{item.remainingValue.toLocaleString('en-IN')}
-                        </Text>
+                        <View style={{ flex: 2, paddingRight: 8 }}><Text style={{ color: '#F1F5F9', fontSize: 13, fontWeight: '500' }} numberOfLines={1}>{item.name}</Text></View>
+                        <View style={{ flex: 1.5, paddingRight: 8 }}><Text style={{ color: '#CBD5E1', fontSize: 13 }} numberOfLines={1}>{item.serialNo || 'N/A'}</Text></View>
+                        <View style={{ flex: 1, paddingRight: 8 }}><Text style={{ color: '#CBD5E1', fontSize: 13 }}>₹{parseFloat(item.price || 0).toLocaleString('en-IN')}</Text></View>
+                        <View style={{ flex: 1.2, paddingRight: 8 }}>
+                          <Text style={{ color: item.percentLifeRemaining < 20 ? '#EF4444' : '#F59E0B', fontSize: 13, fontWeight: 'bold' }}>
+                            {item.percentLifeRemaining}%
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1.2, paddingRight: 8 }}>
+                          <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '600' }}>
+                            ₹{item.remainingValue.toLocaleString('en-IN')}
+                          </Text>
+                        </View>
                         <View style={{ flex: 1.5 }}>
                           <View style={{
                             backgroundColor: item.percentLifeRemaining < 20 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',

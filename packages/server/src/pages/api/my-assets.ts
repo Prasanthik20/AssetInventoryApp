@@ -23,7 +23,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const userEmployeeId = parseInt(rawId);
+    const empIdNum = parseInt(rawId) || 0;
+    const empIdStr = String(rawId).trim();
+
+    const userRes = await query(
+      `SELECT TOP 1 "tenantId", "employeeId" 
+       FROM "Users" 
+       WHERE "employeeId" = $1 OR CAST("employeeId" AS VARCHAR(50)) = $2 OR "userId" = $1`, 
+      [empIdNum, empIdStr]
+    );
+
+    const userTenantId = userRes.rows[0]?.tenantId || null;
+    const targetEmployeeId = userRes.rows[0]?.employeeId ? Number(userRes.rows[0].employeeId) : empIdNum;
+    const userEmployeeId = targetEmployeeId;
 
     /**
      * Return assignment timeline for the user/employee.
@@ -42,20 +54,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         aa.assigned_date AS "assignedDate",
         aa.expected_return_date AS "expectedReturnDate",
         aa.returned_date AS "returnedDate",
-        aa."supervisor_employeeId" AS "assignedBy",
+        aa."supervisor_employeeId" AS "assignedById",
+        COALESCE(u_assigner."fullName", CAST(aa."supervisor_employeeId" AS VARCHAR(50))) AS "assignedBy",
         aa.status AS "assignmentStatus",
-        ad.assigned_to AS "currentlyAssignedTo"
-      FROM "Asset_Assignments" aa
-      INNER JOIN "Asset_Details" ad ON ad.id = aa."assetId"
-      WHERE (CAST(aa."operator_employeeId" AS text) = CAST($1 AS text) OR CAST(ad.assigned_to AS text) = CAST($1 AS text))
-        AND (
-          ad."tenantId" = (SELECT "tenantId" FROM "Users" WHERE CAST("employeeId" AS text) = CAST($1 AS text) LIMIT 1)
-          OR ad."tenantId" IS NULL
-        )
-      ORDER BY aa.assigned_date DESC NULLS LAST, aa.id DESC;
+        ad.assigned_to AS "currentlyAssignedTo",
+        COALESCE(u_assignee."fullName", CAST(ad.assigned_to AS VARCHAR(50))) AS "assignedToName"
+      FROM "Asset_Details" ad
+      LEFT JOIN "Asset_Assignments" aa ON ad.id = aa."assetId"
+      LEFT JOIN "Users" u_assigner ON CAST(aa."supervisor_employeeId" AS VARCHAR(50)) = CAST(u_assigner."employeeId" AS VARCHAR(50))
+      LEFT JOIN "Users" u_assignee ON CAST(ad.assigned_to AS VARCHAR(50)) = CAST(u_assignee."employeeId" AS VARCHAR(50))
+      WHERE (
+        ad.assigned_to = $1 
+        OR CAST(ad.assigned_to AS VARCHAR(50)) = $2
+        OR aa."operator_employeeId" = $1 
+        OR CAST(aa."operator_employeeId" AS VARCHAR(50)) = $2
+      )
+        AND ($3 IS NULL OR ad."tenantId" IS NULL OR ad."tenantId" = $3 OR LOWER(ad."tenantId") = LOWER($3))
+      ORDER BY COALESCE(aa.assigned_date, ad.purchase_date) DESC, ad.id DESC;
     `;
 
-    const assetsResult = await query(assetsQuery, [userEmployeeId]);
+    const assetsResult = await query(assetsQuery, [targetEmployeeId, empIdStr, userTenantId]);
 
     /**
      * Determine Overdue Status (expectedReturnDate < today)
@@ -67,35 +85,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       today.setHours(0, 0, 0, 0);
 
       let isOverdue = false;
-      const assignmentStatus = String(asset.assignmentStatus || '').toLowerCase();
+      const assignmentStatus = String(asset.assignmentStatus || 'assigned').toLowerCase();
       if (asset.expectedReturnDate) {
         const due = new Date(asset.expectedReturnDate);
         due.setHours(0, 0, 0, 0);
         isOverdue = assignmentStatus === 'assigned' && due < today;
       }
 
-      const isCurrentlyAssigned = Number(asset.currentlyAssignedTo) === userEmployeeId;
+      const isCurrentlyAssigned = 
+        asset.currentlyAssignedTo !== null &&
+        asset.currentlyAssignedTo !== undefined &&
+        (Number(asset.currentlyAssignedTo) === targetEmployeeId || String(asset.currentlyAssignedTo).trim() === empIdStr);
 
       let normalizedStatus = 'Assigned';
-      if (assignmentStatus === 'returned' || !isCurrentlyAssigned) {
+      if (assignmentStatus === 'returned' || (!isCurrentlyAssigned && asset.currentlyAssignedTo === null)) {
         normalizedStatus = 'Returned';
       } else if (isOverdue) {
         normalizedStatus = 'Overdue';
       }
 
       return {
-        assignmentId: Number(asset.assignmentId),
-        assetId: Number(asset.assetId),
-        assetName: asset.assetName,
+        assignmentId: Number(asset.assignmentId || asset.assignmentid || 0),
+        assetId: Number(asset.assetId || asset.assetid || 0),
+        assetName: asset.assetName || asset.assetname,
         barcode: asset.barcode,
-        barcodeURL: asset.barcodeURL,
-        serialNo: asset.serialNo,
-        location: asset.assetLocation,
+        barcodeURL: asset.barcodeURL || asset.barcodeurl,
+        serialNo: asset.serialNo || asset.serialno,
+        location: (!asset.assetLocation || String(asset.assetLocation).trim().toLowerCase() === 'unassigned' || String(asset.assetLocation).trim().toLowerCase() === 'null') ? 'Office' : String(asset.assetLocation).trim(),
         photoURL: asset.photoURL,
         assignedDate: asset.assignedDate,
         expectedReturnDate: asset.expectedReturnDate,
         returnedDate: asset.returnedDate,
+        assignedById: asset.assignedById,
         assignedBy: asset.assignedBy,
+        assignedTo: asset.assignedToName || asset.currentlyAssignedTo,
         isCurrentlyAssigned,
         isOverdue,
         status: normalizedStatus,
@@ -106,11 +129,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
      * Get last known user location
      */
     const locationQuery = `
-      SELECT location 
+      SELECT TOP 1 location 
       FROM "Asset_Assignments"
       WHERE "operator_employeeId" = $1
-      ORDER BY assigned_date DESC NULLS LAST
-      LIMIT 1;
+      ORDER BY assigned_date DESC;
     `;
 
     const locationResult = await query(locationQuery, [userEmployeeId]);
@@ -137,8 +159,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json(responseData);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('My Assets API Error:', error);
-    return res.status(500).json({ message: 'Internal server error.' });
+    return res.status(500).json({ message: error?.message || 'Internal server error.', details: String(error?.stack || error) });
   }
 }
